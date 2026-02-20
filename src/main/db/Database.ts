@@ -14,7 +14,11 @@ export function initDb() {
       params TEXT NOT NULL,
       status TEXT DEFAULT 'idle',
       created_at INTEGER,
-      updated_at INTEGER
+      updated_at INTEGER,
+      queued_count INTEGER DEFAULT 0,
+      downloaded_count INTEGER DEFAULT 0,
+      published_count INTEGER DEFAULT 0,
+      failed_count INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS videos (

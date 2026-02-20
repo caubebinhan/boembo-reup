@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { WizardStepper, StepDef } from './WizardStepper'
+import { WizardStepper } from './WizardStepper'
 import { Step1_Details } from './wizard/Step1_Details'
 import { Step2_Sources } from './wizard/Step2_Sources'
 import { Step4_Schedule } from './wizard/Step4_Schedule'

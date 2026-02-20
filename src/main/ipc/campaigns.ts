@@ -2,7 +2,8 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '../../shared/ipc-types'
 import { db } from '../db/Database'
 import * as crypto from 'crypto'
-import { flowLoader } from '../core/flow/FlowLoader'
+import { flowLoader } from '../../core/flow/FlowLoader'
+import { flowEngine } from '../../core/engine/FlowEngine'
 
 export function setupCampaignIPC() {
   ipcMain.handle(IPC_CHANNELS.CAMPAIGN_LIST, async () => {
@@ -56,7 +57,6 @@ export function setupCampaignIPC() {
 
   ipcMain.handle(IPC_CHANNELS.CAMPAIGN_TRIGGER, async (_event, { id }) => {
     db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('active', id)
-    const { flowEngine } = require('../core/engine/FlowEngine')
     flowEngine.triggerCampaign(id)
     return true
   })

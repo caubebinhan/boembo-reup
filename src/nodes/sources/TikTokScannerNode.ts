@@ -1,5 +1,5 @@
 import { NodeDefinition, NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
-import { TikTokScanner } from '../../lib/tiktok/TikTokScanner'
+import { TikTokScanner } from '../../main/tiktok/TikTokScanner'
 
 export const TikTokScannerNode: NodeDefinition = {
   id: 'tiktok.scanner',

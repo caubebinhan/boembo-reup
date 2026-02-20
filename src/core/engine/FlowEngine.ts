@@ -1,4 +1,4 @@
-import { FlowDefinition } from '../flow/ExecutionContracts'
+// import { FlowDefinition } from '../flow/ExecutionContracts'
 import { nodeRegistry } from '../nodes/NodeRegistry'
 import { JobQueue, JobRecord } from '../../main/db/JobQueue'
 import { db } from '../../main/db/Database'
@@ -91,7 +91,7 @@ export class FlowEngine {
           config,
           variables: campaignParams.variables || {},
           logger,
-          onProgress: (msg) => { /* Could emit IPC here */ }
+          onProgress: (_msg: string) => { /* Could emit IPC here */ }
         }
 
         // Execute node

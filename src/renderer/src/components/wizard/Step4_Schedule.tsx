@@ -21,7 +21,7 @@ export function Step4_Schedule({ data, updateData }: Step4Props) {
         const intervalMs = (data.intervalMinutes || 60) * 60000
 
         // Simple preview logic: Just generate a mocked sequence of scan items based on schedule
-        const items = []
+        const items: any[] = []
         let seq = 1
 
         for (const source of sources) {

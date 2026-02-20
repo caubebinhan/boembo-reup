@@ -8,8 +8,11 @@ import { VideoQueueRepo } from './db/VideoQueueRepo'
 import { initDb, db } from './db/Database'
 import { setupWizardIPC } from './ipc/wizard'
 import { initSentry } from './sentry'
+import { flowEngine } from '../core/engine/FlowEngine'
+import { setupCampaignIPC } from './ipc/campaigns'
+import { setupScannerIPC } from './ipc/scanner'
 import { CrashRecoveryService } from './services/CrashRecovery'
-import { flowLoader } from './core/flow/FlowLoader'
+import { flowLoader } from '../core/flow/FlowLoader'
 
 // Sentry
 if (!app.isPackaged || process.env.NODE_ENV === 'development') {
@@ -78,7 +81,6 @@ function createWindow(): void {
 
       mainWindow.webContents.send('campaign:created', { ...campaign, params: session.outputs })
       
-      const { flowEngine } = require('./core/engine/FlowEngine')
       flowEngine.triggerCampaign(campaignId)
     } catch (err) {
       console.error('Failed to save campaign:', err)
@@ -113,11 +115,8 @@ app.whenReady().then(() => {
   console.log(`Loaded ${flows.length} flows`)
 
   // Initialize Engine
-  const { flowEngine } = require('./core/engine/FlowEngine')
   flowEngine.start()
 
-  const { setupCampaignIPC } = require('./ipc/campaigns')
-  const { setupScannerIPC } = require('./ipc/scanner')
   setupCampaignIPC()
   setupScannerIPC()
   setupWizardIPC()
