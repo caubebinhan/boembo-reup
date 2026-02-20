@@ -1,0 +1,507 @@
+# src/flows/presets/tiktok-repost.flow.yaml
+# ─────────────────────────────────────────
+# Đây là định nghĩa đầy đủ 1 workflow.
+# Gồm 4 sections: meta, nodes, edges, ui
+
+# ── SECTION 1: METADATA ──────────────────
+id: tiktok-repost
+name: TikTok Repost
+description: Scan TikTok channels → Download → Edit → Publish back to TikTok
+icon: 🔄
+color: "#00f2ea"
+version: "1.0"
+
+# ── SECTION 2: NODES ─────────────────────
+# Mỗi node có 3 phần: id, config, execution
+nodes:
+
+  - node_id: tiktok.scanner       # Phải match NodeDefinition.id
+    instance_id: scanner_1        # Unique trong flow này
+    
+    config:                       # Default config — wizard sẽ override
+      sources: []
+      time_range: history_and_future
+      max_videos: 50
+      sort_order: newest
+    
+    execution:
+      strategy: scheduled_recurring
+      # scheduled_recurring = tạo job, chạy xong tự schedule lại
+      
+      job_type: FLOW_SCAN
+      initial_trigger: campaign_start
+      
+      repeat_after:
+        source: campaign.schedule.interval_minutes
+        unit: minutes
+        jitter: false
+      
+      stop_repeat_if: "campaign.status != 'active'"
+      on_resume: reschedule_from_now
+
+  - node_id: core.deduplicator
+    instance_id: dedup_1
+    
+    config:
+      check_db: true
+    
+    execution:
+      strategy: inline
+      # inline = chạy trong cùng process với node trước
+      # Không tạo job riêng trong DB
+
+  - node_id: core.quality_filter
+    instance_id: quality_1
+    
+    config:
+      min_views: 0
+      min_likes: 0
+    
+    execution:
+      strategy: inline
+
+  - node_id: core.limit
+    instance_id: limit_1
+    
+    config:
+      max: 100
+    
+    execution:
+      strategy: inline
+
+  - node_id: core.downloader
+    instance_id: downloader_1
+    
+    config:
+      max_retries: 3
+      quality: best
+    
+    execution:
+      strategy: per_item_job
+      # per_item_job = mỗi video từ upstream → 1 job riêng trong DB
+      
+      job_type: FLOW_STEP
+      
+      gap_between_items:
+        source: campaign.schedule.interval_minutes
+        unit: minutes
+        jitter: true
+        jitter_percent: 30
+      
+      respect_daily_window: true
+      
+      retry:
+        max: 3
+        backoff: exponential
+        base_delay_ms: 10000
+        max_delay_ms: 300000
+      
+      create_downstream_job: immediately_after
+
+  - node_id: ffmpeg.editor
+    instance_id: editor_1
+    
+    config:
+      pipeline: []
+    
+    execution:
+      strategy: inline
+
+  - node_id: core.caption_gen
+    instance_id: caption_1
+    
+    config:
+      template: "{original}"
+      remove_hashtags: false
+    
+    execution:
+      strategy: inline
+
+  - node_id: tiktok.publisher
+    instance_id: publisher_1
+    
+    config:
+      accounts: []
+      privacy: public
+      account_rotation: round_robin
+    
+    execution:
+      strategy: per_item_job
+      job_type: FLOW_STEP
+      
+      gap_between_items:
+        source: fixed
+        fixed_value: 0
+        unit: seconds
+      
+      respect_daily_window: true
+      depends_on: downloader_1
+      
+      retry:
+        max: 3
+        backoff: linear
+        base_delay_ms: 30000
+        max_delay_ms: 300000
+      
+      create_downstream_job: immediately_after
+
+# ── SECTION 3: EDGES ─────────────────────
+# Khai báo thứ tự chạy: from → to
+edges:
+  - from: scanner_1
+    to: dedup_1
+  - from: dedup_1
+    to: quality_1
+  - from: quality_1
+    to: limit_1
+  - from: limit_1
+    to: downloader_1
+  - from: downloader_1
+    to: editor_1
+  - from: editor_1
+    to: caption_1
+  - from: caption_1
+    to: publisher_1
+
+# ── SECTION 4: UI ─────────────────────────
+# Định nghĩa toàn bộ cách UI render workflow này
+ui:
+
+  # Campaign Card trong danh sách
+  campaign_card:
+    
+    stats:
+      - key: scanned
+        label: Scanned
+        icon: 🔍
+        value_expr: "(campaign.scan_pending_count || 0) + (campaign.scanned_count || 0)"
+      
+      - key: downloaded
+        label: Downloaded
+        icon: ⬇️
+        value_expr: "campaign.downloaded_count || 0"
+      
+      - key: published
+        label: Published
+        icon: ✅
+        value_expr: "campaign.published_count || 0"
+        color_expr: "value > 0 ? '#4ade80' : 'var(--text-muted)'"
+      
+      - key: failed
+        label: Failed
+        icon: ❌
+        value_expr: "campaign.failed_count || 0"
+        color_expr: "value > 0 ? '#ef4444' : 'var(--text-muted)'"
+        show_if: "(campaign.failed_count || 0) > 0"
+    
+    # Status badges theo priority — badge đầu tiên match sẽ được dùng
+    status_badges:
+      - condition: "campaign.status == 'needs_captcha'"
+        label: "⚠️ CAPTCHA"
+        color: "#ef4444"
+        bg: "rgba(239,68,68,0.15)"
+        blink: true
+      
+      - condition: "campaign.status == 'needs_review'"
+        label: "👁 NEEDS REVIEW"
+        color: "#f59e0b"
+        bg: "rgba(245,158,11,0.15)"
+      
+      - condition: "campaign.has_missed_jobs == 1"
+        label: "⏰ MISSED JOBS"
+        color: "#f59e0b"
+        bg: "rgba(245,158,11,0.15)"
+      
+      - condition: "(campaign.scanning_count || 0) > 0"
+        label: "🔍 SCANNING"
+        color: "#60a5fa"
+        bg: "rgba(96,165,250,0.15)"
+      
+      - condition: "campaign.status == 'active' && (campaign.scan_pending_count || 0) > 0"
+        label: "📡 MONITORING"
+        color: "#a78bfa"
+        bg: "rgba(167,139,250,0.15)"
+      
+      - condition: "hasActiveJobs"
+        label: "▶ RUNNING"
+        color: "#60a5fa"
+        bg: "rgba(96,165,250,0.15)"
+      
+      - condition: "campaign.status == 'paused' && campaign.paused_at_startup"
+        label: "⏸ AUTO-PAUSED"
+        color: "#eab308"
+        bg: "rgba(234,179,8,0.15)"
+      
+      - condition: "campaign.status == 'paused'"
+        label: "⏸ PAUSED"
+        color: "#9ca3af"
+        bg: "rgba(156,163,175,0.15)"
+      
+      - condition: "campaign.status == 'finished'"
+        label: "✅ FINISHED"
+        color: "#10b981"
+        bg: "rgba(16,185,129,0.15)"
+      
+      - condition: "campaign.status == 'active'"
+        label: "• Active"
+        color: "#10b981"
+        bg: "rgba(16,185,129,0.15)"
+    
+    subtitle_expr: >
+      (config.type == 'scan_video' ? '📋 New Items' : '📡 Channels') +
+      '  📅 Every ' + (config.schedule?.interval_minutes || 60) + 'm'
+    
+    progress:
+      value_expr: >
+        campaign.total_recent > 0
+          ? Math.round(((campaign.published_count || 0) / campaign.total_recent) * 100)
+          : 0
+      color_expr: "value >= 100 ? '#10b981' : value > 50 ? '#60a5fa' : '#a78bfa'"
+      show_if: "(campaign.total_recent || 0) > 0 && campaign.status != 'paused'"
+  
+  # Nút action trên campaign card
+  card_actions:
+    
+    - key: resume
+      label: "▶ Resume"
+      icon: "▶"
+      style: primary
+      show_if: "campaign.status == 'paused'"
+      action:
+        type: ipc
+        event: toggle-campaign-status
+        payload_expr: "{ id: campaign.id, currentStatus: 'paused' }"
+    
+    - key: captcha
+      label: "🔓 Resolve Captcha"
+      icon: "🔓"
+      style: warning
+      show_if: "campaign.status == 'needs_captcha'"
+      action:
+        type: ipc
+        event: campaign:open-captcha
+        payload_expr: "{ id: campaign.id }"
+    
+    - key: run
+      label: "🚀 Run Now"
+      icon: "🚀"
+      style: primary
+      show_if: "campaign.status == 'active'"
+      action:
+        type: ipc
+        event: trigger-campaign
+        payload_expr: "{ id: campaign.id, runNow: true }"
+    
+    - key: pause
+      label: "⏸ Pause"
+      icon: "⏸"
+      style: secondary
+      show_if: "campaign.status == 'active'"
+      action:
+        type: ipc
+        event: pause-campaign
+        payload_expr: "{ id: campaign.id }"
+    
+    - key: clone
+      label: "📋 Clone"
+      icon: "📋"
+      style: ghost
+      show_if: "true"
+      action:
+        type: ipc
+        event: campaign:clone
+        payload_expr: "{ id: campaign.id }"
+    
+    - key: delete
+      label: "🗑 Delete"
+      icon: "🗑"
+      style: danger
+      show_if: "campaign.status != 'active'"
+      confirm:
+        title: Delete Campaign?
+        message: This cannot be undone.
+        danger: true
+      action:
+        type: ipc
+        event: delete-campaign
+        payload_expr: "{ id: campaign.id }"
+  
+  # Wizard steps khi tạo campaign
+  wizard:
+    steps:
+      
+      - id: details
+        title: Details
+        icon: 📝
+        custom_component: CampaignDetailsStep
+        description: Campaign name, type, schedule, and captions
+        # Không có can_advance_expr = luôn có thể next
+      
+      - id: sources
+        title: Source
+        icon: 📡
+        node_instance: scanner_1
+        custom_component: SourcePickerStep
+        description: Configure channels and keywords to monitor
+        can_advance_expr: >
+          (stepData.sources && stepData.sources.length > 0) ||
+          (stepData.videos && stepData.videos.length > 0)
+      
+      - id: editor
+        title: Editor
+        icon: ✂️
+        node_instance: editor_1
+        custom_component: VideoEditorStep
+      
+      - id: schedule
+        title: Schedule
+        icon: 📅
+        custom_component: SchedulePreviewStep
+        description: Preview and adjust publish schedule
+      
+      - id: target
+        title: Target
+        icon: 🎯
+        node_instance: publisher_1
+        custom_component: AccountPickerStep
+        can_advance_expr: "stepData.accounts && stepData.accounts.length > 0"
+        description: Select TikTok accounts to publish to
+  
+  # Trang chi tiết campaign
+  detail_page:
+    timeline_adapter: tiktok-repost
+    show_node_status: true
+    
+    tabs:
+      - id: overview
+        label: Overview
+        icon: 📊
+        component: NodeStatusGrid
+      
+      - id: timeline
+        label: Videos
+        icon: 🎬
+        component: TimelineContainer
+      
+      - id: review
+        label: Review
+        icon: 👁
+        component: VideoReviewPanel
+        show_if: "campaign.status == 'needs_review'"
+      
+      - id: accounts
+        label: Accounts
+        icon: 👤
+        component: AccountPanel
+      
+      - id: logs
+        label: Logs
+        icon: 📃
+        component: LogViewer
+    
+    header_stats:
+      - key: scanned
+        label: Scanned
+        icon: 🔍
+        value_expr: "(campaign.scan_pending_count || 0) + (campaign.scanned_count || 0)"
+      
+      - key: downloaded
+        label: Downloaded
+        icon: ⬇️
+        value_expr: "campaign.downloaded_count || 0"
+      
+      - key: published
+        label: Published
+        icon: ✅
+        value_expr: "campaign.published_count || 0"
+        click_action: timeline
+      
+      - key: failed
+        label: Failed
+        icon: ❌
+        value_expr: "campaign.failed_count || 0"
+        click_action: timeline
+    
+    header_actions:
+      - key: run
+        label: "🚀 Run Now"
+        icon: "🚀"
+        style: primary
+        show_if: "campaign.status == 'active'"
+        loading_if: "hasActiveJobs"
+        action:
+          type: ipc
+          event: trigger-campaign
+          payload_expr: "{ id: campaign.id, runNow: true }"
+      
+      - key: pause
+        label: "⏸ Pause"
+        icon: "⏸"
+        style: secondary
+        show_if: "campaign.status == 'active'"
+        action:
+          type: ipc
+          event: pause-campaign
+          payload_expr: "{ id: campaign.id }"
+      
+      - key: resume
+        label: "▶ Resume"
+        icon: "▶"
+        style: primary
+        show_if: "campaign.status == 'paused'"
+        action:
+          type: ipc
+          event: toggle-campaign-status
+          payload_expr: "{ id: campaign.id, currentStatus: 'paused' }"
+  
+  # Node status cards trong overview tab
+  node_status_cards:
+    
+    - node_instance: scanner_1
+      state_expr: "jobs.find(j => j.type == 'FLOW_SCAN' && j.status == 'running')"
+      display:
+        status_expr: >
+          state ? 'running' :
+          (campaign.scan_pending_count || 0) > 0 ? 'waiting' : 'idle'
+        label_expr: >
+          state
+            ? (JSON.parse(state.data_json || '{}')).status || 'Scanning...'
+            : 'Scanner'
+        detail_expr: "'Scanned: ' + (campaign.scanned_count || 0)"
+    
+    - node_instance: dedup_1
+      state_expr: "null"
+      display:
+        status_expr: "(campaign.scanned_count || 0) > 0 ? 'done' : 'idle'"
+        label_expr: "'Deduplicator'"
+    
+    - node_instance: downloader_1
+      state_expr: "jobs.find(j => j.status == 'downloading')"
+      display:
+        status_expr: >
+          state ? 'running' :
+          (campaign.downloaded_count || 0) > 0 ? 'done' : 'idle'
+        label_expr: "state ? 'Downloading...' : 'Downloader'"
+        detail_expr: "'Downloaded: ' + (campaign.downloaded_count || 0)"
+    
+    - node_instance: editor_1
+      state_expr: "jobs.find(j => j.status == 'editing')"
+      display:
+        status_expr: "state ? 'running' : 'idle'"
+        label_expr: "state ? 'Editing...' : 'Editor'"
+    
+    - node_instance: publisher_1
+      state_expr: "jobs.find(j => ['publishing','uploading'].includes(j.status))"
+      display:
+        status_expr: >
+          state ? 'running' :
+          (campaign.published_count || 0) > 0 ? 'done' : 'idle'
+        label_expr: "state ? 'Publishing...' : 'Publisher'"
+        detail_expr: "'Published: ' + (campaign.published_count || 0)"
+      actions:
+        - label: "🔓 Solve Captcha"
+          show_if: "campaign.status == 'needs_captcha'"
+          action:
+            type: ipc
+            event: campaign:open-captcha
+            payload_expr: "{ id: campaign.id }"
