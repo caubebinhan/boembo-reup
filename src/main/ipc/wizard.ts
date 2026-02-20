@@ -34,4 +34,16 @@ export function setupWizardIPC() {
     const prevIndex = Math.max(0, session.currentStepIndex - 1)
     WizardWindowManager.openStep(session, prevIndex)
   })
+
+  ipcMain.handle('account:list', async () => {
+    // Return mock accounts for now since PublishAccountService is stubbed
+    return [
+      { id: 'acc1', username: 'Test Account 1', handle: '@testacc1', status: 'active' },
+      { id: 'acc2', username: 'Test Account 2', handle: '@testacc2', status: 'active' }
+    ]
+  })
+
+  ipcMain.handle('account:add', async () => {
+    return true
+  })
 }
