@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useEffect } from 'react'
 
 interface Source {
     name: string
@@ -12,6 +12,20 @@ interface Step4Props {
 
 export function Step4_Schedule({ data, updateData }: Step4Props) {
     const sources: Source[] = data.sources || []
+
+    // ── Initialize defaults into stepData on mount ──────────────────
+    // IMPORTANT: inputs use `value={data.x || default}` as display fallback,
+    // but if the user never touches the input, onChange is never called and
+    // the default is never written into stepData → it becomes undefined in DB.
+    // We fix this by writing defaults once on mount (only for fields not yet set).
+    useEffect(() => {
+        const defaults: Record<string, any> = {}
+        if (data.intervalMinutes == null) defaults.intervalMinutes = 60
+        if (data.activeHoursStart == null) defaults.activeHoursStart = '09:00'
+        if (data.activeHoursEnd == null) defaults.activeHoursEnd = '21:00'
+        if (Object.keys(defaults).length > 0) updateData(defaults)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     // Calculate preview timeline items
     const timelineItems = useMemo(() => {

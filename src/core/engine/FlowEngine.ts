@@ -60,6 +60,19 @@ export class FlowEngine {
   public resumeCampaign(campaignId: string) {
     db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('active', campaignId)
     ExecutionLogger.campaignEvent(campaignId, 'campaign:resumed', 'Campaign resumed')
+
+    // Re-trigger: check if there are any pending/running jobs already.
+    // If none exist, the loop ended or was interrupted — re-trigger from start.
+    // Deduplicator will skip already-processed videos, so this is safe to re-run.
+    const existingJobs = db.prepare(
+      `SELECT COUNT(*) as cnt FROM jobs WHERE campaign_id = ? AND status IN ('pending', 'running')`
+    ).get(campaignId) as any
+
+    if (!existingJobs || existingJobs.cnt === 0) {
+      ExecutionLogger.campaignEvent(campaignId, 'campaign:retriggered',
+        'No pending jobs found after resume — re-triggering campaign from start')
+      this.triggerCampaign(campaignId)
+    }
   }
 
   // ── Tick ─────────────────────────────────────────

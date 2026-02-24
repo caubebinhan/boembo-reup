@@ -1,9 +1,27 @@
+import { useEffect } from 'react'
+
 interface Step1Props {
     data: Record<string, any>
     updateData: (updates: Record<string, any>) => void
 }
 
 export function Step1_Details({ data, updateData }: Step1Props) {
+    // ── Initialize defaults on mount ───────────────────────────────
+    // Without this, inputs that show `data.x || default` never write the
+    // default into stepData unless the user physically changes the field.
+    // The missing value is then omitted by JSON.stringify → undefined in DB.
+    useEffect(() => {
+        const defaults: Record<string, any> = {}
+        if (data.intervalMinutes == null) defaults.intervalMinutes = 60
+        if (data.activeHoursStart == null) defaults.activeHoursStart = '09:00'
+        if (data.activeHoursEnd == null) defaults.activeHoursEnd = '21:00'
+        if (data.activeDays == null) defaults.activeDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        if (data.autoSchedule == null) defaults.autoSchedule = true
+        if (data.missedJobHandling == null) defaults.missedJobHandling = 'auto'
+        if (Object.keys(defaults).length > 0) updateData(defaults)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     const insertTag = (tag: string) => {
         const current = data.captionTemplate || ''
         updateData({ captionTemplate: current + tag })
@@ -39,8 +57,8 @@ export function Step1_Details({ data, updateData }: Step1Props) {
                     <div
                         onClick={() => updateData({ campaignType: 'scan_video' })}
                         className={`p-4 rounded-lg cursor-pointer border-2 transition ${data.campaignType === 'scan_video'
-                                ? 'border-purple-600 bg-purple-600/10'
-                                : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                            ? 'border-purple-600 bg-purple-600/10'
+                            : 'border-gray-700 bg-gray-800 hover:border-gray-600'
                             }`}
                     >
                         <div className="flex items-center gap-3 font-semibold mb-2">
@@ -53,8 +71,8 @@ export function Step1_Details({ data, updateData }: Step1Props) {
                     <div
                         onClick={() => updateData({ campaignType: 'scan_channel' })}
                         className={`p-4 rounded-lg cursor-pointer border-2 transition ${data.campaignType === 'scan_channel'
-                                ? 'border-purple-600 bg-purple-600/10'
-                                : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                            ? 'border-purple-600 bg-purple-600/10'
+                            : 'border-gray-700 bg-gray-800 hover:border-gray-600'
                             }`}
                     >
                         <div className="flex items-center gap-3 font-semibold mb-2">
@@ -191,8 +209,8 @@ export function Step1_Details({ data, updateData }: Step1Props) {
                                         key={day}
                                         onClick={() => toggleDay(day)}
                                         className={`px-4 py-2 rounded-lg font-medium text-sm transition ${isActive
-                                                ? 'bg-purple-600 border border-purple-500 text-white'
-                                                : 'bg-gray-800 border border-gray-700 text-gray-400 hover:border-gray-500'
+                                            ? 'bg-purple-600 border border-purple-500 text-white'
+                                            : 'bg-gray-800 border border-gray-700 text-gray-400 hover:border-gray-500'
                                             }`}
                                     >
                                         {day}
@@ -214,8 +232,8 @@ export function Step1_Details({ data, updateData }: Step1Props) {
                     <div
                         onClick={() => updateData({ missedJobHandling: 'auto' })}
                         className={`p-4 rounded-lg cursor-pointer border-2 transition ${(data.missedJobHandling || 'auto') === 'auto'
-                                ? 'border-purple-600 bg-purple-600/10'
-                                : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                            ? 'border-purple-600 bg-purple-600/10'
+                            : 'border-gray-700 bg-gray-800 hover:border-gray-600'
                             }`}
                     >
                         <div className="flex items-center gap-2 font-semibold mb-1">
@@ -227,8 +245,8 @@ export function Step1_Details({ data, updateData }: Step1Props) {
                     <div
                         onClick={() => updateData({ missedJobHandling: 'manual' })}
                         className={`p-4 rounded-lg cursor-pointer border-2 transition ${data.missedJobHandling === 'manual'
-                                ? 'border-purple-600 bg-purple-600/10'
-                                : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                            ? 'border-purple-600 bg-purple-600/10'
+                            : 'border-gray-700 bg-gray-800 hover:border-gray-600'
                             }`}
                     >
                         <div className="flex items-center gap-2 font-semibold mb-1">

@@ -8,7 +8,10 @@ import os from 'os'
 export interface ScanOptions {
     limit?: number
     sortOrder?: 'newest' | 'oldest' | 'most_liked' | 'most_viewed'
-    timeRange?: 'history_only' | 'future_only' | 'history_and_future'
+    timeRange?: 'history_only' | 'future_only' | 'history_and_future' | 'custom_range'
+    /** Used when timeRange = 'custom_range' (YYYY-MM-DD) */
+    startDate?: string
+    endDate?: string
 }
 
 export interface VideoInfo {
