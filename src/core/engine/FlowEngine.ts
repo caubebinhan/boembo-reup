@@ -209,6 +209,7 @@ export class FlowEngine {
     for (let i = 0; i < items.length; i++) {
       const item = items[i]
       let currentData = item
+      let skipToNextItem = false  // set when a node skips the item but rest of pipeline should still run
 
       // Check campaign status — stop if paused/cancelled
       const campaignStatus = (db.prepare('SELECT status FROM campaigns WHERE id = ?').get(job.campaign_id) as any)?.status
@@ -241,14 +242,21 @@ export class FlowEngine {
           continue
         }
 
-        // Input contract validation
-        if (currentData === null || currentData === undefined) {
+        // If item was skipped by a previous node, only run timeout nodes
+        // so gap is still respected before moving to the next item.
+        if (skipToNextItem) {
+          if (childDef.node_id !== 'core.timeout') continue
+        }
+
+        // Input contract validation (only for non-skip phases)
+        if (!skipToNextItem && (currentData === null || currentData === undefined)) {
           const msg = `Node "${childDef.instance_id}" received null input — previous node may have failed or returned empty data`
           ExecutionLogger.log({
             campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
             level: 'error', event: 'node:input-error', message: msg
           })
-          break // Skip to next item
+          skipToNextItem = true // Mark as skipped, continue to next child (e.g. timeout)
+          continue
         }
 
         const startTime = Date.now()
@@ -278,7 +286,7 @@ export class FlowEngine {
         }
 
         try {
-          const resultPromise = NodeImpl.execute(currentData, ctx)
+          const resultPromise = NodeImpl.execute(skipToNextItem ? {} : currentData, ctx)
           
           let result: any
           if (childDef.timeout) {
@@ -312,8 +320,17 @@ export class FlowEngine {
           }
 
           if (result.action === 'continue' && !result.data) {
-            // Node explicitly skipped this item (e.g. dedup)
-            break
+            // Node skipped this item (e.g. dedup, CAPTCHA).
+            // Set flag so we still run timeout before next item — don't break immediately.
+            if (!skipToNextItem) {
+              ExecutionLogger.log({
+                campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
+                level: 'info', event: 'node:skip',
+                message: `Item skipped by ${childDef.instance_id} — will still run timeout before next item`
+              })
+              skipToNextItem = true
+            }
+            continue
           }
 
           currentData = result.data
@@ -328,8 +345,8 @@ export class FlowEngine {
               `Campaign stopped: node "${childDef.instance_id}" failed: ${err.message}`)
             return
           }
-          // 'skip' (default) — skip this item, continue to next
-          break
+          // 'skip' (default) — set flag and still run timeout
+          skipToNextItem = true
         }
       }
     }

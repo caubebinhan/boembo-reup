@@ -1,38 +1,36 @@
 import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
 
+const DEFAULT_GAP_MINUTES = 5  // fallback if campaign has no gap configured
+
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
-  // Read gap from wizard params — wizard Step4_Schedule saves as "intervalMinutes"
+  // Read gap from wizard params — Step4_Schedule saves as "intervalMinutes"
   const rawGap = ctx.params.intervalMinutes
     ?? ctx.params.schedule?.interval_minutes
     ?? ctx.params.gap_minutes
 
-  // Debug: log what params we received so we can diagnose missing gap values
+  // Log received params (helpful for debugging missing gap values)
   ctx.logger.info(`[Timeout] params keys: ${Object.keys(ctx.params).join(', ')}`)
-  ctx.logger.info(`[Timeout] intervalMinutes=${ctx.params.intervalMinutes}, gap_minutes=${ctx.params.gap_minutes}, schedule=${JSON.stringify(ctx.params.schedule)}`)
+  ctx.logger.info(`[Timeout] intervalMinutes=${ctx.params.intervalMinutes}`)
 
-  if (rawGap === undefined || rawGap === null) {
-    ctx.logger.info('[Timeout] No gap configured — skipping wait (using 0s)')
-    ctx.onProgress('⏳ No gap configured — continuing immediately')
-    return { data: input, action: 'continue' }
-  }
+  const gapMinutes = rawGap != null && Number(rawGap) > 0
+    ? Number(rawGap)
+    : DEFAULT_GAP_MINUTES   // always wait — never skip
 
-  const gapMinutes = Number(rawGap)
-  if (gapMinutes <= 0) {
-    ctx.logger.info('[Timeout] Gap is 0 — skipping wait')
-    return { data: input, action: 'continue' }
+  if (rawGap == null || rawGap === '') {
+    ctx.logger.info(`[Timeout] No gap configured — using default ${DEFAULT_GAP_MINUTES}min`)
   }
 
   const gapMs = gapMinutes * 60 * 1000
-  const jitter = gapMs * 0.2 * (Math.random() * 2 - 1)  // ±20% jitter
-  const waitMs = Math.max(1000, gapMs + jitter)
+  const jitter = gapMs * 0.15 * (Math.random() * 2 - 1)  // ±15% jitter
+  const waitMs = Math.max(5000, gapMs + jitter)
   const waitMins = (waitMs / 60000).toFixed(1)
 
-  ctx.logger.info(`⏳ Wait ${gapMinutes}min (configured) → actual ${waitMins}min (with jitter)`)
-  ctx.onProgress(`⏳ Waiting ${waitMins} minutes before next video...`)
+  ctx.logger.info(`⏳ Waiting ${waitMins}min (gap=${gapMinutes}min + jitter)`)
+  ctx.onProgress(`⏳ Waiting ${waitMins} min before next video...`)
 
   await new Promise(resolve => setTimeout(resolve, waitMs))
 
-  ctx.logger.info('Timeout complete, continuing to next video')
-  ctx.onProgress('Timeout done — continuing')
+  ctx.logger.info('Timeout done, continuing to next video')
+  ctx.onProgress('✓ Timeout done')
   return { data: input, action: 'continue' }
 }
