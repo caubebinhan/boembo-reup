@@ -67,7 +67,7 @@ export function setupCampaignIPC() {
     return true
   })
 
-  ipcMain.handle('campaign:resume', async (_event, { id }) => {
+  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_RESUME, async (_event, { id }) => {
     flowEngine.resumeCampaign(id)
     return true
   })
@@ -125,10 +125,18 @@ export function setupCampaignIPC() {
       nodes: flow.nodes.map(n => ({
         node_id: n.node_id,
         instance_id: n.instance_id,
+        children: n.children,
         execution: n.execution
       })),
       edges: flow.edges
     }
+  })
+
+  // ── Videos by campaign ─────────────────────────────
+  ipcMain.handle('campaign:get-videos', async (_event, { id }) => {
+    return db.prepare(
+      'SELECT * FROM videos WHERE campaign_id = ? ORDER BY rowid DESC'
+    ).all(id) as any[]
   })
 
   // ── Execution Logs ───────────────────────────────

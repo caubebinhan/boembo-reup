@@ -55,21 +55,20 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
 
     const rebuild = useCallback(async () => {
         try {
+            // Fetch videos from DB (source of truth for counts + thumbnails)
             // @ts-ignore
-            const logs: any[] = await window.api.invoke('campaign:get-logs', { id: campaignId, limit: 500 })
-            if (!logs?.length) return
+            const dbVideos: any[] = await window.api.invoke('campaign:get-videos', { id: campaignId }) || []
 
-            const videoMap = new Map<string, TikTokVideo>()
+            // Fetch logs for phase detection
+            // @ts-ignore
+            const logs: any[] = await window.api.invoke('campaign:get-logs', { id: campaignId, limit: 200 }) || []
+
+            // Phase detection from logs
             let phase: TikTokRepostState['phase'] = 'idle'
             let phaseMessage = ''
-
-            // Process chronologically (oldest first)
             const sorted = [...logs].reverse()
             for (const log of sorted) {
                 const nodeId = log.node_id || ''
-                const data = log.data_json ? tryParse(log.data_json) : null
-
-                // Phase detection
                 if (log.event === 'node:start' && nodeId.includes('scanner')) {
                     phase = 'scanning'; phaseMessage = 'Scanning sources...'
                 }
@@ -82,44 +81,30 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                 if (log.event === 'campaign:finished') {
                     phase = 'finished'; phaseMessage = log.message || ''
                 }
-                if (log.event === 'node:error') {
+                if (log.event === 'campaign:error') {
                     phase = 'error'; phaseMessage = log.message || ''
                 }
-
-                // Extract video data from scanner results
-                if (log.event === 'node:end' && nodeId.includes('scanner') && data?.resultSummary) {
-                    // Scanner completed — scanned videos come from node-data events
-                }
-
-                // Progress messages
                 if (log.event === 'node:progress') {
                     phaseMessage = log.message || phaseMessage
                 }
             }
 
-            // Build video list from any structured data in logs
-            for (const log of sorted) {
-                const data = log.data_json ? tryParse(log.data_json) : null
-                if (!data) continue
-
-                // Scanner log with video data
-                if (data.inputSummary && Array.isArray(data.inputSummary)) {
-                    for (const v of data.inputSummary) {
-                        if (v.platform_id && !videoMap.has(v.platform_id)) {
-                            videoMap.set(v.platform_id, {
-                                platform_id: v.platform_id,
-                                description: v.description,
-                                author: v.author,
-                                thumbnail: v.thumbnail,
-                                stats: v.stats,
-                                status: 'scanned',
-                            })
-                        }
-                    }
+            // Build video list from DB
+            const videos: TikTokVideo[] = dbVideos.map((v: any) => {
+                const meta = v.data_json ? tryParse(v.data_json) : {}
+                return {
+                    platform_id: v.platform_id,
+                    description: meta?.description || '',
+                    author: meta?.author || '',
+                    thumbnail: meta?.thumbnail || '',
+                    stats: meta?.stats,
+                    local_path: v.local_path,
+                    caption: meta?.generated_caption || meta?.description || '',
+                    published_url: v.publish_url,
+                    status: mapDbStatus(v.status),
+                    error: undefined,
                 }
-            }
-
-            const videos = Array.from(videoMap.values())
+            })
 
             setState({
                 phase,
@@ -139,11 +124,11 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
         rebuild()
         const timer = setInterval(rebuild, 3000)
 
-        // Live updates from node-data events
+        // Live updates trigger rebuild
         // @ts-ignore
         const offData = window.api?.on('execution:node-data', (ev: any) => {
             if (ev.campaignId !== campaignId) return
-            rebuild() // Re-derive state from logs
+            rebuild()
         })
         // @ts-ignore
         const offProgress = window.api?.on('node:progress', (ev: any) => {
@@ -159,6 +144,17 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
     }, [campaignId, rebuild])
 
     return state
+}
+
+function mapDbStatus(dbStatus: string): TikTokVideo['status'] {
+    const map: Record<string, TikTokVideo['status']> = {
+        pending: 'scanned',
+        downloaded: 'downloaded',
+        published: 'published',
+        failed: 'failed',
+        verified: 'published',
+    }
+    return map[dbStatus] || 'scanned'
 }
 
 // ── UI Components (TikTok-specific) ─────────────────

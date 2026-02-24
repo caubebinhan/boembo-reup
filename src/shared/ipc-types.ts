@@ -19,8 +19,9 @@ export const IPC_CHANNELS = {
   CAMPAIGN_GET_JOBS: 'campaign:get-jobs',
   CAMPAIGN_GET_FLOW_NODES: 'campaign:get-flow-nodes',
 
-  CAMPAIGN_TRIGGER: 'trigger-campaign',
-  CAMPAIGN_PAUSE: 'pause-campaign',
+  CAMPAIGN_TRIGGER: 'campaign:trigger',
+  CAMPAIGN_PAUSE: 'campaign:pause',
+  CAMPAIGN_RESUME: 'campaign:resume',
   CAMPAIGN_TOGGLE_STATUS: 'toggle-campaign-status',
 
   SCANNER_OPEN_WINDOW: 'open-scanner-window',
