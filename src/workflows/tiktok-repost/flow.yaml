@@ -79,21 +79,21 @@ ui:
       show_if: "campaign.status == 'idle'"
       action:
         type: ipc
-        event: trigger-campaign
+        event: campaign:trigger
         payload_expr: "{ id: campaign.id }"
 
     - label: "⏸️ Pause"
       show_if: "campaign.status == 'active'"
       action:
         type: ipc
-        event: pause-campaign
+        event: campaign:pause
         payload_expr: "{ id: campaign.id }"
 
     - label: "🗑️ Delete"
       style: danger
       action:
         type: ipc
-        event: delete-campaign
+        event: campaign:delete
         payload_expr: "{ id: campaign.id }"
 
   # Wizard steps — collect input for backend nodes
@@ -140,7 +140,7 @@ ui:
         loading_if: "hasActiveJobs"
         action:
           type: ipc
-          event: trigger-campaign
+          event: campaign:trigger
           payload_expr: "{ id: campaign.id }"
 
       - key: pause
@@ -150,7 +150,7 @@ ui:
         show_if: "campaign.status == 'active'"
         action:
           type: ipc
-          event: pause-campaign
+          event: campaign:pause
           payload_expr: "{ id: campaign.id }"
 
       - key: resume
@@ -160,7 +160,7 @@ ui:
         show_if: "campaign.status == 'paused'"
         action:
           type: ipc
-          event: resume-campaign
+          event: campaign:resume
           payload_expr: "{ id: campaign.id }"
 
     header_stats:

@@ -1,49 +1,41 @@
-import { ipcMain } from 'electron'
-import { IPC_CHANNELS } from '../../shared/ipc-types'
-import { sessionManager } from '../wizard/WizardSessionManager'
-import { WizardWindowManager } from '../wizard/WizardWindowManager'
+import { ipcMain, BrowserWindow } from 'electron'
+import { PublishAccountService } from '../services/PublishAccountService'
 
 export function setupWizardIPC() {
-  ipcMain.handle(IPC_CHANNELS.WIZARD_START, (_event, { workflowId }) => {
-    const session = sessionManager.create(workflowId)
-    WizardWindowManager.openStep(session, 0)
-    return session.id
-  })
-
-  ipcMain.handle(IPC_CHANNELS.WIZARD_GET_SESSION, (_event, { sessionId }) => {
-    const session = sessionManager.get(sessionId)
-    if (!session) return null
-    const { window, ...sessionData } = session
-    return sessionData
-  })
-
-  ipcMain.handle(IPC_CHANNELS.WIZARD_COMMIT_STEP, (_event, { sessionId, stepKey, data }) => {
-    const session = sessionManager.get(sessionId)
-    if (!session) throw new Error('Session not found')
-      
-    sessionManager.commitStep(sessionId, stepKey, data)
-    
-    // Open next step automatically
-    WizardWindowManager.openStep(session, session.currentStepIndex + 1)
-  })
-
-  ipcMain.handle(IPC_CHANNELS.WIZARD_GO_BACK, (_event, { sessionId }) => {
-    const session = sessionManager.get(sessionId)
-    if (!session) throw new Error('Session not found')
-    
-    const prevIndex = Math.max(0, session.currentStepIndex - 1)
-    WizardWindowManager.openStep(session, prevIndex)
-  })
-
+  // Account management
   ipcMain.handle('account:list', async () => {
-    // Return mock accounts for now since PublishAccountService is stubbed
-    return [
-      { id: 'acc1', username: 'Test Account 1', handle: '@testacc1', status: 'active' },
-      { id: 'acc2', username: 'Test Account 2', handle: '@testacc2', status: 'active' }
-    ]
+    try {
+      const accounts = PublishAccountService.listAccounts()
+      console.log(`[IPC] account:list → ${accounts.length} accounts`)
+      return accounts.map(a => ({
+        id: a.id,
+        username: a.username,
+        handle: a.handle || `@${a.username}`,
+        avatar: a.avatar,
+        status: a.session_status,
+      }))
+    } catch (err) {
+      console.error('[IPC] account:list error:', err)
+      return []
+    }
   })
 
   ipcMain.handle('account:add', async () => {
+    console.log('[IPC] account:add — opening login window')
+    const parentWindow = BrowserWindow.getFocusedWindow() || undefined
+    const account = await PublishAccountService.addAccountViaLogin(parentWindow)
+    if (account) {
+      console.log(`[IPC] account:add — saved: ${account.username}`)
+      BrowserWindow.getAllWindows().forEach(w => {
+        if (!w.isDestroyed()) w.webContents.send('account:updated')
+      })
+    }
+    return account ? { id: account.id, username: account.username, handle: account.handle, status: 'active' } : null
+  })
+
+  ipcMain.handle('account:delete', async (_event, { id }: { id: string }) => {
+    console.log(`[IPC] account:delete — ${id}`)
+    PublishAccountService.deleteAccount(id)
     return true
   })
 }

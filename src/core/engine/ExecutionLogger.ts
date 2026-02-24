@@ -95,6 +95,13 @@ export class ExecutionLogger {
     })
   }
 
+  /** Emit structured node result data for live detail views */
+  static nodeData(campaignId: string, instanceId: string, nodeId: string, data: any) {
+    this.emitToUI('execution:node-data', {
+      campaignId, instanceId, nodeId, data, timestamp: Date.now()
+    })
+  }
+
   static nodeError(campaignId: string, jobId: string, instanceId: string, nodeId: string, error: string) {
     this.log({
       campaign_id: campaignId, job_id: jobId, instance_id: instanceId, node_id: nodeId,

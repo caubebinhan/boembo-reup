@@ -111,8 +111,8 @@ app.whenReady().then(() => {
   initDb()
   CrashRecoveryService.recoverPendingTasks()
   
-  // Initialize FlowLoader
-  const flowsDir = join(__dirname, '../../src/flows/presets')
+  // Initialize FlowLoader — scan src/workflows/*/flow.yaml
+  const flowsDir = join(__dirname, '../../src/workflows')
   console.log('Loading yaml flows from:', flowsDir)
   const flows = flowLoader.loadAll(flowsDir)
   console.log(`Loaded ${flows.length} flows`)

@@ -1,6 +1,6 @@
-import { WizardStepConfig, WizardStepProps } from '../WizardStepTypes'
-import { Step5_Target } from '../../components/wizard/Step5_Target'
-import { FormField, TextInput } from '../shared'
+import { WizardStepConfig, WizardStepProps } from '@renderer/wizard/WizardStepTypes'
+import { Step5_Target } from '@renderer/components/wizard/Step5_Target'
+import { FormField, TextInput } from '@renderer/wizard/shared'
 import React, { useRef } from 'react'
 
 // ─── Step: File Picker ────────────────────────────

@@ -6,19 +6,22 @@ import { FlowDefinition, WorkflowUIDescriptor } from './ExecutionContracts'
 export class FlowLoader {
   private cache = new Map<string, FlowDefinition>()
 
-  public loadAll(presetsDir: string): FlowDefinition[] {
-    if (!fs.existsSync(presetsDir)) return []
+  public loadAll(workflowsDir: string): FlowDefinition[] {
+    if (!fs.existsSync(workflowsDir)) return []
     
-    const files = fs.readdirSync(presetsDir).filter(f => f.endsWith('.flow.yaml'))
+    // Scan subdirectories: src/workflows/*/flow.yaml
+    const entries = fs.readdirSync(workflowsDir, { withFileTypes: true })
     const flows: FlowDefinition[] = []
 
-    for (const file of files) {
-      const filePath = path.join(presetsDir, file)
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const flowFile = path.join(workflowsDir, entry.name, 'flow.yaml')
+      if (!fs.existsSync(flowFile)) continue
       try {
-        const flow = this.load(filePath)
+        const flow = this.load(flowFile)
         flows.push(flow)
       } catch (err) {
-        console.error(`Error loading flow ${file}:`, err)
+        console.error(`Error loading flow ${entry.name}/flow.yaml:`, err)
       }
     }
     return flows
@@ -49,6 +52,7 @@ export class FlowLoader {
       node_id: n.node_id,
       instance_id: n.instance_id,
       children: n.children,
+      on_error: n.on_error,
     }))
 
     const edges = raw.edges.map((e: any) => ({

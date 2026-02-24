@@ -1,8 +1,8 @@
-import { WizardStepConfig } from '../WizardStepTypes'
-import { Step1_Details } from '../../components/wizard/Step1_Details'
-import { Step2_Sources } from '../../components/wizard/Step2_Sources'
-import { Step4_Schedule } from '../../components/wizard/Step4_Schedule'
-import { Step5_Target } from '../../components/wizard/Step5_Target'
+import { WizardStepConfig } from '@renderer/wizard/WizardStepTypes'
+import { Step1_Details } from '@renderer/components/wizard/Step1_Details'
+import { Step2_Sources } from '@renderer/components/wizard/Step2_Sources'
+import { Step4_Schedule } from '@renderer/components/wizard/Step4_Schedule'
+import { Step5_Target } from '@renderer/components/wizard/Step5_Target'
 
 export const tiktokRepostSteps: WizardStepConfig[] = [
   {

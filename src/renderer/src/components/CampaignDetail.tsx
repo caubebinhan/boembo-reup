@@ -1,11 +1,36 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, Suspense, Component, ReactNode } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '../store/store'
 import { setJobsForCampaign } from '../store/nodeEventsSlice'
 import { InteractionBadge } from './InteractionBadge'
-import { NodeStatusGrid } from './NodeStatusGrid'
 import { useFlowUIDescriptor, evaluateExpression } from '../hooks/useFlowUIDescriptor'
-import { getDetailComponent } from './DetailComponentRegistry'
+import { getWorkflowDetailComponent } from '../detail/WorkflowDetailRegistry'
+
+// ── ErrorBoundary for lazy detail views ──────────
+interface EBState { hasError: boolean; error?: Error }
+class DetailErrorBoundary extends Component<{ children: ReactNode; workflowId: string }, EBState> {
+    state: EBState = { hasError: false }
+    static getDerivedStateFromError(error: Error) { return { hasError: true, error } }
+    componentDidCatch(error: Error, info: any) {
+        console.error('[DetailErrorBoundary] Caught error in detail view:', error, info)
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-6 text-center">
+                    <p className="text-red-400 font-semibold mb-2">⚠ Detail View Error</p>
+                    <p className="text-red-400/70 text-sm mb-3">{this.state.error?.message || 'Unknown error'}</p>
+                    <p className="text-gray-600 text-xs">Workflow: {this.props.workflowId}</p>
+                    <button
+                        onClick={() => this.setState({ hasError: false, error: undefined })}
+                        className="mt-3 px-4 py-1.5 text-sm rounded-lg bg-red-900/30 text-red-400 hover:bg-red-900/50 transition"
+                    >Retry</button>
+                </div>
+            )
+        }
+        return this.props.children
+    }
+}
 
 interface CampaignDetailProps {
     campaignId: string
@@ -16,7 +41,6 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
     const dispatch = useDispatch()
     const [campaign, setCampaign] = useState<any>(null)
     const [loading, setLoading] = useState(true)
-    const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
 
     const workflowId = campaign?.workflow_id || 'tiktok-repost'
     const { descriptor } = useFlowUIDescriptor(workflowId)
@@ -37,7 +61,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
             // @ts-ignore
             const data = await window.api.invoke('campaign:get', { id: campaignId })
             if (data) setCampaign(data)
-        } catch (err) { console.error(err) }
+        } catch (err) { console.error('[CampaignDetail] fetchCampaign error:', err) }
         finally { setLoading(false) }
     }, [campaignId])
 
@@ -46,23 +70,16 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
             // @ts-ignore
             const jobs = await window.api.invoke('campaign:get-jobs', { id: campaignId })
             dispatch(setJobsForCampaign({ campaignId, jobs }))
-        } catch (err) { console.error(err) }
+        } catch (err) { console.error('[CampaignDetail] fetchJobs error:', err) }
     }, [campaignId, dispatch])
 
     useEffect(() => {
+        console.log(`[CampaignDetail] Loading campaign ${campaignId}`)
         fetchCampaign()
         fetchJobs()
         const timer = setInterval(() => { fetchCampaign(); fetchJobs() }, 3000)
         return () => clearInterval(timer)
     }, [fetchCampaign, fetchJobs])
-
-    // Initialize collapsed state from descriptor sections
-    useEffect(() => {
-        const sections = descriptor?.detail_page?.sections || []
-        const initial: Record<string, boolean> = {}
-        sections.forEach((s: any) => { if (s.collapsed) initial[s.id] = true })
-        setCollapsedSections(initial)
-    }, [descriptor])
 
     if (loading || !campaign) {
         return (
@@ -72,11 +89,12 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
         )
     }
 
+    console.log(`[CampaignDetail] Rendering campaign ${campaign.name}, workflow=${workflowId}, status=${campaign.status}`)
+
     const evalCtx = { campaign, config, hasActiveJobs }
     const detailPage = descriptor?.detail_page || {}
     const headerStats = detailPage?.header_stats || []
     const headerActions = detailPage?.header_actions || []
-    const sections = detailPage?.sections || []
 
     const statusColors: Record<string, string> = {
         idle: '#6b7280', active: '#10b981', paused: '#eab308',
@@ -84,16 +102,16 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
     }
 
     const handleAction = async (event: string, payload: any) => {
+        console.log(`[CampaignDetail] Action: ${event}`, payload)
         try {
             // @ts-ignore
             await window.api.invoke(event, payload)
             setTimeout(() => { fetchCampaign(); fetchJobs() }, 500)
-        } catch (err) { console.error('Action failed:', err) }
+        } catch (err) { console.error('[CampaignDetail] Action failed:', err) }
     }
 
-    const toggleSection = (id: string) => {
-        setCollapsedSections(prev => ({ ...prev, [id]: !prev[id] }))
-    }
+    // ── Per-workflow detail component (cached lazy) ──
+    const WorkflowDetail = getWorkflowDetailComponent(workflowId)
 
     return (
         <div className="flex-1 flex flex-col h-screen bg-gray-900 text-white overflow-hidden">
@@ -110,7 +128,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                             <h2 className="text-xl font-bold text-white">{campaign.name}</h2>
                             <p className="text-xs text-gray-500 mt-0.5">{workflowId} • {new Date(campaign.created_at).toLocaleDateString()}</p>
                         </div>
-                        <span className="text-xs px-2 py-0.5 rounded-full" style={{
+                        <span className="text-xs px-2.5 py-1 rounded-full font-medium" style={{
                             backgroundColor: `${statusColors[campaign.status] || '#6b7280'}20`,
                             color: statusColors[campaign.status] || '#6b7280'
                         }}>{campaign.status}</span>
@@ -168,48 +186,25 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                 )}
             </div>
 
-            {/* CONTENT */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
-                {/* Sections from YAML */}
-                {sections.map((section: any) => {
-                    const show = section.show_if ? evaluateExpression(section.show_if, evalCtx, true) : true
-                    if (!show) return null
-                    const isCollapsed = collapsedSections[section.id] ?? false
-
-                    let SectionComponent: React.FC<any> | null = null
-                    if (section.component === 'NodePipelineView') {
-                        SectionComponent = () => <NodeStatusGrid campaignId={campaignId} campaign={campaign} workflowId={workflowId} />
-                    } else {
-                        SectionComponent = getDetailComponent(section.component)
-                    }
-
-                    return (
-                        <div key={section.id} className="rounded-xl border border-gray-800 bg-gray-900/50 overflow-hidden">
-                            <button onClick={() => toggleSection(section.id)} className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-800/30 transition">
-                                <div className="flex items-center gap-2">
-                                    <span>{section.icon || '📋'}</span>
-                                    <span className="font-medium text-white text-sm">{section.title}</span>
+            {/* CONTENT — Per-workflow detail or fallback */}
+            <div className="flex-1 overflow-y-auto px-6 py-6">
+                <DetailErrorBoundary workflowId={workflowId}>
+                    {WorkflowDetail ? (
+                        <Suspense fallback={
+                            <div className="flex items-center justify-center py-12">
+                                <div className="text-gray-500 animate-pulse flex items-center gap-2">
+                                    <span className="animate-spin">⏳</span> Loading detail view...
                                 </div>
-                                <span className="text-gray-500 text-xs">{isCollapsed ? '▶' : '▼'}</span>
-                            </button>
-                            {!isCollapsed && SectionComponent && (
-                                <div className="px-5 pb-5 pt-1">
-                                    <SectionComponent campaignId={campaignId} campaign={campaign} workflowId={workflowId} />
-                                </div>
-                            )}
-                            {!isCollapsed && !SectionComponent && (
-                                <div className="px-5 pb-5 pt-1 text-gray-600 text-sm">Component "{section.component}" not registered</div>
-                            )}
+                            </div>
+                        }>
+                            <WorkflowDetail campaignId={campaignId} campaign={campaign} workflowId={workflowId} />
+                        </Suspense>
+                    ) : (
+                        <div className="text-gray-600 text-sm text-center py-12">
+                            No detail view registered for workflow "{workflowId}"
                         </div>
-                    )
-                })}
-
-                {/* Fallback if no sections */}
-                {sections.length === 0 && (
-                    <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-5">
-                        <NodeStatusGrid campaignId={campaignId} campaign={campaign} workflowId={workflowId} />
-                    </div>
-                )}
+                    )}
+                </DetailErrorBoundary>
             </div>
         </div>
     )

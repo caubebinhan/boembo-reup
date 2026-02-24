@@ -1,48 +1,32 @@
 import { useState, useEffect } from 'react'
-import { WorkflowUIDescriptor } from '../../../core/flow/ExecutionContracts'
 
-export function useFlowUIDescriptor(flowId: string) {
-    const [descriptor, setDescriptor] = useState<WorkflowUIDescriptor | null>(null)
-    const [loading, setLoading] = useState(true)
+// Reads UI descriptor from flow.yaml (workflow-agnostic).
+// The flow.yaml's 'ui' section drives CampaignCard badges, stats, actions, and detail page layout.
+export function useFlowUIDescriptor(workflowId: string) {
+  const [descriptor, setDescriptor] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
-    useEffect(() => {
-        if (!flowId) {
-            setLoading(false)
-            return
-        }
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    // @ts-ignore
+    window.api.invoke('flow:get-ui-descriptor', workflowId)
+      .then((ui: any) => { if (!cancelled) setDescriptor(ui) })
+      .catch((err: any) => console.error('[useFlowUIDescriptor] Failed:', err))
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [workflowId])
 
-        const load = async () => {
-            try {
-                // @ts-ignore
-                const ui = await window.api.invoke('flow:get-ui-descriptor', flowId)
-                setDescriptor(ui)
-            } catch (err) {
-                console.error(`Failed to load UI descriptor for flow ${flowId}:`, err)
-            } finally {
-                setLoading(false)
-            }
-        }
-        load()
-    }, [flowId])
-
-    return { descriptor, loading }
+  return { descriptor, loading }
 }
 
-/**
- * Safely evaluates a JS expression string against a data context
- */
-export function evaluateExpression(expr: string | undefined, context: Record<string, any>, fallback: any = null): any {
-    if (!expr) return fallback
-    
-    try {
-        const keys = Object.keys(context)
-        const values = Object.values(context)
-        // Create an isolated function context
-        // eslint-disable-next-line no-new-func
-        const fn = new Function(...keys, `return ${expr}`)
-        return fn(...values)
-    } catch (err) {
-        console.warn(`Evaluation failed for expression: "${expr}"`, err)
-        return fallback
-    }
+// Safe expression evaluator for YAML-driven UI configs
+export function evaluateExpression(expr: string | undefined, ctx: any, fallback: any = null): any {
+  if (!expr) return fallback
+  try {
+    const fn = new Function(...Object.keys(ctx), `return (${expr})`)
+    return fn(...Object.values(ctx))
+  } catch {
+    return fallback
+  }
 }

@@ -10,7 +10,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
   try {
     const existing = db.prepare(
-      `SELECT id FROM videos WHERE platform_id = ? AND campaign_id = ? AND status IN ('published','verified','downloaded')`
+      `SELECT platform_id FROM videos WHERE platform_id = ? AND campaign_id = ? AND status IN ('published','verified','downloaded')`
     ).get(video.platform_id, ctx.campaign_id) as any
 
     if (existing) {

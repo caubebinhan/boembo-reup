@@ -127,6 +127,9 @@ export class FlowEngine {
       ExecutionLogger.nodeEnd(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id,
         { action: result.action, message: result.message }, durationMs)
 
+      // Emit structured data for live detail views
+      ExecutionLogger.nodeData(job.campaign_id, nodeDef.instance_id, nodeDef.node_id, result.data)
+
       JobQueue.updateStatus(job.id, 'completed')
 
       // ── Handle flow control ───────────────────────
@@ -192,6 +195,23 @@ export class FlowEngine {
       const item = items[i]
       let currentData = item
 
+      // Check campaign status — stop if paused/cancelled
+      const campaignStatus = (db.prepare('SELECT status FROM campaigns WHERE id = ?').get(job.campaign_id) as any)?.status
+      if (campaignStatus === 'paused' || campaignStatus === 'cancelled') {
+        ExecutionLogger.log({
+          campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
+          level: 'info', event: 'loop:paused',
+          message: `Loop paused at item ${i + 1}/${items.length} (campaign ${campaignStatus})`
+        })
+        return
+      }
+
+      ExecutionLogger.log({
+        campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
+        level: 'info', event: 'loop:iteration',
+        message: `Processing item ${i + 1}/${items.length}`
+      })
+
       for (const childInstanceId of children) {
         const childDef = flow.nodes.find(n => n.instance_id === childInstanceId)
         if (!childDef) continue
@@ -204,6 +224,16 @@ export class FlowEngine {
             message: `Node impl ${childDef.node_id} not registered, skipping`
           })
           continue
+        }
+
+        // Input contract validation
+        if (currentData === null || currentData === undefined) {
+          const msg = `Node "${childDef.instance_id}" received null input — previous node may have failed or returned empty data`
+          ExecutionLogger.log({
+            campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
+            level: 'error', event: 'node:input-error', message: msg
+          })
+          break // Skip to next item
         }
 
         const startTime = Date.now()
@@ -238,6 +268,12 @@ export class FlowEngine {
           ExecutionLogger.nodeEnd(job.campaign_id, job.id, childDef.instance_id, childDef.node_id,
             { action: result.action }, durationMs)
 
+          // Emit structured data for live detail views
+          ExecutionLogger.nodeData(job.campaign_id, childDef.instance_id, childDef.node_id, result.data)
+
+          // Update campaign counters based on node type
+          this.updateCampaignCounters(job.campaign_id, childDef.node_id, result)
+
           // Flow control from child
           if (result.action === 'finish') {
             db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('finished', job.campaign_id)
@@ -245,18 +281,24 @@ export class FlowEngine {
             return
           }
 
-          if (result.action === 'recall' && result.recall_target) {
-            const targetNode = flow.nodes.find(n => n.instance_id === result.recall_target)
-            if (targetNode) {
-              this.createJob(job.campaign_id, job.workflow_id, targetNode.instance_id, targetNode.node_id, result.data || {})
-            }
-            return
+          if (result.action === 'continue' && !result.data) {
+            // Node explicitly skipped this item (e.g. dedup)
+            break
           }
 
           currentData = result.data
         } catch (err: any) {
           ExecutionLogger.nodeError(job.campaign_id, job.id, childDef.instance_id, childDef.node_id, err.message)
-          // Skip this item on error, continue to next
+
+          // Per-node error handling
+          const onError = childDef.on_error || 'skip'
+          if (onError === 'stop_campaign') {
+            db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('error', job.campaign_id)
+            ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:error',
+              `Campaign stopped: node "${childDef.instance_id}" failed: ${err.message}`)
+            return
+          }
+          // 'skip' (default) — skip this item, continue to next
           break
         }
       }
@@ -270,6 +312,20 @@ export class FlowEngine {
         this.createJob(job.campaign_id, job.workflow_id, nextNode.instance_id, nextNode.node_id, { loopCompleted: true, itemCount: items.length })
       }
     }
+  }
+
+  // ── Update campaign counters ──────────────────────
+  private updateCampaignCounters(campaignId: string, nodeId: string, result: any) {
+    try {
+      if (nodeId.includes('scanner') && result.data) {
+        const count = Array.isArray(result.data) ? result.data.length : 1
+        db.prepare('UPDATE campaigns SET queued_count = queued_count + ? WHERE id = ?').run(count, campaignId)
+      } else if (nodeId.includes('downloader') && result.data?.local_path) {
+        db.prepare('UPDATE campaigns SET downloaded_count = downloaded_count + 1 WHERE id = ?').run(campaignId)
+      } else if (nodeId.includes('publisher') && result.data?.published) {
+        db.prepare('UPDATE campaigns SET published_count = published_count + 1 WHERE id = ?').run(campaignId)
+      }
+    } catch { /* non-critical */ }
   }
 
   // ── Helpers ──────────────────────────────────────

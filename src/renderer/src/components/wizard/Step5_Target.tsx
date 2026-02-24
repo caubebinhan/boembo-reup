@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
 interface Account {
     id: string
@@ -15,28 +15,31 @@ interface Step5Props {
 
 export function Step5_Target({ data, updateData }: Step5Props) {
     const [accounts, setAccounts] = useState<Account[]>([])
+    const [addingAccount, setAddingAccount] = useState(false)
     const selectedAccounts: string[] = data.selectedAccounts || []
 
-    useEffect(() => {
-        // Fetch accounts from IPC
-        // @ts-ignore
-        window.api.invoke('account:list').then(data => {
-            if (data && data.length > 0) {
-                setAccounts(data)
-            } else {
-                // Fallback mock accounts if empty
-                setAccounts([
-                    { id: 'acc1', username: 'Animation Lab', handle: '@animationlabjapan', status: 'active' },
-                    { id: 'acc2', username: 'Daily News', handle: '@dailynews123', status: 'expired' }
-                ])
-            }
-        }).catch(() => {
-            setAccounts([
-                { id: 'acc1', username: 'Animation Lab', handle: '@animationlabjapan', status: 'active' },
-                { id: 'acc2', username: 'Daily News', handle: '@dailynews123', status: 'expired' }
-            ])
-        })
+    const fetchAccounts = useCallback(async () => {
+        try {
+            // @ts-ignore
+            const list = await window.api.invoke('account:list')
+            console.log('[Step5_Target] Fetched accounts:', list?.length || 0)
+            setAccounts(list || [])
+        } catch (err) {
+            console.error('[Step5_Target] Failed to fetch accounts:', err)
+            setAccounts([])
+        }
     }, [])
+
+    useEffect(() => {
+        fetchAccounts()
+        // Listen for account updates (after adding a new one)
+        // @ts-ignore
+        const off = window.api?.on('account:updated', () => {
+            console.log('[Step5_Target] Account updated event — refreshing list')
+            fetchAccounts()
+        })
+        return () => { if (typeof off === 'function') off() }
+    }, [fetchAccounts])
 
     const toggleAccount = (id: string) => {
         if (selectedAccounts.includes(id)) {
@@ -47,9 +50,18 @@ export function Step5_Target({ data, updateData }: Step5Props) {
     }
 
     const handleAddAccount = async () => {
-        // @ts-ignore
-        await window.api.invoke('account:add')
-        // Should trigger reload of account:list, omitting for now
+        setAddingAccount(true)
+        try {
+            // @ts-ignore
+            const result = await window.api.invoke('account:add')
+            console.log('[Step5_Target] account:add result:', result)
+            // Refresh list after adding
+            await fetchAccounts()
+        } catch (err) {
+            console.error('[Step5_Target] Failed to add account:', err)
+        } finally {
+            setAddingAccount(false)
+        }
     }
 
     return (
@@ -84,9 +96,10 @@ export function Step5_Target({ data, updateData }: Step5Props) {
                     </div>
                     <button
                         onClick={handleAddAccount}
-                        className="text-sm font-medium border border-gray-600 hover:bg-gray-800 px-4 py-2 rounded-lg transition"
+                        disabled={addingAccount}
+                        className="text-sm font-medium border border-gray-600 hover:bg-gray-800 px-4 py-2 rounded-lg transition disabled:opacity-50"
                     >
-                        + Add New Account
+                        {addingAccount ? '⏳ Logging in...' : '+ Add New Account'}
                     </button>
                 </div>
 
@@ -99,8 +112,8 @@ export function Step5_Target({ data, updateData }: Step5Props) {
                                 key={acc.id}
                                 onClick={() => toggleAccount(acc.id)}
                                 className={`flex items-center p-4 rounded-xl border-2 transition cursor-pointer select-none group ${isSelected
-                                        ? 'border-purple-600 bg-purple-600/10'
-                                        : 'border-gray-700 bg-[#111827] hover:border-gray-500'
+                                    ? 'border-purple-600 bg-purple-600/10'
+                                    : 'border-gray-700 bg-[#111827] hover:border-gray-500'
                                     }`}
                             >
                                 {/* Checkbox */}

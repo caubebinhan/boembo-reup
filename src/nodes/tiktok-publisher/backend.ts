@@ -17,25 +17,29 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   rrState.set(rrKey, idx + 1)
   const accountId = selectedAccounts[idx]
 
-  let account: any = null
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { PublishAccountService } = require('../../main/services/PublishAccountService')
-    account = PublishAccountService.getAccount(accountId)
-    if (typeof account === 'string') account = JSON.parse(account)
-  } catch {
-    throw new Error('Account not found')
+  // Query account directly from DB (no dynamic require)
+  const account = db.prepare(
+    'SELECT * FROM publish_accounts WHERE id = ?'
+  ).get(accountId) as any
+
+  if (!account) {
+    throw new Error(`Account not found: ${accountId}`)
+  }
+  if (account.session_status === 'expired') {
+    throw new Error('SESSION_EXPIRED: Account session invalid')
   }
 
-  if (!account || account.session_status === 'expired') {
-    throw new Error('SESSION_EXPIRED: Account session invalid')
+  // Parse cookies from JSON string
+  const cookies = account.cookies_json ? JSON.parse(account.cookies_json) : null
+  if (!cookies) {
+    throw new Error(`Account ${account.username} has no cookies`)
   }
 
   const caption = video.generated_caption || video.description || ''
   ctx.onProgress(`Publishing to @${account.username}...`)
 
   const tiktok = new TikTokScanner()
-  const result = await tiktok.publishVideo(video.local_path, caption, account.cookies, {
+  const result = await tiktok.publishVideo(video.local_path, caption, cookies, {
     privacy: ctx.params.privacy || 'public',
   })
 

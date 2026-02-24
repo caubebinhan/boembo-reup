@@ -26,7 +26,8 @@ export function initDb() {
       campaign_id TEXT NOT NULL,
       status TEXT DEFAULT 'pending',
       publish_url TEXT,
-      local_path TEXT
+      local_path TEXT,
+      data_json TEXT
     );
 
     CREATE TABLE IF NOT EXISTS jobs (
@@ -58,5 +59,28 @@ export function initDb() {
       data_json TEXT,
       created_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS publish_accounts (
+      id TEXT PRIMARY KEY,
+      platform TEXT NOT NULL DEFAULT 'tiktok',
+      username TEXT NOT NULL,
+      handle TEXT,
+      avatar TEXT,
+      cookies_json TEXT,
+      proxy TEXT,
+      session_status TEXT DEFAULT 'active',
+      auto_caption INTEGER DEFAULT 0,
+      auto_tags TEXT,
+      created_at INTEGER,
+      updated_at INTEGER
+    );
   `)
+
+  // Migrations for existing DBs
+  const migrations = [
+    'ALTER TABLE videos ADD COLUMN data_json TEXT',
+  ]
+  for (const sql of migrations) {
+    try { db.exec(sql) } catch { /* column already exists */ }
+  }
 }

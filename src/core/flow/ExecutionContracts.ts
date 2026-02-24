@@ -15,6 +15,8 @@ export interface FlowNodeDefinition {
   instance_id: string
   /** Only for loop nodes — which children to iterate */
   children?: string[]
+  /** Per-node error handling: skip (default) | stop_campaign | retry */
+  on_error?: 'skip' | 'stop_campaign' | 'retry'
   /** Runtime execution state (populated by engine) */
   execution?: any
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { WizardStepper } from './WizardStepper'
-import { workflowWizardRegistry } from '../wizard/workflowWizardRegistry'
+import { getWizardSteps, workflowWizardRegistry } from '../wizard/workflowWizardRegistry'
 import { WizardStepConfig } from '../wizard/WizardStepTypes'
 import { FormField, TextInput, SelectInput } from '../wizard/shared'
 
@@ -55,11 +55,20 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
         }
         load()
     }, [])
-
-    // ── Wizard steps for selected workflow ─────
-    const workflowSteps: WizardStepConfig[] = useMemo(() => {
-        if (!selectedWorkflow) return []
-        return workflowWizardRegistry[selectedWorkflow] || []
+    // ── Wizard steps for selected workflow (async) ─────
+    const [workflowSteps, setWorkflowSteps] = useState<WizardStepConfig[]>([])
+    const [stepsLoading, setStepsLoading] = useState(false)
+    useEffect(() => {
+        if (!selectedWorkflow) { setWorkflowSteps([]); return }
+        console.log(`[Wizard] Loading steps for workflow: ${selectedWorkflow}`)
+        setStepsLoading(true)
+        getWizardSteps(selectedWorkflow)
+            .then(steps => {
+                console.log(`[Wizard] Loaded ${steps.length} steps for ${selectedWorkflow}:`, steps.map(s => s.id))
+                setWorkflowSteps(steps)
+            })
+            .catch(err => console.error('[Wizard] Failed to load steps:', err))
+            .finally(() => setStepsLoading(false))
     }, [selectedWorkflow])
 
     // Step 0 is "Setup" (name + workflow), then workflow-specific steps
@@ -86,6 +95,10 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
             }
             if (!selectedWorkflow) {
                 setStepError('Please select a workflow')
+                return
+            }
+            if (stepsLoading || workflowSteps.length === 0) {
+                setStepError('Wizard steps are still loading, please wait...')
                 return
             }
             // Persist name into stepData
