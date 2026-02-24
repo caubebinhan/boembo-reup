@@ -35,7 +35,17 @@ export class FlowEngine {
 
     // Find start nodes (no incoming edges)
     const targets = new Set(flow.edges.map(e => e.to))
-    const startNodes = flow.nodes.filter(n => !targets.has(n.instance_id))
+    // Exclude: nodes that are edge targets, AND nodes that are children of loop nodes
+    const loopChildren = new Set<string>()
+    for (const node of flow.nodes) {
+      if (node.children) {
+        for (const childId of node.children) loopChildren.add(childId)
+      }
+    }
+    const startNodes = flow.nodes.filter(n => !targets.has(n.instance_id) && !loopChildren.has(n.instance_id))
+
+    console.log(`[FlowEngine] Registered nodes: ${nodeRegistry.getAll().map(n => n.id).join(', ')}`)
+    console.log(`[FlowEngine] Start nodes: ${startNodes.map(n => n.instance_id).join(', ')}`)
 
     for (const node of startNodes) {
       this.createJob(campaignId, campaign.workflow_id, node.instance_id, node.node_id, {})

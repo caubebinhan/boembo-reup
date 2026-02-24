@@ -11,7 +11,7 @@ interface NodeStatusGridProps {
 interface FlowNodeInfo {
     node_id: string
     instance_id: string
-    execution: any
+    children?: string[]
 }
 
 interface FlowEdge {
@@ -19,7 +19,6 @@ interface FlowEdge {
     to: string
 }
 
-// ── Node icons by convention ───────────────────────
 const NODE_ICONS: Record<string, string> = {
     'tiktok.scanner': '🔍',
     'core.deduplicator': '🔄',
@@ -29,6 +28,8 @@ const NODE_ICONS: Record<string, string> = {
     'core.caption_gen': '📋',
     'tiktok.publisher': '📤',
     'youtube.publisher': '📺',
+    'core.timeout': '⏳',
+    'core.loop': '🔁',
 }
 
 const NODE_LABELS: Record<string, string> = {
@@ -38,21 +39,76 @@ const NODE_LABELS: Record<string, string> = {
     'core.limit': 'Limit',
     'core.downloader': 'Download',
     'core.caption_gen': 'Caption',
-    'tiktok.publisher': 'TikTok Pub',
-    'youtube.publisher': 'YouTube Pub',
+    'tiktok.publisher': 'TikTok',
+    'youtube.publisher': 'YouTube',
+    'core.timeout': 'Wait',
+    'core.loop': 'Loop',
+}
+
+function NodeCard({ node, campaignId, size = 'normal' }: { node: FlowNodeInfo, campaignId: string, size?: 'normal' | 'small' }) {
+    const stat = useSelector((s: RootState) =>
+        s.nodeEvents.byCampaign[campaignId]?.nodeStats?.[node.instance_id] || { pending: 0, running: 0, completed: 0, failed: 0 }
+    )
+    const activeInfo = useSelector((s: RootState) =>
+        s.nodeEvents.activeNodes?.[campaignId]?.[node.instance_id]
+    )
+    const progressMsg = useSelector((s: RootState) =>
+        s.nodeEvents.nodeProgress?.[campaignId]?.[node.instance_id]
+    )
+
+    const isRunning = activeInfo?.status === 'running' || stat.running > 0
+    const isError = stat.failed > 0
+    const isDone = stat.completed > 0 && !isRunning
+
+    let statusColor = '#4b5563'   // idle gray
+    if (isRunning) statusColor = '#3b82f6'
+    else if (isError) statusColor = '#ef4444'
+    else if (isDone) statusColor = '#10b981'
+
+    const icon = NODE_ICONS[node.node_id] || '📦'
+    const label = NODE_LABELS[node.node_id] || node.instance_id
+
+    const isSmall = size === 'small'
+
+    return (
+        <div
+            className={`rounded-xl border transition-all duration-300 ${isSmall ? 'p-2.5 min-w-[110px]' : 'p-3.5 min-w-[140px]'}`}
+            style={{
+                borderColor: `${statusColor}50`,
+                backgroundColor: `${statusColor}10`,
+                boxShadow: isRunning ? `0 0 18px ${statusColor}25` : 'none',
+            }}
+        >
+            {/* Running pulse indicator */}
+            {isRunning && (
+                <div className="h-0.5 rounded-t mb-2 -mt-2.5 -mx-2.5 animate-pulse"
+                    style={{ background: `linear-gradient(90deg, transparent, ${statusColor}, transparent)` }} />
+            )}
+
+            <div className="flex items-center gap-1.5 mb-1">
+                <span className={isRunning ? 'animate-pulse' : ''} style={{ fontSize: isSmall ? '13px' : '14px' }}>
+                    {icon}
+                </span>
+                <span className="font-semibold text-white truncate" style={{ fontSize: isSmall ? '11px' : '12px' }}>
+                    {label}
+                </span>
+                {isRunning && <span className="ml-auto w-1.5 h-1.5 rounded-full animate-pulse flex-shrink-0" style={{ background: statusColor }} />}
+            </div>
+
+            {progressMsg && isRunning && (
+                <p className="text-xs truncate mt-1 opacity-80" style={{ color: statusColor }}>{progressMsg}</p>
+            )}
+
+            <div className="flex gap-2 mt-1.5 text-xs opacity-60 text-gray-400">
+                {stat.completed > 0 && <span style={{ color: '#10b981' }}>✓{stat.completed}</span>}
+                {stat.pending > 0 && <span style={{ color: '#eab308' }}>…{stat.pending}</span>}
+                {stat.failed > 0 && <span style={{ color: '#ef4444' }}>✗{stat.failed}</span>}
+            </div>
+        </div>
+    )
 }
 
 export function NodeStatusGrid({ campaignId, workflowId }: NodeStatusGridProps) {
-    const nodeStatsMap = useSelector((state: RootState) =>
-        state.nodeEvents.byCampaign[campaignId]?.nodeStats || {}
-    )
-    const activeNodes = useSelector((state: RootState) =>
-        state.nodeEvents.activeNodes[campaignId] || {}
-    )
-    const nodeProgress = useSelector((state: RootState) =>
-        state.nodeEvents.nodeProgress[campaignId] || {}
-    )
-
     const [flowData, setFlowData] = useState<{ nodes: FlowNodeInfo[], edges: FlowEdge[] } | null>(null)
 
     useEffect(() => {
@@ -62,134 +118,106 @@ export function NodeStatusGrid({ campaignId, workflowId }: NodeStatusGridProps) 
             .catch(console.error)
     }, [workflowId])
 
-    // Topological sort
-    const orderedNodes = useMemo(() => {
-        if (!flowData) return []
-        const { nodes, edges } = flowData
+    // Build top-level ordered nodes (non-children)
+    const { topLevelNodes, childrenSet } = useMemo(() => {
+        if (!flowData) return { topLevelNodes: [], childrenSet: new Set<string>() }
+        const { nodes } = flowData
+        const cs = new Set<string>()
+        for (const n of nodes) if (n.children) for (const c of n.children) cs.add(c)
+        const tl = nodes.filter(n => !cs.has(n.instance_id))
+        return { topLevelNodes: tl, childrenSet: cs }
+    }, [flowData])
+
+    // Topological sort of top-level
+    const orderedTopLevel = useMemo(() => {
+        if (!flowData) return topLevelNodes
+        const { edges } = flowData
         const targets = new Set(edges.map(e => e.to))
-        const starts = nodes.filter(n => !targets.has(n.instance_id))
+        const starts = topLevelNodes.filter(n => !targets.has(n.instance_id))
         const edgeMap = new Map<string, string>()
         for (const e of edges) edgeMap.set(e.from, e.to)
 
         const ordered: FlowNodeInfo[] = []
         const visited = new Set<string>()
         for (const start of starts) {
-            let current: string | undefined = start.instance_id
-            while (current && !visited.has(current)) {
-                visited.add(current)
-                const node = nodes.find(n => n.instance_id === current)
+            let cur: string | undefined = start.instance_id
+            while (cur && !visited.has(cur)) {
+                visited.add(cur)
+                const node = topLevelNodes.find(n => n.instance_id === cur)
                 if (node) ordered.push(node)
-                current = edgeMap.get(current)
+                cur = edgeMap.get(cur)
             }
         }
         return ordered
-    }, [flowData])
+    }, [flowData, topLevelNodes])
+
+    if (!flowData) return <div className="text-gray-500 text-sm animate-pulse">Loading pipeline...</div>
+
+    const childNodes = (flowData?.nodes || []).filter(n => childrenSet.has(n.instance_id))
 
     return (
-        <div className="space-y-6">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <span>📊</span> Pipeline
-            </h3>
-
-            {/* Pipeline flow — horizontal cards connected by arrows */}
-            <div className="flex items-start gap-0 overflow-x-auto pb-4">
-                {orderedNodes.map((node, idx) => {
-                    const stat = nodeStatsMap[node.instance_id] || { pending: 0, running: 0, completed: 0, failed: 0, total: 0 }
-                    const activeInfo = activeNodes[node.instance_id]
-                    const progressMsg = nodeProgress[node.instance_id]
-                    const isActive = activeInfo?.status === 'running' || stat.running > 0
-
-                    let status: 'idle' | 'running' | 'done' | 'error' = 'idle'
-                    if (isActive) status = 'running'
-                    else if (activeInfo?.status === 'failed' || stat.failed > 0) status = 'error'
-                    else if (stat.completed > 0) status = 'done'
-
-                    const icon = NODE_ICONS[node.node_id] || '📦'
-                    const label = NODE_LABELS[node.node_id] || node.instance_id
-
+        <div className="space-y-5">
+            {/* Pipeline row */}
+            <div className="flex items-center gap-0 overflow-x-auto pb-2">
+                {orderedTopLevel.map((node, idx) => {
+                    const isLoopNode = node.children && node.children.length > 0
                     return (
-                        <div key={node.instance_id} className="flex items-center">
-                            {/* Card */}
-                            <div className={`rounded-xl border p-4 min-w-[150px] max-w-[190px] transition-all duration-300 ${status === 'running' ? 'border-blue-400 bg-blue-900/15 shadow-[0_0_20px_rgba(96,165,250,0.15)]' :
-                                status === 'done' ? 'border-green-500/40 bg-green-900/10' :
-                                    status === 'error' ? 'border-red-500/40 bg-red-900/10' :
-                                        'border-gray-700 bg-gray-800/50'
-                                }`}>
-                                {/* Active indicator */}
-                                {status === 'running' && (
-                                    <div className="h-0.5 bg-gradient-to-r from-transparent via-blue-400 to-transparent animate-pulse mb-3 -mt-1 -mx-1 rounded-t" />
-                                )}
-
-                                <div className="flex items-center gap-2 mb-2">
-                                    <span className={`text-sm ${status === 'running' ? 'animate-pulse' : ''}`}>
-                                        {status === 'running' ? '🔵' : status === 'done' ? '🟢' : status === 'error' ? '🔴' : '⚪'}
-                                    </span>
-                                    <span className="text-xs font-semibold uppercase tracking-wider" style={{
-                                        color: status === 'running' ? '#60a5fa' : status === 'done' ? '#10b981' : status === 'error' ? '#ef4444' : '#9ca3af'
-                                    }}>
-                                        {status === 'running' ? 'RUNNING' : status}
-                                    </span>
+                        <div key={node.instance_id} className="flex items-center gap-0">
+                            {isLoopNode ? (
+                                /* ── Loop Block ── */
+                                <div className="rounded-2xl border border-dashed border-blue-500/40 bg-blue-950/20 p-3 relative">
+                                    {/* Loop header */}
+                                    <div className="flex items-center gap-2 mb-3 px-1">
+                                        <span className="text-blue-400 font-bold text-xs uppercase tracking-widest">🔁 Per Video Loop</span>
+                                        <div className="flex-1 h-px bg-blue-500/20" />
+                                        <svg className="text-blue-400 opacity-40" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                                            <path d="M3 3v5h5" />
+                                            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                                            <path d="M16 21h5v-5" />
+                                        </svg>
+                                    </div>
+                                    {/* Children row */}
+                                    <div className="flex items-center gap-0">
+                                        {(node.children || []).map((childId, ci) => {
+                                            const childNode = childNodes.find(n => n.instance_id === childId)
+                                            if (!childNode) return null
+                                            return (
+                                                <div key={childId} className="flex items-center gap-0">
+                                                    <NodeCard node={childNode} campaignId={campaignId} size="small" />
+                                                    {ci < (node.children?.length || 0) - 1 && (
+                                                        <div className="flex items-center px-1.5">
+                                                            <div className="w-5 h-px bg-blue-500/30" />
+                                                            <div className="border-t-[3px] border-b-[3px] border-l-4 border-transparent border-l-blue-500/30" style={{ borderTopColor: 'transparent', borderBottomColor: 'transparent' }} />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
+                                        {/* Loop-back arrow */}
+                                        <div className="ml-2 flex items-center gap-1 opacity-30 text-blue-400 text-xs">
+                                            <span>↩</span>
+                                        </div>
+                                    </div>
                                 </div>
+                            ) : (
+                                <NodeCard node={node} campaignId={campaignId} />
+                            )}
 
-                                <h4 className="font-semibold text-white text-sm mb-1">{icon} {label}</h4>
-
-                                {progressMsg && status === 'running' && (
-                                    <p className="text-xs text-blue-300 truncate">{progressMsg}</p>
-                                )}
-
-                                <div className="text-xs text-gray-500 mt-1">
-                                    ✅ {stat.completed} | ⏳ {stat.pending} | ❌ {stat.failed}
-                                </div>
-                            </div>
-
-                            {/* Arrow */}
-                            {idx < orderedNodes.length - 1 && (
+                            {idx < orderedTopLevel.length - 1 && (
                                 <div className="flex items-center px-2">
                                     <div className="w-8 h-px bg-gray-600" />
-                                    <div className="w-0 h-0 border-t-4 border-b-4 border-l-[6px] border-t-transparent border-b-transparent border-l-gray-600" />
+                                    <div className="w-0 h-0" style={{
+                                        borderTop: '5px solid transparent',
+                                        borderBottom: '5px solid transparent',
+                                        borderLeft: '7px solid #4b5563'
+                                    }} />
                                 </div>
                             )}
                         </div>
                     )
                 })}
             </div>
-
-            {/* Summary table */}
-            {Object.keys(nodeStatsMap).length > 0 && (
-                <div className="rounded-xl border border-gray-800 overflow-hidden">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="bg-gray-800/50">
-                                <th className="text-left px-4 py-2 text-gray-400 font-medium">Node</th>
-                                <th className="text-center px-3 py-2 text-gray-400 font-medium">⏳</th>
-                                <th className="text-center px-3 py-2 text-gray-400 font-medium">🔵</th>
-                                <th className="text-center px-3 py-2 text-gray-400 font-medium">✅</th>
-                                <th className="text-center px-3 py-2 text-gray-400 font-medium">❌</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {orderedNodes.map(node => {
-                                const stat = nodeStatsMap[node.instance_id]
-                                if (!stat) return null
-                                const isRunning = activeNodes[node.instance_id]?.status === 'running'
-                                return (
-                                    <tr key={node.instance_id} className={`border-t border-gray-800/50 ${isRunning ? 'bg-blue-900/10' : 'hover:bg-gray-800/30'}`}>
-                                        <td className="px-4 py-2 text-white text-xs flex items-center gap-2">
-                                            {isRunning && <span className="inline-block w-2 h-2 rounded-full bg-blue-400 animate-pulse" />}
-                                            <span>{NODE_ICONS[node.node_id] || '📦'}</span>
-                                            <span className="font-medium">{NODE_LABELS[node.node_id] || node.instance_id}</span>
-                                        </td>
-                                        <td className="text-center px-3 py-2 text-yellow-400">{stat.pending}</td>
-                                        <td className="text-center px-3 py-2 text-blue-400">{stat.running}</td>
-                                        <td className="text-center px-3 py-2 text-green-400">{stat.completed}</td>
-                                        <td className="text-center px-3 py-2 text-red-400">{stat.failed}</td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
-                </div>
-            )}
         </div>
     )
 }
