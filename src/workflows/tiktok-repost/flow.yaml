@@ -32,6 +32,7 @@ nodes:
 
   - node_id: tiktok.publisher
     instance_id: publisher_1
+    on_error: stop_campaign
 
   - node_id: core.timeout
     instance_id: timeout_1

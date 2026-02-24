@@ -5,10 +5,6 @@ import { upsertTask } from './store/pipelineSlice'
 import { setInteractionWaiting, clearInteraction } from './store/interactionSlice'
 import { updateNodeStatus, updateNodeProgress } from './store/nodeEventsSlice'
 
-import { TikTokChannelPicker } from './wizard/TikTokChannelPicker'
-import { TikTokVideoPicker } from './wizard/TikTokVideoPicker'
-import { ScheduleSetting } from './wizard/ScheduleSetting'
-import { AccountPicker } from './wizard/AccountPicker'
 import { CampaignList } from './components/CampaignList'
 import { CampaignDetail } from './components/CampaignDetail'
 
@@ -72,18 +68,11 @@ function WorkflowPicker({ onSelect, onClose }: { onSelect: (id: string) => void,
 
 // ── Main App ───────────────────────────────────────
 function AppContent() {
-  const [route, setRoute] = useState(window.location.hash.split('?')[0].replace('#', ''))
   const [showWizard, setShowWizard] = useState(false)
   const [showFlowPicker, setShowFlowPicker] = useState(false)
   const [selectedFlowId, setSelectedFlowId] = useState<string>('tiktok-repost')
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null)
   const dispatch = useDispatch()
-
-  useEffect(() => {
-    const onHashChange = () => setRoute(window.location.hash.split('?')[0].replace('#', ''))
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
-  }, [])
 
   useEffect(() => {
     // @ts-ignore
@@ -171,12 +160,6 @@ function AppContent() {
     setShowFlowPicker(false)
     setShowWizard(true)
   }
-
-  // Wizard window routes
-  if (route.startsWith('/wizard/tiktok-channel-picker')) return <TikTokChannelPicker />
-  if (route.startsWith('/wizard/tiktok-video-picker')) return <TikTokVideoPicker />
-  if (route.startsWith('/wizard/schedule-setting')) return <ScheduleSetting />
-  if (route.startsWith('/wizard/account-picker')) return <AccountPicker />
 
   return (
     <div className="flex w-full h-screen bg-gray-900 overflow-hidden">

@@ -16,8 +16,8 @@ for (const [path, factory] of Object.entries(cardModules)) {
 }
 
 // Cache lazy components
-const LAZY_CACHE: Record<string, React.LazyExoticComponent<any>> = {}
-function getCardComponent(workflowId: string): React.LazyExoticComponent<any> | null {
+const LAZY_CACHE: Record<string, React.LazyExoticComponent<React.ComponentType<any>>> = {}
+function getCardComponent(workflowId: string): React.LazyExoticComponent<React.ComponentType<any>> | null {
     if (LAZY_CACHE[workflowId]) return LAZY_CACHE[workflowId]
     const factory = CARD_REGISTRY[workflowId]
     if (!factory) return null
