@@ -165,7 +165,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                         {/* Fallback Run button */}
                         {campaign.status === 'idle' && (
                             <button
-                                onClick={() => handleAction('trigger-campaign', { id: campaign.id })}
+                                onClick={() => handleAction('campaign:trigger', { id: campaign.id })}
                                 className="px-4 py-2 text-sm rounded-lg font-medium transition text-white bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/20 flex items-center gap-1.5"
                             >🚀 Run Now</button>
                         )}
