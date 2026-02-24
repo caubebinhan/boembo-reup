@@ -1,7 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
 import { Campaign } from '../../../core/types/Context'
 
-interface CampaignsState {
+export interface CampaignsState {
   items: Campaign[]
   selected: string | null
   status: 'idle' | 'loading'

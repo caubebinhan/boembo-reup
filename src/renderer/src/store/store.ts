@@ -3,6 +3,7 @@ import * as Sentry from '@sentry/react'
 import campaignsReducer from './campaignsSlice'
 import pipelineReducer from './pipelineSlice'
 import interactionReducer from './interactionSlice'
+import nodeEventsReducer from './nodeEventsSlice'
 
 const sentryReduxEnhancer = Sentry.createReduxEnhancer({
   // Optionally pass options
@@ -13,6 +14,7 @@ export const store = configureStore({
     campaigns: campaignsReducer,
     pipeline: pipelineReducer,
     interaction: interactionReducer,
+    nodeEvents: nodeEventsReducer,
   },
   enhancers: (getDefaultEnhancers) => {
     return getDefaultEnhancers().concat(sentryReduxEnhancer as any)

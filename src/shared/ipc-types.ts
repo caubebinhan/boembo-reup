@@ -16,6 +16,8 @@ export const IPC_CHANNELS = {
   CAMPAIGN_GET: 'campaign:get',
   CAMPAIGN_CREATE: 'campaign:create',
   CAMPAIGN_DELETE: 'campaign:delete',
+  CAMPAIGN_GET_JOBS: 'campaign:get-jobs',
+  CAMPAIGN_GET_FLOW_NODES: 'campaign:get-flow-nodes',
 
   CAMPAIGN_TRIGGER: 'trigger-campaign',
   CAMPAIGN_PAUSE: 'pause-campaign',

@@ -3,9 +3,10 @@ import { CampaignCard } from './CampaignCard'
 
 interface CampaignListProps {
     onOpenWizard: () => void
+    onAction: (event: string, payload: any) => void
 }
 
-export function CampaignList({ onOpenWizard }: CampaignListProps) {
+export function CampaignList({ onOpenWizard, onAction }: CampaignListProps) {
     const [campaigns, setCampaigns] = useState<any[]>([])
 
     const fetchCampaigns = async () => {
@@ -36,7 +37,12 @@ export function CampaignList({ onOpenWizard }: CampaignListProps) {
 
     const handleCampaignAction = (event: string, payload: any) => {
         console.log('Campaign action:', event, payload)
-        // Send to IPC
+        // Delegate to parent for navigation events
+        if (event === 'campaign:view-details') {
+            onAction(event, payload)
+            return
+        }
+        // Send to IPC for other events
         // @ts-ignore
         window.api.invoke(event, payload).then(fetchCampaigns)
     }

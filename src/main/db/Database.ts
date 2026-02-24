@@ -45,5 +45,18 @@ export function initDb() {
       created_at INTEGER,
       updated_at INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS execution_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id TEXT NOT NULL,
+      job_id TEXT,
+      instance_id TEXT,
+      node_id TEXT,
+      level TEXT NOT NULL DEFAULT 'info',
+      event TEXT NOT NULL,
+      message TEXT,
+      data_json TEXT,
+      created_at INTEGER NOT NULL
+    );
   `)
 }

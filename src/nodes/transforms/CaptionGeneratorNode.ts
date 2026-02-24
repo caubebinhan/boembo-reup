@@ -1,64 +1,37 @@
 import { NodeDefinition, NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
+import { nodeRegistry } from '../../core/nodes/NodeRegistry'
 
 export const CaptionGeneratorNode: NodeDefinition = {
   id: 'core.caption_gen',
   name: 'Caption Generator',
   category: 'transform',
-  
-  default_execution: { strategy: 'inline' },
-
-  config_schema: {
-    fields: [
-      {
-        key: 'template',
-        label: 'Caption Template',
-        type: 'string',
-        default: '{original}',
-        description: 'Variables: {original} {author} {time} {date} {tags}'
-      },
-      {
-        key: 'remove_hashtags',
-        label: 'Remove Original Hashtags',
-        type: 'boolean',
-        default: false
-      },
-      {
-        key: 'append_tags',
-        label: 'Append Tags',
-        type: 'string',
-        default: '',
-        description: 'Space-separated tags to append: #fyp #viral'
-      }
-    ]
-  },
-
-  input_type: 'video_single',
-  output_type: 'video_single',
+  icon: '📋',
 
   async execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
-    const video = input.data as any
-    const { template, remove_hashtags, append_tags } = ctx.config
-    
+    const video = input
+    const template = ctx.params.captionTemplate || ctx.params.caption_template || '{original}'
+    const removeHashtags = ctx.params.removeHashtags ?? ctx.params.remove_hashtags ?? false
+    const appendTags = ctx.params.appendTags || ctx.params.append_tags || ''
+
     let original = video.description || ''
-    if (remove_hashtags) {
-      original = original.replace(/#\w+/g, '').trim()
+    if (removeHashtags) {
+      original = original.replace(/#[\w\u0400-\u04FF\u00C0-\u024F]+/gu, '').trim()
     }
-    
+
     let caption = template
       .replace('{original}', original)
       .replace('{author}', video.author || '')
       .replace('{time}', new Date().toLocaleTimeString('en', { hour12: false }))
       .replace('{date}', new Date().toLocaleDateString('en-CA'))
       .replace('{tags}', video.tags?.join(' ') || '')
-    
-    if (append_tags) {
-      caption = caption.trim() + ' ' + append_tags
+
+    if (appendTags) {
+      caption = caption.trim() + ' ' + appendTags
     }
-    
-    return {
-      type: 'video_single',
-      data: { ...video, generated_caption: caption },
-      emit_mode: 'each'
-    }
+
+    ctx.logger.info(`Caption: "${caption.slice(0, 60)}..."`)
+    return { data: { ...video, generated_caption: caption } }
   }
 }
+
+nodeRegistry.register(CaptionGeneratorNode)

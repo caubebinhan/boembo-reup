@@ -13,35 +13,13 @@ export interface FlowDefinition {
 export interface FlowNodeDefinition {
   node_id: string
   instance_id: string
-  config: Record<string, any>
-  execution: NodeExecution
-  position?: { x: number; y: number }
+  /** Only for loop nodes — which children to iterate */
+  children?: string[]
 }
 
 export interface FlowEdgeDefinition {
-  from_instance: string
-  to_instance: string
-}
-
-export type NodeExecutionStrategy = 'inline' | 'scheduled_recurring' | 'per_item_job'
-
-export interface NodeExecution {
-  strategy: NodeExecutionStrategy
-  job_type?: string
-  initial_trigger?: string
-  repeat_after?: any
-  stop_repeat_if?: string
-  on_resume?: string
-  gap_between_items?: any
-  respect_daily_window?: boolean
-  depends_on?: string
-  retry?: {
-    max: number
-    backoff: 'linear' | 'exponential'
-    base_delay_ms: number
-    max_delay_ms?: number
-  }
-  create_downstream_job?: string
+  from: string
+  to: string
 }
 
 export interface WorkflowUIDescriptor {
@@ -56,5 +34,4 @@ export interface WorkflowUIDescriptor {
     steps: any[]
   }
   detail_page?: any
-  node_status_cards?: any[]
 }

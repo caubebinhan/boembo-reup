@@ -1,11 +1,7 @@
 import * as yaml from 'js-yaml'
 import * as fs from 'fs'
 import * as path from 'path'
-import {
-  FlowDefinition,
-  NodeExecution,
-  WorkflowUIDescriptor
-} from './ExecutionContracts'
+import { FlowDefinition, WorkflowUIDescriptor } from './ExecutionContracts'
 
 export class FlowLoader {
   private cache = new Map<string, FlowDefinition>()
@@ -46,21 +42,18 @@ export class FlowLoader {
 
   private parseRaw(raw: any): FlowDefinition {
     if (!raw.id || !raw.name || !raw.nodes || !raw.edges) {
-      console.log('raw:', raw)
-      throw new Error(`Invalid Flow definition: missing required fields. id=${raw.id}`)
+      throw new Error(`Invalid Flow: missing required fields. id=${raw.id}`)
     }
 
     const nodes = raw.nodes.map((n: any) => ({
       node_id: n.node_id,
       instance_id: n.instance_id,
-      config: n.config || {},
-      execution: this.parseExecution(n.execution),
-      position: n.position
+      children: n.children,
     }))
 
     const edges = raw.edges.map((e: any) => ({
-      from_instance: e.from,
-      to_instance: e.to
+      from: e.from,
+      to: e.to,
     }))
 
     const ui = raw.ui ? this.parseUI(raw.ui) : undefined
@@ -78,43 +71,8 @@ export class FlowLoader {
     }
   }
 
-  private parseExecution(raw: any): NodeExecution {
-    if (!raw || !raw.strategy) return { strategy: 'inline' }
-
-    if (raw.strategy === 'inline') {
-      return { strategy: 'inline' }
-    }
-
-    if (raw.strategy === 'scheduled_recurring') {
-      return {
-        strategy: 'scheduled_recurring',
-        job_type: raw.job_type,
-        initial_trigger: raw.initial_trigger || 'campaign_start',
-        repeat_after: raw.repeat_after,
-        stop_repeat_if: raw.stop_repeat_if,
-        on_resume: raw.on_resume || 'reschedule_from_now'
-      }
-    }
-
-    if (raw.strategy === 'per_item_job') {
-      return {
-        strategy: 'per_item_job',
-        job_type: raw.job_type || 'FLOW_STEP',
-        gap_between_items: raw.gap_between_items,
-        respect_daily_window: raw.respect_daily_window ?? true,
-        depends_on: raw.depends_on,
-        retry: raw.retry || { max: 3, backoff: 'exponential', base_delay_ms: 5000 },
-        create_downstream_job: raw.create_downstream_job || 'immediately_after'
-      }
-    }
-
-    // Default fallback
-    return { strategy: 'inline' }
-  }
-
   private parseUI(raw: any): WorkflowUIDescriptor {
     if (!raw) return {}
-    // Deep clone JSON stringify to strip potential YAML class references
     const ui = JSON.parse(JSON.stringify(raw))
     return this.stripYamlMultilineStrings(ui)
   }
@@ -137,5 +95,4 @@ export class FlowLoader {
   }
 }
 
-// Global Singleton for easy access
 export const flowLoader = new FlowLoader()

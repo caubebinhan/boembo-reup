@@ -5,7 +5,7 @@ export interface InteractionState {
   message: string
 }
 
-interface InteractionStoreState {
+export interface InteractionStoreState {
   waiting: Record<string, InteractionState>
 }
 

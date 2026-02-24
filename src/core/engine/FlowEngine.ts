@@ -1,8 +1,9 @@
-// import { FlowDefinition } from '../flow/ExecutionContracts'
 import { nodeRegistry } from '../nodes/NodeRegistry'
 import { JobQueue, JobRecord } from '../../main/db/JobQueue'
 import { db } from '../../main/db/Database'
 import { flowLoader } from '../flow/FlowLoader'
+import { ExecutionLogger } from './ExecutionLogger'
+import { FlowDefinition, FlowNodeDefinition } from '../flow/ExecutionContracts'
 
 export class FlowEngine {
   private isRunning = false
@@ -12,7 +13,7 @@ export class FlowEngine {
     if (this.isRunning) return
     this.isRunning = true
     this.pollInterval = setInterval(() => this.tick(), 5000)
-    console.log('[FlowEngine] Started')
+    console.log('[FlowEngine] Started — polling every 5s')
   }
 
   public stop() {
@@ -21,33 +22,37 @@ export class FlowEngine {
     console.log('[FlowEngine] Stopped')
   }
 
-  // Called to start a campaign immediately (from UI or cron)
+  // ── Trigger Campaign ─────────────────────────────
   public triggerCampaign(campaignId: string) {
     const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId) as any
-    if (!campaign) return
+    if (!campaign) return console.error(`[FlowEngine] Campaign ${campaignId} not found`)
 
-    const flow = flowLoader.get(campaign.workflow_id)
-    if (!flow) return
+    const flow = flowLoader.get(campaign.workflow_id) as FlowDefinition | undefined
+    if (!flow) return console.error(`[FlowEngine] Flow ${campaign.workflow_id} not found`)
 
-    // Find initial scanner/trigger nodes (nodes without incoming edges)
-    const targets = new Set(flow.edges.map(e => e.to_instance))
+    db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('active', campaignId)
+    ExecutionLogger.campaignEvent(campaignId, 'campaign:triggered', 'Campaign triggered')
+
+    // Find start nodes (no incoming edges)
+    const targets = new Set(flow.edges.map(e => e.to))
     const startNodes = flow.nodes.filter(n => !targets.has(n.instance_id))
 
     for (const node of startNodes) {
-      if (node.execution.strategy === 'scheduled_recurring') {
-        JobQueue.create({
-          campaign_id: campaignId,
-          workflow_id: campaign.workflow_id,
-          node_id: node.node_id,
-          instance_id: node.instance_id,
-          type: node.execution.job_type || 'FLOW_SCAN',
-          status: 'pending',
-          data_json: JSON.stringify({ trigger: 'manual' })
-        })
-      }
+      this.createJob(campaignId, campaign.workflow_id, node.instance_id, node.node_id, {})
     }
   }
 
+  public pauseCampaign(campaignId: string) {
+    db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('paused', campaignId)
+    ExecutionLogger.campaignEvent(campaignId, 'campaign:paused', 'Campaign paused')
+  }
+
+  public resumeCampaign(campaignId: string) {
+    db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('active', campaignId)
+    ExecutionLogger.campaignEvent(campaignId, 'campaign:resumed', 'Campaign resumed')
+  }
+
+  // ── Tick ─────────────────────────────────────────
   private async tick() {
     const jobs = JobQueue.getPendingJobs(5)
     for (const job of jobs) {
@@ -55,132 +60,229 @@ export class FlowEngine {
     }
   }
 
+  // ── Execute Job ──────────────────────────────────
   private async executeJob(job: JobRecord) {
     try {
       JobQueue.updateStatus(job.id, 'running')
-      
-      const flow = flowLoader.get(job.workflow_id)
+
+      const flow = flowLoader.get(job.workflow_id) as FlowDefinition | undefined
       if (!flow) throw new Error(`Flow ${job.workflow_id} not found`)
-      
+
       const nodeDef = flow.nodes.find(n => n.instance_id === job.instance_id)
-      if (!nodeDef) throw new Error(`Node instance ${job.instance_id} not found locally`)
-      
-      const NodeClass = nodeRegistry.get(nodeDef.node_id)
-      if (!NodeClass) throw new Error(`Node implementation ${nodeDef.node_id} not registered`)
+      if (!nodeDef) throw new Error(`Node ${job.instance_id} not found in flow`)
 
       const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(job.campaign_id) as any
-      const campaignParams = JSON.parse(campaign.params || '{}')
-      
-      // Merge config: campaign params override default node config
-      const config = { ...nodeDef.config, ...(campaignParams[job.instance_id] || {}) }
-      
-      let currentResult: any = { data: JSON.parse(job.data_json || '{}') }
-      let currentNodeDef = nodeDef
-      let currentNodeClass = NodeClass
+      const params = JSON.parse(campaign?.params || '{}')
+      const inputData = JSON.parse(job.data_json || '{}')
 
-      // Inline execution loop: keep traversing edges as long as downstream is 'inline'
-      while (true) {
-        const logger = {
-          info: (msg) => console.log(`[Job ${job.id}][${currentNodeDef.instance_id}] ${msg}`),
-          error: (msg, err) => console.error(`[Job ${job.id}][${currentNodeDef.instance_id}] ERROR: ${msg}`, err)
+      // ── Is this a loop node? ──────────────────────
+      if (nodeDef.children && nodeDef.children.length > 0) {
+        await this.executeLoop(job, flow, nodeDef, inputData, params)
+        JobQueue.updateStatus(job.id, 'completed')
+        return
+      }
+
+      // ── Regular node execution ────────────────────
+      const NodeImpl = nodeRegistry.get(nodeDef.node_id)
+      if (!NodeImpl) throw new Error(`Node impl ${nodeDef.node_id} not registered`)
+
+      const startTime = Date.now()
+      ExecutionLogger.nodeStart(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id, {})
+
+      const ctx = {
+        campaign_id: job.campaign_id,
+        job_id: job.id,
+        params,
+        logger: {
+          info: (msg: string) => ExecutionLogger.log({
+            campaign_id: job.campaign_id, job_id: job.id,
+            instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
+            level: 'info', event: 'node:log', message: msg
+          }),
+          error: (msg: string, err?: any) => ExecutionLogger.log({
+            campaign_id: job.campaign_id, job_id: job.id,
+            instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
+            level: 'error', event: 'node:log', message: msg,
+            data: { error: err?.message || String(err) }
+          })
+        },
+        onProgress: (msg: string) => {
+          ExecutionLogger.nodeProgress(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id, msg)
         }
+      }
+
+      const result = await NodeImpl.execute(inputData, ctx)
+      const durationMs = Date.now() - startTime
+
+      ExecutionLogger.nodeEnd(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id,
+        { action: result.action, message: result.message }, durationMs)
+
+      JobQueue.updateStatus(job.id, 'completed')
+
+      // ── Handle flow control ───────────────────────
+      if (result.action === 'finish') {
+        db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('finished', job.campaign_id)
+        ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Campaign finished')
+        return
+      }
+
+      if (result.action === 'recall' && result.recall_target) {
+        const targetNode = flow.nodes.find(n => n.instance_id === result.recall_target)
+        if (targetNode) {
+          this.createJob(job.campaign_id, job.workflow_id, targetNode.instance_id, targetNode.node_id, result.data || {})
+          ExecutionLogger.log({
+            campaign_id: job.campaign_id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
+            level: 'info', event: 'node:recall',
+            message: `Recalling ${result.recall_target}`,
+          })
+        }
+        return
+      }
+
+      // Default: continue to next node via edges
+      const nextEdges = flow.edges.filter(e => e.from === nodeDef.instance_id)
+      for (const edge of nextEdges) {
+        const nextNode = flow.nodes.find(n => n.instance_id === edge.to)
+        if (nextNode) {
+          this.createJob(job.campaign_id, job.workflow_id, nextNode.instance_id, nextNode.node_id, result.data || {})
+        }
+      }
+
+    } catch (err: any) {
+      const errorMsg = err.message || String(err)
+      JobQueue.updateStatus(job.id, 'failed', errorMsg)
+      ExecutionLogger.nodeError(job.campaign_id, job.id, job.instance_id, job.node_id, errorMsg)
+
+      if (errorMsg.includes('CAPTCHA') || errorMsg.includes('captcha')) {
+        db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('needs_captcha', job.campaign_id)
+        ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:needs-captcha', 'CAPTCHA detected')
+      }
+    }
+  }
+
+  // ── Loop Execution ───────────────────────────────
+  // Receives an array of items, runs children pipeline for each item
+  private async executeLoop(
+    job: JobRecord,
+    flow: FlowDefinition,
+    loopDef: FlowNodeDefinition,
+    inputData: any,
+    params: Record<string, any>
+  ) {
+    const items = Array.isArray(inputData) ? inputData : (inputData.videos || inputData.items || [inputData])
+    const children = loopDef.children || []
+
+    ExecutionLogger.log({
+      campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
+      level: 'info', event: 'loop:start',
+      message: `Loop "${loopDef.instance_id}" processing ${items.length} items through ${children.length} children`
+    })
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i]
+      let currentData = item
+
+      for (const childInstanceId of children) {
+        const childDef = flow.nodes.find(n => n.instance_id === childInstanceId)
+        if (!childDef) continue
+
+        const NodeImpl = nodeRegistry.get(childDef.node_id)
+        if (!NodeImpl) {
+          ExecutionLogger.log({
+            campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
+            level: 'warn', event: 'node:not-found',
+            message: `Node impl ${childDef.node_id} not registered, skipping`
+          })
+          continue
+        }
+
+        const startTime = Date.now()
+        ExecutionLogger.nodeStart(job.campaign_id, job.id, childDef.instance_id, childDef.node_id,
+          { itemIndex: i, totalItems: items.length })
 
         const ctx = {
           campaign_id: job.campaign_id,
           job_id: job.id,
-          config,
-          variables: campaignParams.variables || {},
-          logger,
-          onProgress: (_msg: string) => { /* Could emit IPC here */ }
+          params,
+          logger: {
+            info: (msg: string) => ExecutionLogger.log({
+              campaign_id: job.campaign_id, job_id: job.id,
+              instance_id: childDef.instance_id, node_id: childDef.node_id,
+              level: 'info', event: 'node:log', message: msg
+            }),
+            error: (msg: string, err?: any) => ExecutionLogger.log({
+              campaign_id: job.campaign_id, job_id: job.id,
+              instance_id: childDef.instance_id, node_id: childDef.node_id,
+              level: 'error', event: 'node:log', message: msg,
+              data: { error: err?.message || String(err) }
+            })
+          },
+          onProgress: (msg: string) => {
+            ExecutionLogger.nodeProgress(job.campaign_id, job.id, childDef.instance_id, childDef.node_id, msg)
+          }
         }
 
-        // Execute node
-        const execResult = await currentNodeClass.execute(currentResult, ctx)
+        try {
+          const result = await NodeImpl.execute(currentData, ctx)
+          const durationMs = Date.now() - startTime
+          ExecutionLogger.nodeEnd(job.campaign_id, job.id, childDef.instance_id, childDef.node_id,
+            { action: result.action }, durationMs)
 
-        // Save variables back if modified
-        if (Object.keys(ctx.variables).length > 0) {
-          campaignParams.variables = ctx.variables
-          db.prepare('UPDATE campaigns SET params = ? WHERE id = ?').run(JSON.stringify(campaignParams), job.campaign_id)
-        }
+          // Flow control from child
+          if (result.action === 'finish') {
+            db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('finished', job.campaign_id)
+            ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Finished by child node')
+            return
+          }
 
-        // Process downstream edges
-        const outEdges = flow.edges.filter(e => e.from_instance === currentNodeDef.instance_id)
-        
-        if (outEdges.length === 0) break // End of flow
+          if (result.action === 'recall' && result.recall_target) {
+            const targetNode = flow.nodes.find(n => n.instance_id === result.recall_target)
+            if (targetNode) {
+              this.createJob(job.campaign_id, job.workflow_id, targetNode.instance_id, targetNode.node_id, result.data || {})
+            }
+            return
+          }
 
-        // For simplicity right now, assume single downstream edge per node in inline traversal.
-        // If branching was needed, we'd need a more complex recursive pipeline.
-        const targetInstance = outEdges[0].to_instance
-        const targetDef = flow.nodes.find(n => n.instance_id === targetInstance)
-        if (!targetDef) break
-
-        if (targetDef.execution.strategy === 'inline') {
-          // Flow directly into next node
-          currentNodeDef = targetDef
-          currentNodeClass = nodeRegistry.get(targetDef.node_id)!
-          currentResult = execResult
-          continue
-        }
-
-        if (targetDef.execution.strategy === 'per_item_job') {
-          this.handleFanOut(job.campaign_id, job.workflow_id, targetDef, execResult)
+          currentData = result.data
+        } catch (err: any) {
+          ExecutionLogger.nodeError(job.campaign_id, job.id, childDef.instance_id, childDef.node_id, err.message)
+          // Skip this item on error, continue to next
           break
         }
-        
-        break // Stop inline execution
       }
+    }
 
-      JobQueue.updateStatus(job.id, 'completed')
-
-      // Reschedule recurring trigger if applicable
-      if (nodeDef.execution.strategy === 'scheduled_recurring' && campaign.status === 'active') {
-        const repeat = nodeDef.execution.repeat_after
-        let delayMs = 60 * 60 * 1000 // default 1hr
-        if (repeat?.unit === 'minutes') {
-          // Simplistic schedule resolution
-          const val = typeof repeat.source === 'number' ? repeat.source : (campaignParams.schedule?.interval_minutes || 60)
-          delayMs = val * 60 * 1000
-        }
-        
-        JobQueue.create({
-          campaign_id: job.campaign_id,
-          workflow_id: job.workflow_id,
-          node_id: nodeDef.node_id,
-          instance_id: nodeDef.instance_id,
-          type: nodeDef.execution.job_type,
-          scheduled_at: Date.now() + delayMs
-        })
+    // Loop done — continue to edges after loop node
+    const nextEdges = flow.edges.filter(e => e.from === loopDef.instance_id)
+    for (const edge of nextEdges) {
+      const nextNode = flow.nodes.find(n => n.instance_id === edge.to)
+      if (nextNode) {
+        this.createJob(job.campaign_id, job.workflow_id, nextNode.instance_id, nextNode.node_id, { loopCompleted: true, itemCount: items.length })
       }
-
-    } catch (err: any) {
-      console.error(`[Job ${job.id}] Failed:`, err)
-      JobQueue.updateStatus(job.id, 'failed', err.message || String(err))
     }
   }
 
-  private handleFanOut(campaignId: string, workflowId: string, targetDef: any, result: any) {
-    let items: any[] = []
-    if (result.emit_mode === 'batch' && Array.isArray(result.data)) {
-      items = result.data
-    } else {
-      items = [result.data]
-    }
+  // ── Helpers ──────────────────────────────────────
+  private createJob(campaignId: string, workflowId: string, instanceId: string, nodeId: string, data: any, scheduledAt?: number) {
+    const jobId = JobQueue.create({
+      campaign_id: campaignId,
+      workflow_id: workflowId,
+      node_id: nodeId,
+      instance_id: instanceId,
+      type: 'FLOW_STEP',
+      status: 'pending',
+      data_json: JSON.stringify(data),
+      scheduled_at: scheduledAt
+    })
 
-    const gapMs = targetDef.execution.gap_between_items?.fixed_value || 0
-    let scheduledTime = Date.now()
+    ExecutionLogger.log({
+      campaign_id: campaignId, instance_id: instanceId, node_id: nodeId,
+      level: 'info', event: 'job:created',
+      message: `Job created for ${instanceId}`,
+      data: { jobId }
+    })
 
-    for (const item of items) {
-      JobQueue.create({
-        campaign_id: campaignId,
-        workflow_id: workflowId,
-        node_id: targetDef.node_id,
-        instance_id: targetDef.instance_id,
-        type: targetDef.execution.job_type,
-        data_json: JSON.stringify(item),
-        scheduled_at: scheduledTime
-      })
-      scheduledTime += gapMs
-    }
+    return jobId
   }
 }
 

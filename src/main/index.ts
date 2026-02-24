@@ -13,6 +13,9 @@ import { setupCampaignIPC } from './ipc/campaigns'
 import { setupScannerIPC } from './ipc/scanner'
 import { CrashRecoveryService } from './services/CrashRecovery'
 import { flowLoader } from '../core/flow/FlowLoader'
+// Importing the nodes barrel triggers self-registration of all nodes.
+// To add a new node: create the file, export + call nodeRegistry.register(), then add to src/nodes/index.ts
+import '../nodes'
 
 // Sentry
 if (!app.isPackaged || process.env.NODE_ENV === 'development') {

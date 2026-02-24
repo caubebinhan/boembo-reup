@@ -11,7 +11,7 @@ export interface VideoTask {
   error?: string
 }
 
-interface PipelineState {
+export interface PipelineState {
   tasks: Record<string, VideoTask>
   runningCampaigns: string[]
 }

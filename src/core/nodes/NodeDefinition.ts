@@ -1,5 +1,3 @@
-import { NodeExecution } from '../flow/ExecutionContracts'
-
 export interface NodeConfigSchemaField {
   key: string
   label: string
@@ -8,7 +6,6 @@ export interface NodeConfigSchemaField {
   default?: any
   options?: Array<{ value: string; label: string }>
   description?: string
-  show_if?: string
 }
 
 export interface NodeConfigSchema {
@@ -18,8 +15,8 @@ export interface NodeConfigSchema {
 export interface NodeExecutionContext {
   campaign_id: string
   job_id?: string
-  config: Record<string, any>
-  variables: Record<string, any>
+  /** Campaign params from wizard (all settings saved to DB) */
+  params: Record<string, any>
   logger: {
     info(msg: string): void
     error(msg: string, err?: any): void
@@ -27,24 +24,27 @@ export interface NodeExecutionContext {
   onProgress(msg: string): void
 }
 
+/** What a node returns to control the flow */
 export interface NodeExecutionResult {
-  type: string
+  /** Data to pass to the next node */
   data: any
-  emit_mode?: 'batch' | 'each'
+  /** Flow control action */
+  action?: 'continue' | 'recall' | 'finish'
+  /** If action='recall', which instance_id to jump back to */
+  recall_target?: string
+  /** Human-readable message for logs */
+  message?: string
 }
 
 export interface NodeDefinition {
   id: string
   name: string
-  category: 'source' | 'filter' | 'transform' | 'publish'
+  category: 'source' | 'filter' | 'transform' | 'publish' | 'control'
   icon?: string
-  version?: string
-  
-  default_execution: NodeExecution
-  config_schema?: NodeConfigSchema
-  
-  input_type?: string | null
-  output_type?: string | null
 
+  /** Schema for config UI (optional — used by wizard auto-generation) */
+  config_schema?: NodeConfigSchema
+
+  /** The node's execution logic. Receives input from previous node + context. */
   execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult>
 }
