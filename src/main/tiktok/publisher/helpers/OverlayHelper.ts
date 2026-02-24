@@ -31,6 +31,13 @@ export class OverlayHelper {
 
             // Step 3: Remove obstructing overlays that block clicks
             await this.page.evaluate(() => {
+                // Kill react-joyride tour overlay immediately (TikTok onboarding)
+                const joyride = document.getElementById('react-joyride-portal')
+                if (joyride) {
+                    joyride.remove()
+                    console.log('[OverlayHelper] Removed react-joyride-portal')
+                }
+
                 const selectors = [
                     'div[role="dialog"]',
                     '.modal',
@@ -40,6 +47,8 @@ export class OverlayHelper {
                     '[class*="Cookie"]',
                     '[class*="notification"]',
                     '[class*="banner"]',
+                    '[data-test-id="overlay"]',
+                    '.react-joyride__overlay',
                 ]
                 selectors.forEach(sel => {
                     document.querySelectorAll(sel).forEach(el => {

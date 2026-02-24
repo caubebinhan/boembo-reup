@@ -72,15 +72,18 @@ export class VideoPublisher {
             if (page.isClosed()) throw new Error('Browser closed unexpectedly before posting')
             await page.waitForTimeout(1000)
 
+            // ── Clean overlays before caption (joyride blocks editor) ──
+            const overlayHelper = new OverlayHelper(page, onProgress)
+            await overlayHelper.clean()
+
             // ── Set caption ───────────────────────────────
             const captionSetter = new CaptionSetter(page, onProgress)
             await captionSetter.setCaption(finalCaption)
 
             if (page.isClosed()) throw new Error('Browser closed unexpectedly before posting')
 
-            // ── Clean overlays before submit ──────────────
+            // ── Clean overlays again before submit ──────────
             if (onProgress) onProgress('Cleaning overlays...')
-            const overlayHelper = new OverlayHelper(page, onProgress)
             await overlayHelper.clean()
 
             // ── Submit post ───────────────────────────────

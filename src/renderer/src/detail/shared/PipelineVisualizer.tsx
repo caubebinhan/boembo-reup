@@ -32,6 +32,8 @@ const NODE_META: Record<string, { icon: string; label: string; color: string; de
     'core.timeout': { icon: '⏳', label: 'Wait', color: '#6b7280', desc: 'Delay between items' },
     'core.loop': { icon: '🔁', label: 'Loop', color: '#3b82f6', desc: 'Process each item' },
     'core.campaign_finish': { icon: '🏁', label: 'Finish', color: '#10b981', desc: 'Finish campaign' },
+    'core.condition': { icon: '🔀', label: 'Condition', color: '#f97316', desc: 'Branch on expression' },
+    'core.notify': { icon: '🔔', label: 'Notify', color: '#a78bfa', desc: 'Send desktop notification' },
 }
 
 type NodeStatus = 'idle' | 'running' | 'done' | 'error'

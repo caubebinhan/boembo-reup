@@ -1,14 +1,14 @@
 import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
 import { db } from '../../main/db/Database'
-import { nextValidSlot } from '../_shared/timeWindow'
+import { normalizeTimeRanges, nextValidSlot } from '../_shared/timeWindow'
 import { ExecutionLogger } from '../../core/engine/ExecutionLogger'
 
 /**
  * VideoScheduler Node
  *
- * Receives scanned videos from the scanner node, calculates a `scheduled_for`
- * timestamp for each video based on interval + active time window, saves them
- * to the `videos` DB table, and passes the array to the loop node.
+ * Calculates a `scheduled_for` timestamp for each video using the
+ * campaign's time ranges (multi-range or legacy single window).
+ * Saves to DB and passes array to the loop node.
  */
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const videos = Array.isArray(input) ? input : (input.videos || input.items || [])
@@ -18,15 +18,16 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     return { data: videos, action: 'continue', message: 'No videos to schedule' }
   }
 
-  // Read schedule params from campaign wizard
   const intervalMinutes = ctx.params.intervalMinutes ?? ctx.params.schedule?.interval_minutes ?? 1
-  const activeStart = ctx.params.activeHoursStart ?? ctx.params.schedule?.start_time ?? '00:00'
-  const activeEnd = ctx.params.activeHoursEnd ?? ctx.params.schedule?.end_time ?? '23:59'
-  const activeDays: number[] = ctx.params.activeDays ?? ctx.params.schedule?.active_days ?? [0, 1, 2, 3, 4, 5, 6]
-
   const intervalMs = intervalMinutes * 60 * 1000
 
-  ctx.logger.info(`[VideoScheduler] Scheduling ${videos.length} videos (interval=${intervalMinutes}min, window=${activeStart}–${activeEnd})`)
+  // Resolve time ranges (multi-range or legacy single window)
+  const ranges = normalizeTimeRanges(ctx.params)
+  const rangeDesc = ranges.length === 1
+    ? `${ranges[0].start}–${ranges[0].end}`
+    : `${ranges.length} ranges`
+
+  ctx.logger.info(`[VideoScheduler] Scheduling ${videos.length} videos (interval=${intervalMinutes}min, window=${rangeDesc})`)
   ctx.onProgress(`📋 Scheduling ${videos.length} videos...`)
 
   // Reset last_processed_index for a fresh run
@@ -42,8 +43,8 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
   const transaction = db.transaction(() => {
     for (let i = 0; i < videos.length; i++) {
-      // Find next valid slot within the active time window
-      cursor = nextValidSlot(cursor, activeStart, activeEnd, activeDays)
+      // Find next valid slot within any active time window
+      cursor = nextValidSlot(cursor, ranges)
 
       const video = videos[i]
       video.scheduled_for = cursor
@@ -67,7 +68,6 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   // Update campaign queued count
   db.prepare('UPDATE campaigns SET queued_count = ? WHERE id = ?').run(videos.length, ctx.campaign_id)
 
-  // Emit event so detail UI knows about the queued count
   ExecutionLogger.log({
     campaign_id: ctx.campaign_id,
     instance_id: 'scheduler_1',

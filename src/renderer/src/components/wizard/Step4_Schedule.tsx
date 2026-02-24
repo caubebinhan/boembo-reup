@@ -1,8 +1,11 @@
 import { useMemo, useEffect } from 'react'
 
-interface Source {
-    name: string
-    autoSchedule: boolean
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+interface TimeRange {
+    days: number[]
+    start: string
+    end: string
 }
 
 interface Step4Props {
@@ -10,59 +13,100 @@ interface Step4Props {
     updateData: (updates: Record<string, any>) => void
 }
 
-export function Step4_Schedule({ data, updateData }: Step4Props) {
-    const sources: Source[] = data.sources || []
+const DEFAULT_RANGES: TimeRange[] = [
+    { days: [1, 2, 3, 4, 5], start: '09:00', end: '21:00' },
+]
 
-    // ── Initialize defaults into stepData on mount ──────────────────
-    // IMPORTANT: inputs use `value={data.x || default}` as display fallback,
-    // but if the user never touches the input, onChange is never called and
-    // the default is never written into stepData → it becomes undefined in DB.
-    // We fix this by writing defaults once on mount (only for fields not yet set).
+export function Step4_Schedule({ data, updateData }: Step4Props) {
+    const ranges: TimeRange[] = data.timeRanges || DEFAULT_RANGES
+
+    // Initialize defaults on mount
     useEffect(() => {
         const defaults: Record<string, any> = {}
         if (data.intervalMinutes == null) defaults.intervalMinutes = 60
-        if (data.activeHoursStart == null) defaults.activeHoursStart = '09:00'
-        if (data.activeHoursEnd == null) defaults.activeHoursEnd = '21:00'
+        if (!data.timeRanges) defaults.timeRanges = DEFAULT_RANGES
         if (Object.keys(defaults).length > 0) updateData(defaults)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // Calculate preview timeline items
-    const timelineItems = useMemo(() => {
-        if (!data.firstRunAt || sources.length === 0) return []
+    const updateRanges = (newRanges: TimeRange[]) => updateData({ timeRanges: newRanges })
 
-        let t = new Date(data.firstRunAt).getTime()
-        const intervalMs = (data.intervalMinutes || 60) * 60000
-
-        // Simple preview logic: Just generate a mocked sequence of scan items based on schedule
-        const items: any[] = []
-        let seq = 1
-
-        for (const source of sources) {
-            items.push({
-                id: seq.toString(),
-                time: new Date(t).toISOString().slice(0, 16).replace('T', ' '),
-                type: 'Scan Source',
-                sourceName: source.name,
-                seq: seq++
-            })
-            t += intervalMs
-        }
-
-        return items
-    }, [data.firstRunAt, data.intervalMinutes, sources])
-
-    const toggleSourceAutoSchedule = (index: number) => {
-        const newSources = [...sources]
-        newSources[index].autoSchedule = !newSources[index].autoSchedule
-        updateData({ sources: newSources })
+    const addRange = () => {
+        updateRanges([...ranges, { days: [0, 6], start: '10:00', end: '18:00' }])
     }
+
+    const removeRange = (i: number) => {
+        const next = ranges.filter((_, idx) => idx !== i)
+        updateRanges(next.length > 0 ? next : DEFAULT_RANGES)
+    }
+
+    const updateRange = (i: number, patch: Partial<TimeRange>) => {
+        const next = ranges.map((r, idx) => idx === i ? { ...r, ...patch } : r)
+        updateRanges(next)
+    }
+
+    const toggleDay = (rangeIdx: number, day: number) => {
+        const r = ranges[rangeIdx]
+        const days = r.days.includes(day) ? r.days.filter(d => d !== day) : [...r.days, day].sort()
+        updateRange(rangeIdx, { days })
+    }
+
+    // Live preview: show first 5 scheduled slots
+    const preview = useMemo(() => {
+        const intervalMs = (data.intervalMinutes || 60) * 60_000
+        const slots: string[] = []
+        let cursor = Date.now()
+
+        for (let i = 0; i < 5; i++) {
+            // Find next valid slot
+            let found: number | null = null
+            for (let off = 0; off <= 7; off++) {
+                for (const r of ranges) {
+                    const d = new Date(cursor)
+                    d.setDate(d.getDate() + off)
+                    if (!r.days.includes(d.getDay())) continue
+                    const [sh, sm] = r.start.split(':').map(Number)
+                    const [eh, em] = r.end.split(':').map(Number)
+                    const startMin = sh * 60 + sm
+                    const endMin = eh * 60 + em
+                    const nowMin = (off === 0 ? d : new Date(d.setHours(sh, sm, 0, 0))).getHours() * 60 + (off === 0 ? d.getMinutes() : sm)
+                    const candidate = new Date(cursor)
+                    candidate.setDate(candidate.getDate() + off)
+
+                    if (off === 0 && nowMin >= startMin && nowMin <= endMin) {
+                        found = cursor; break
+                    } else if (off > 0 || nowMin < startMin) {
+                        candidate.setHours(sh, sm, 0, 0)
+                        if (candidate.getTime() >= cursor) { found = candidate.getTime(); break }
+                    }
+                }
+                if (found !== null) break
+            }
+            if (found === null) break
+            slots.push(new Date(found).toLocaleString('vi-VN', { weekday: 'short', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }))
+            cursor = found + intervalMs
+        }
+        return slots
+    }, [data.intervalMinutes, ranges])
 
     return (
         <div className="flex flex-col gap-6 text-white max-w-4xl mx-auto pb-10">
 
-            {/* SECTION 1: Config summary bar */}
-            <div className="grid grid-cols-3 gap-4 bg-[#111827] border border-gray-700 p-4 rounded-xl">
+            {/* Interval */}
+            <div className="grid grid-cols-2 gap-4 bg-[#111827] border border-gray-700 p-4 rounded-xl">
+                <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-gray-400">Gap between videos</label>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="number" min={1}
+                            value={data.intervalMinutes || 60}
+                            onChange={(e) => updateData({ intervalMinutes: Number(e.target.value) })}
+                            className="bg-gray-800 border border-gray-700 rounded p-2 w-24 outline-none text-sm"
+                        />
+                        <span className="text-sm text-gray-500">minutes</span>
+                    </div>
+                </div>
+
                 <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-gray-400">Campaign Start Time</label>
                     <input
@@ -72,125 +116,90 @@ export function Step4_Schedule({ data, updateData }: Step4Props) {
                         className="bg-gray-800 border border-gray-700 rounded p-2 outline-none text-sm"
                     />
                 </div>
-
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-400">Gap between actions</label>
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="number"
-                            value={data.intervalMinutes || 60}
-                            onChange={(e) => updateData({ intervalMinutes: Number(e.target.value) })}
-                            className="bg-gray-800 border border-gray-700 rounded p-2 w-20 outline-none text-sm"
-                        />
-                        <span className="text-sm text-gray-500">minutes</span>
-                    </div>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-400">Daily Window</label>
-                    <div className="flex items-center gap-2">
-                        <input
-                            type="time"
-                            value={data.activeHoursStart || '09:00'}
-                            onChange={(e) => updateData({ activeHoursStart: e.target.value })}
-                            className="bg-gray-800 border border-gray-700 rounded p-2 outline-none text-sm"
-                        />
-                        <span className="text-gray-500">-</span>
-                        <input
-                            type="time"
-                            value={data.activeHoursEnd || '21:00'}
-                            onChange={(e) => updateData({ activeHoursEnd: e.target.value })}
-                            className="bg-gray-800 border border-gray-700 rounded p-2 outline-none text-sm"
-                        />
-                    </div>
-                </div>
             </div>
 
-            {/* SECTION 2: Info bar */}
-            <div className="flex justify-between items-center bg-purple-900/40 border border-purple-500/30 p-4 rounded-lg">
-                <div className="flex flex-col">
-                    <span className="text-xs text-purple-300 font-bold">First Scan</span>
-                    <span className="text-sm font-medium">{data.firstRunAt ? new Date(data.firstRunAt).toLocaleString() : 'Not Set'}</span>
+            {/* Multi time ranges */}
+            <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-gray-400 tracking-wider">DAILY ACTIVE HOURS</h3>
+                    <button
+                        onClick={addRange}
+                        className="text-xs bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 text-purple-300 px-3 py-1 rounded-lg transition flex items-center gap-1"
+                    >
+                        ＋ Add time slot
+                    </button>
                 </div>
-                <div className="flex flex-col border-l border-purple-500/30 pl-4">
-                    <span className="text-xs text-purple-300 font-bold">First Upload</span>
-                    <span className="text-sm font-medium text-gray-400">TBD (After Scan)</span>
-                </div>
-                <div className="flex flex-col border-l border-purple-500/30 pl-4">
-                    <span className="text-xs text-purple-300 font-bold">Total Items</span>
-                    <span className="text-sm font-medium text-green-400">{sources.length} actions</span>
-                </div>
+                <p className="text-xs text-gray-500">Videos will only be scheduled within these time windows. Add multiple slots for different days or time ranges.</p>
+
+                {ranges.map((r, i) => (
+                    <div key={i} className="bg-[#111827] border border-gray-700 rounded-xl p-4 flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-4">
+                            {/* Day selector */}
+                            <div className="flex items-center gap-1 flex-wrap">
+                                {DAY_NAMES.map((name, day) => (
+                                    <button
+                                        key={day}
+                                        onClick={() => toggleDay(i, day)}
+                                        className={`w-9 h-9 rounded-lg text-xs font-bold transition border ${r.days.includes(day)
+                                                ? 'bg-purple-600 border-purple-500 text-white'
+                                                : 'bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-500'
+                                            }`}
+                                    >
+                                        {name}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Time range */}
+                            <div className="flex items-center gap-2 shrink-0">
+                                <input
+                                    type="time"
+                                    value={r.start}
+                                    onChange={(e) => updateRange(i, { start: e.target.value })}
+                                    className="bg-gray-800 border border-gray-700 rounded p-2 outline-none text-sm"
+                                />
+                                <span className="text-gray-500">→</span>
+                                <input
+                                    type="time"
+                                    value={r.end}
+                                    onChange={(e) => updateRange(i, { end: e.target.value })}
+                                    className="bg-gray-800 border border-gray-700 rounded p-2 outline-none text-sm"
+                                />
+                            </div>
+
+                            {ranges.length > 1 && (
+                                <button
+                                    onClick={() => removeRange(i)}
+                                    className="text-gray-600 hover:text-red-400 transition text-lg shrink-0"
+                                    title="Remove slot"
+                                >✕</button>
+                            )}
+                        </div>
+
+                        {/* Active days summary */}
+                        <div className="text-xs text-gray-500">
+                            {r.days.length === 7 ? 'Every day' :
+                                r.days.length === 0 ? '⚠️ No days selected' :
+                                    r.days.map(d => DAY_NAMES[d]).join(', ')}
+                            {' · '}{r.start} – {r.end}
+                        </div>
+                    </div>
+                ))}
             </div>
 
-            {/* SECTION 3: Source Verification Options */}
-            {sources.length > 0 && (
-                <div className="flex flex-col gap-2">
-                    <h3 className="text-sm font-bold text-gray-400 tracking-wider">SOURCE VERIFICATION OPTIONS</h3>
-                    <div className="bg-gray-800/50 border border-gray-700 rounded-lg overflow-hidden">
-                        {sources.map((source, idx) => (
-                            <div key={idx} className="flex justify-between items-center p-3 border-b border-gray-700/50 last:border-0 hover:bg-gray-800 transition">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500/50 to-indigo-600/50 flex flex-shrink-0 items-center justify-center text-xs">📡</div>
-                                    <span className="font-medium text-sm">{source.name}</span>
-                                </div>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <span className="text-xs text-gray-400">Auto-schedule</span>
-                                    <input
-                                        type="checkbox"
-                                        checked={!!source.autoSchedule}
-                                        onChange={() => toggleSourceAutoSchedule(idx)}
-                                        className="w-4 h-4 accent-purple-600"
-                                    />
-                                </label>
-                            </div>
-                        ))}
-                    </div>
+            {/* Preview */}
+            <div className="flex flex-col gap-2">
+                <h3 className="text-sm font-bold text-gray-400 tracking-wider">SCHEDULE PREVIEW (next 5 slots)</h3>
+                <div className="bg-[#111827] border border-gray-700 rounded-xl overflow-hidden">
+                    {preview.length === 0 ? (
+                        <div className="text-gray-500 italic p-4 text-center text-sm">Set time ranges to see preview</div>
+                    ) : preview.map((slot, idx) => (
+                        <div key={idx} className="flex items-center gap-3 px-4 py-2 border-b border-gray-800 last:border-0">
+                            <span className="text-xs bg-purple-500/20 text-purple-400 font-mono px-2 py-1 rounded">#{idx + 1}</span>
+                            <span className="text-sm font-mono">{slot}</span>
+                        </div>
+                    ))}
                 </div>
-            )}
-
-            {/* SECTION 4: Schedule Timeline Preview */}
-            <div className="flex flex-col gap-2 mt-4">
-                <h3 className="text-sm font-bold text-gray-400 tracking-wider">SCHEDULE PREVIEW</h3>
-
-                {timelineItems.length === 0 ? (
-                    <div className="text-gray-500 italic p-4 text-center border border-gray-800 rounded-lg">
-                        No items to preview. Add sources and set schedule.
-                    </div>
-                ) : (
-                    <div className="flex flex-col gap-3 relative pl-4">
-                        {/* Vertical timeline line */}
-                        <div className="absolute left-[27px] top-4 bottom-4 w-px bg-gray-700 z-0"></div>
-
-                        {timelineItems.map((item, idx) => (
-                            <div key={idx} className="flex items-center gap-4 relative z-10 group">
-                                {/* Drag handle */}
-                                <div className="text-gray-600 cursor-grab hover:text-white">⠿</div>
-
-                                {/* Timeline node */}
-                                <div className="w-3 h-3 rounded-full bg-purple-500 ring-4 ring-[#0f172a]"></div>
-
-                                {/* Card */}
-                                <div className="flex-1 flex items-center justify-between bg-[#1e293b] border border-gray-700 p-3 rounded-lg group-hover:border-gray-500 transition">
-                                    <div className="flex items-center gap-4">
-                                        <span className="text-gray-400 text-sm font-mono bg-black/30 px-2 py-1 rounded">[{item.time}]</span>
-
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30">
-                                                📺 {item.type}
-                                            </span>
-                                            <span className="font-medium">{item.sourceName}</span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-4">
-                                        <span className="text-xs text-gray-500 font-mono">Seq#{item.seq}</span>
-                                        <button className="text-gray-600 hover:text-red-400 transition" title="Remove instance">🗑</button>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
             </div>
 
         </div>

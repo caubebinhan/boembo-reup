@@ -5,6 +5,22 @@ import { flowLoader } from '../flow/FlowLoader'
 import { ExecutionLogger } from './ExecutionLogger'
 import { FlowDefinition, FlowNodeDefinition } from '../flow/ExecutionContracts'
 
+/**
+ * Safely evaluate a conditional edge expression against data.
+ * Only top-level keys of `data` are exposed as variables.
+ * Returns false on any error.
+ */
+function safeEval(expression: string, data: any): boolean {
+  try {
+    const safeData = typeof data === 'object' && data !== null ? data : {}
+    // eslint-disable-next-line no-new-func
+    const fn = new Function(...Object.keys(safeData), `"use strict"; return Boolean(${expression})`)
+    return fn(...Object.values(safeData))
+  } catch {
+    return false
+  }
+}
+
 export class FlowEngine {
   private isRunning = false
   private pollInterval: NodeJS.Timeout | null = null
@@ -180,8 +196,12 @@ export class FlowEngine {
         return
       }
 
-      // Default: continue to next node via edges
-      const nextEdges = flow.edges.filter(e => e.from === nodeDef.instance_id)
+      // Default: continue to next node via edges (supports conditional `when` expressions)
+      const nextEdges = flow.edges.filter(e => {
+        if (e.from !== nodeDef.instance_id) return false
+        if (!e.when) return true // unconditional edge
+        return safeEval(e.when, result.data)
+      })
       for (const edge of nextEdges) {
         const nextNode = flow.nodes.find(n => n.instance_id === edge.to)
         if (nextNode) {
@@ -259,10 +279,12 @@ export class FlowEngine {
           continue
         }
 
-        // If item was skipped by a previous node, only run timeout nodes
-        // so gap is still respected before moving to the next item.
+        // If item was skipped by a previous node, only run:
+        // - timeout (to respect gaps)
+        // - condition/notify (to fire side-effect notifications)
         if (skipToNextItem) {
-          if (childDef.node_id !== 'core.timeout') continue
+          const allowOnSkip = ['core.timeout', 'core.condition', 'core.notify']
+          if (!allowOnSkip.includes(childDef.node_id)) continue
         }
 
         // Input contract validation (only for non-skip phases)

@@ -28,6 +28,11 @@ export interface FlowNodeDefinition {
 export interface FlowEdgeDefinition {
   from: string
   to: string
+  /** Optional JS expression evaluated against result.data — edge only followed when truthy.
+   *  Available variables: all top-level keys from data (e.g. `status`, `published`, etc.)
+   *  Example: "status === 'violation'"  or  "published === true"
+   */
+  when?: string
 }
 
 export interface WorkflowUIDescriptor {

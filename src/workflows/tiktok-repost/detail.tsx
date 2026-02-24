@@ -12,6 +12,16 @@ import { useState, useEffect, useCallback } from 'react'
 import { PipelineVisualizer } from '@renderer/detail/shared/PipelineVisualizer'
 import type { WorkflowDetailProps } from '@renderer/detail/WorkflowDetailRegistry'
 
+const tryParse = (str: string) => {
+    try { return JSON.parse(str) } catch { return {} }
+}
+
+const fmt = (num: number) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K'
+    return num.toString()
+}
+
 // ── TikTok Repost State ──────────────────────────────
 interface TikTokVideo {
     platform_id: string
@@ -232,7 +242,7 @@ function StatCard({ icon, label, value, color }: { icon: string; label: string; 
     )
 }
 
-function VideoCard({ video, index, gapMinutes, campaignId }: { video: TikTokVideo; index: number; gapMinutes?: number; campaignId: string }) {
+function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: number; campaignId: string }) {
     const sc = STATUS_CONFIG[video.status] || STATUS_CONFIG.queued
     const isActive = video.isActive
     const scheduledTime = video.scheduledAt
@@ -249,6 +259,7 @@ function VideoCard({ video, index, gapMinutes, campaignId }: { video: TikTokVide
                     boxShadow: isActive ? `0 0 10px ${sc.color}, 0 0 20px ${sc.color}40` : 'none',
                 }}
             />
+
             {scheduledTime && (
                 <span className="absolute -left-[3px] top-7 text-[10px] text-gray-600 w-[34px] text-center">
                     {scheduledTime}
@@ -257,7 +268,7 @@ function VideoCard({ video, index, gapMinutes, campaignId }: { video: TikTokVide
 
             <div
                 className={`rounded-xl p-4 transition-all ${isActive
-                    ? 'bg-gray-900/80 border-2 hover:border-gray-600'
+                    ? 'bg-gray-900/80 border-2'
                     : 'bg-gray-900/60 border border-gray-800 hover:border-gray-700'
                     }`}
                 style={{
@@ -272,62 +283,91 @@ function VideoCard({ video, index, gapMinutes, campaignId }: { video: TikTokVide
                     </div>
                 )}
 
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-4">
                     {video.thumbnail ? (
                         <img src={video.thumbnail} alt="" className="w-16 h-16 rounded-lg object-cover flex-shrink-0 bg-gray-800" />
                     ) : (
                         <div className="w-16 h-16 rounded-lg bg-gray-800 flex items-center justify-center text-2xl flex-shrink-0">🎬</div>
                     )}
+
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                            {video.author && (
-                                <span className="text-xs text-gray-500">👤 @{video.author}</span>
-                            )}
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ml-auto shrink-0"
-                                style={{ color: sc.color, backgroundColor: sc.bg }}>
-                                {sc.label}
-                            </span>
+                        <div className="flex items-center justify-between gap-4 mb-1.5">
+                            <div className="flex items-center gap-2">
+                                {scheduledTime && (
+                                    <div className="group relative">
+                                        <input
+                                            type="time"
+                                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                                            onChange={async (e) => {
+                                                const [h, m] = e.target.value.split(':').map(Number)
+                                                const newDate = new Date(video.scheduledAt!)
+                                                newDate.setHours(h, m, 0, 0)
+                                                await window.api.invoke('video:reschedule', {
+                                                    platformId: video.platform_id,
+                                                    campaignId,
+                                                    scheduledFor: newDate.getTime()
+                                                })
+                                            }}
+                                        />
+                                        <span className="text-[10px] font-mono bg-black/40 text-gray-400 px-2 py-0.5 rounded border border-gray-800 group-hover:border-purple-500/50 group-hover:text-purple-400 transition cursor-pointer">
+                                            🕒 {scheduledTime}
+                                        </span>
+                                    </div>
+                                )}
+                                <span className="text-[10px] font-bold tracking-widest px-1.5 py-0.5 rounded" style={{ color: sc.color, backgroundColor: sc.bg }}>
+                                    {sc.label}
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                {video.author && (
+                                    <span className="text-[10px] text-gray-500 font-medium">@{video.author}</span>
+                                )}
+                                <span className="text-[10px] text-gray-600 font-mono">#{index + 1}</span>
+                            </div>
                         </div>
-                        <p className="text-sm text-gray-300 line-clamp-2 mb-1.5">
+
+                        <p className="text-sm text-gray-300 line-clamp-1 mb-2 font-medium">
                             {video.caption || video.description || 'Untitled Video'}
                         </p>
-                        <div className="flex items-center gap-3 text-[11px] text-gray-600">
-                            {video.stats?.views != null && <span>👁 {fmt(video.stats.views)}</span>}
-                            {video.stats?.likes != null && <span>❤ {fmt(video.stats.likes)}</span>}
-                            {video.local_path && <span className="text-green-600">✓ Downloaded</span>}
-                            {video.local_path && (
-                                <button
-                                    className="text-cyan-400 hover:text-cyan-300 transition cursor-pointer"
-                                    onClick={() => {
-                                        // @ts-ignore
-                                        window.api?.invoke('video:show-in-explorer', { path: video.local_path })
-                                    }}
-                                >
-                                    📂 Open
-                                </button>
-                            )}
-                            {video.published_url && (
-                                <a href={video.published_url} className="text-purple-400 hover:underline" target="_blank" rel="noreferrer">🔗 View</a>
-                            )}
+
+                        <div className="flex items-center justify-between mt-1">
+                            <div className="flex items-center gap-3 text-[10px] text-gray-500 font-medium">
+                                {video.stats?.views != null && <span className="flex items-center gap-1">👁 {fmt(video.stats.views)}</span>}
+                                {video.stats?.likes != null && <span className="flex items-center gap-1">❤ {fmt(video.stats.likes)}</span>}
+                                {video.local_path && <span className="text-green-500 flex items-center gap-1">✓ Downloaded</span>}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                {video.local_path && (
+                                    <button
+                                        className="text-[10px] text-cyan-500 hover:text-cyan-400 font-bold tracking-wider uppercase transition cursor-pointer"
+                                        onClick={() => window.api.invoke('video:show-in-explorer', video.local_path)}
+                                    >
+                                        📂 Open
+                                    </button>
+                                )}
+                                {video.published_url && (
+                                    <a href={video.published_url} target="_blank" rel="noreferrer" className="text-[10px] text-purple-400 hover:text-purple-300 font-bold tracking-wider uppercase">
+                                        🔗 Link
+                                    </a>
+                                )}
+                            </div>
                         </div>
+
                         {video.error && (
-                            <p className="text-xs text-red-400 mt-1 bg-red-500/10 rounded px-2 py-1">⚠ {video.error}</p>
+                            <p className="text-[10px] text-red-400 mt-2 bg-red-500/10 rounded px-2 py-1 leading-relaxed border border-red-500/20">
+                                ⚠ {video.error}
+                            </p>
                         )}
 
-                        {/* CAPTCHA resolve button */}
                         {video.status === 'captcha' && (
-                            <div className="mt-2 flex items-center gap-2 p-2 rounded-lg border" style={{ borderColor: '#f97316', background: '#f9731608' }}>
-                                <span className="text-[11px]" style={{ color: '#f97316' }}>⚠️ CAPTCHA verification needed</span>
-                                <button
-                                    className="ml-auto text-[10px] font-bold px-3 py-1 rounded bg-orange-500 text-white hover:bg-orange-600 transition"
-                                    onClick={() => {
-                                        // @ts-ignore
-                                        window.api?.send('captcha:resolve', { videoId: video.platform_id, campaignId })
-                                    }}
-                                >
-                                    Resolve
-                                </button>
-                            </div>
+                            <button
+                                className="mt-2 w-full text-[10px] font-bold px-3 py-1.5 rounded bg-orange-500 text-white hover:bg-orange-600 transition uppercase tracking-wider shadow-lg shadow-orange-500/20"
+                                onClick={() => window.api?.send('captcha:resolve', { videoId: video.platform_id, campaignId })}
+                            >
+                                Resolve CAPTCHA
+                            </button>
                         )}
                     </div>
                 </div>
@@ -485,18 +525,6 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
             <ExecutionLogs campaignId={campaignId} />
         </div>
     )
-}
-
-// ── Helpers ─────────────────────────────────────────
-function fmt(n: number): string {
-    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
-    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
-    return String(n)
-}
-
-function tryParse(json: string): any {
-    try { return JSON.parse(json) }
-    catch { return null }
 }
 
 export default TikTokRepostDetail

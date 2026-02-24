@@ -1,6 +1,6 @@
 # src/flows/presets/tiktok-repost.flow.yaml
 # ─────────────────────────────────────────
-# Workflow: Scan → Schedule → Loop(checkTime → dedup → download → caption → publish) → Finish
+# Workflow: Scan → Schedule → Loop(check → dedup → download → caption → publish → condition → notify) → Finish
 
 # ── METADATA ─────────────────────────────
 id: tiktok-repost
@@ -8,7 +8,7 @@ name: TikTok Repost
 description: Scan TikTok channels → Schedule → Download → Edit caption → Publish
 icon: 🔄
 color: "#00f2ea"
-version: "2.3"
+version: "2.4"
 
 # ── NODES ────────────────────────────────
 nodes:
@@ -19,9 +19,20 @@ nodes:
   - node_id: core.video_scheduler
     instance_id: scheduler_1
 
+  # Loop children: all nodes including condition + notify are INSIDE the loop
+  # so they fire per-video iteration
   - node_id: core.loop
     instance_id: video_loop
-    children: [check_time_1, dedup_1, downloader_1, caption_1, publisher_1]
+    children:
+      - check_time_1
+      - dedup_1
+      - downloader_1
+      - caption_1
+      - publisher_1
+      - cond_violation_1
+      - notify_violation_1
+      - cond_captcha_1
+      - notify_captcha_1
 
   - node_id: core.check_in_time
     instance_id: check_time_1
@@ -42,17 +53,66 @@ nodes:
       captcha:detected:
         action: skip_item
         emit: campaign:needs_captcha
-      violation:detected:
-        action: skip_item
 
+  # ── Condition + Notify nodes (loop children) ───────────────────
+  - node_id: core.condition
+    instance_id: cond_violation_1
+    params:
+      expression: "status === 'violation'"
+
+  - node_id: core.notify
+    instance_id: notify_violation_1
+    params:
+      title: "⚠️ Video Violation"
+      body: "Video from {{author}} was flagged for policy violation"
+      sound: true
+
+  - node_id: core.condition
+    instance_id: cond_captcha_1
+    params:
+      expression: "status === 'captcha'"
+
+  - node_id: core.notify
+    instance_id: notify_captcha_1
+    params:
+      title: "🤖 CAPTCHA Required"
+      body: "Boembo needs your help solving a CAPTCHA"
+      sound: true
+
+  # ── After loop finishes ────────────────────────────────────────
   - node_id: core.campaign_finish
     instance_id: finish_1
 
+  - node_id: core.notify
+    instance_id: notify_finish_1
+    params:
+      title: "✅ Campaign Finished"
+      body: "All scheduled videos have been processed"
+      sound: false
+
 # ── EDGES ────────────────────────────────
+# Note: edges INSIDE the loop use conditional `when` to route per-video
 edges:
   - from: scanner_1
     to: scheduler_1
   - from: scheduler_1
     to: video_loop
+
+  # Conditional per-video notifications (inside loop)
+  - from: publisher_1
+    to: cond_violation_1
+  - from: cond_violation_1
+    to: notify_violation_1
+    when: "branch === 'true'"
+
+  - from: publisher_1
+    to: cond_captcha_1
+  - from: cond_captcha_1
+    to: notify_captcha_1
+    when: "branch === 'true'"
+
+  # After loop → finish → campaign done notification
   - from: video_loop
     to: finish_1
+  - from: finish_1
+    to: notify_finish_1

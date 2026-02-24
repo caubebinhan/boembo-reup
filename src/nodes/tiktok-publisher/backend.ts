@@ -56,8 +56,8 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
           .run(video.platform_id, ctx.campaign_id)
       } catch {}
 
-      // Return null data → FlowEngine loop skips to next item
-      return { action: 'continue', data: null }
+      // Return status-tagged data for conditional edges
+      return { action: 'continue', data: { ...video, status: 'captcha' } }
     }
 
     // ── Violation: skip video, continue loop ──────────
@@ -73,7 +73,8 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
           .run(video.platform_id, ctx.campaign_id)
       } catch {}
 
-      return { action: 'continue', data: null }
+      // Return status-tagged data for conditional edges
+      return { action: 'continue', data: { ...video, status: 'violation' } }
     }
 
     // ── Other errors: throw to respect on_error config ──
