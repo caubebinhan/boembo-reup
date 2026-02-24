@@ -15,6 +15,8 @@ export interface FlowNodeDefinition {
   instance_id: string
   /** Only for loop nodes — which children to iterate */
   children?: string[]
+  /** Runtime execution state (populated by engine) */
+  execution?: any
 }
 
 export interface FlowEdgeDefinition {

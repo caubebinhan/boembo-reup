@@ -1,115 +1,241 @@
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { WizardStepper } from './WizardStepper'
-import { Step1_Details } from './wizard/Step1_Details'
-import { Step2_Sources } from './wizard/Step2_Sources'
-import { Step4_Schedule } from './wizard/Step4_Schedule'
-import { Step5_Target } from './wizard/Step5_Target'
-import { useFlowUIDescriptor, evaluateExpression } from '../hooks/useFlowUIDescriptor'
+import { workflowWizardRegistry } from '../wizard/workflowWizardRegistry'
+import { WizardStepConfig } from '../wizard/WizardStepTypes'
+import { FormField, TextInput, SelectInput } from '../wizard/shared'
 
 interface CampaignWizardProps {
     onClose: () => void
     flowId?: string
 }
 
-/** Maps YAML custom_component names → React components */
-const STEP_COMPONENTS: Record<string, React.FC<{ data: Record<string, any>, updateData: (u: Record<string, any>) => void }>> = {
-    CampaignDetailsStep: Step1_Details,
-    SourcePickerStep: Step2_Sources,
-    SchedulePreviewStep: Step4_Schedule,
-    AccountPickerStep: Step5_Target,
+interface WorkflowOption {
+    id: string
+    name: string
+    icon?: string
+    description?: string
 }
 
-export function CampaignWizard({ onClose, flowId = 'tiktok-repost' }: CampaignWizardProps) {
-    const { descriptor, loading } = useFlowUIDescriptor(flowId)
-
+/**
+ * Campaign Wizard — Step 0 (name + workflow) → Per-workflow custom steps
+ */
+export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizardProps) {
+    // ── State ──────────────────────────────────
+    const [selectedWorkflow, setSelectedWorkflow] = useState(initialFlowId || '')
+    const [campaignName, setCampaignName] = useState('')
     const [currentStepIndex, setCurrentStepIndex] = useState(0)
     const [stepData, setStepData] = useState<Record<string, any>>({})
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [stepError, setStepError] = useState<string | null>(null)
+    const [availableWorkflows, setAvailableWorkflows] = useState<WorkflowOption[]>([])
 
-    const steps = useMemo(() => {
-        if (!descriptor?.wizard?.steps) return []
-        return descriptor.wizard.steps.map((s: any) => ({
-            id: s.id,
-            title: s.title,
-            icon: s.icon,
-            custom_component: s.custom_component,
-            can_advance_expr: s.can_advance_expr,
-        }))
-    }, [descriptor])
-
-    const isLastStep = steps.length > 0 && currentStepIndex === steps.length - 1
-
-    const handleNext = () => {
-        const step = steps[currentStepIndex]
-        if (step?.can_advance_expr) {
-            if (!evaluateExpression(step.can_advance_expr, { stepData }, true)) {
-                alert('Please complete all required fields before advancing.')
-                return
+    // ── Load available workflows from backend ──
+    useEffect(() => {
+        const load = async () => {
+            try {
+                // @ts-ignore
+                const flows = await window.api.invoke('flow:list')
+                setAvailableWorkflows(
+                    flows.map((f: any) => ({
+                        id: f.id,
+                        name: f.name,
+                        icon: f.icon,
+                        description: f.description,
+                    }))
+                )
+            } catch {
+                // Fallback: use registry keys
+                setAvailableWorkflows(
+                    Object.keys(workflowWizardRegistry).map(id => ({
+                        id,
+                        name: id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                    }))
+                )
             }
         }
-        if (!isLastStep) setCurrentStepIndex(prev => prev + 1)
+        load()
+    }, [])
+
+    // ── Wizard steps for selected workflow ─────
+    const workflowSteps: WizardStepConfig[] = useMemo(() => {
+        if (!selectedWorkflow) return []
+        return workflowWizardRegistry[selectedWorkflow] || []
+    }, [selectedWorkflow])
+
+    // Step 0 is "Setup" (name + workflow), then workflow-specific steps
+    const isStep0 = currentStepIndex === 0
+    const workflowStepIndex = currentStepIndex - 1
+    const totalSteps = 1 + workflowSteps.length
+    const isLastStep = currentStepIndex === totalSteps - 1
+
+    // Build stepper display
+    const stepperSteps = useMemo(() => {
+        const setup = { id: 'setup', title: 'Setup', icon: '⚙️' }
+        const wfSteps = workflowSteps.map(s => ({ id: s.id, title: s.title, icon: s.icon }))
+        return [setup, ...wfSteps]
+    }, [workflowSteps])
+
+    // ── Handlers ───────────────────────────────
+    const handleNext = () => {
+        setStepError(null)
+
+        if (isStep0) {
+            if (!campaignName.trim()) {
+                setStepError('Campaign name is required')
+                return
+            }
+            if (!selectedWorkflow) {
+                setStepError('Please select a workflow')
+                return
+            }
+            // Persist name into stepData
+            setStepData(prev => ({ ...prev, name: campaignName.trim() }))
+        } else {
+            // Validate current workflow step
+            const currentStep = workflowSteps[workflowStepIndex]
+            if (currentStep?.validate) {
+                const error = currentStep.validate(stepData)
+                if (error) {
+                    setStepError(error)
+                    return
+                }
+            }
+        }
+
+        if (!isLastStep) {
+            setCurrentStepIndex(prev => prev + 1)
+        }
     }
 
     const handleBack = () => {
-        if (currentStepIndex > 0) setCurrentStepIndex(prev => prev - 1)
-        else onClose()
+        setStepError(null)
+        if (currentStepIndex > 0) {
+            setCurrentStepIndex(prev => prev - 1)
+        } else {
+            onClose()
+        }
     }
 
     const handleSave = async () => {
+        setStepError(null)
+
+        // Validate last step
+        if (!isStep0) {
+            const currentStep = workflowSteps[workflowStepIndex]
+            if (currentStep?.validate) {
+                const error = currentStep.validate(stepData)
+                if (error) {
+                    setStepError(error)
+                    return
+                }
+            }
+        }
+
         setIsSubmitting(true)
         try {
-            const payload = { ...stepData, workflow_id: flowId }
+            const payload = {
+                ...stepData,
+                name: campaignName.trim(),
+                workflow_id: selectedWorkflow,
+            }
             // @ts-ignore
             await window.api.invoke('campaign:create', payload)
             onClose()
         } catch (err: any) {
             console.error(err)
-            alert(`Failed: ${err.message}`)
+            setStepError(`Failed to create campaign: ${err.message}`)
         } finally {
             setIsSubmitting(false)
         }
     }
 
-    if (loading) {
-        return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                <div className="bg-[#1e293b] p-8 rounded-xl text-white animate-pulse">Loading…</div>
-            </div>
-        )
-    }
+    // ── Step 0: Setup ──────────────────────────
+    const renderStep0 = () => (
+        <div>
+            <h2 className="text-xl font-bold text-white mb-1">Create Campaign</h2>
+            <p className="text-gray-400 text-sm mb-6">Name your campaign and select a workflow</p>
 
-    if (steps.length === 0) {
-        return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                <div className="bg-[#1e293b] p-8 rounded-xl text-white">
-                    <p>No wizard steps found for this workflow.</p>
-                    <button className="mt-4 px-4 py-2 bg-gray-600 rounded" onClick={onClose}>Close</button>
+            <FormField label="Campaign Name" required>
+                <TextInput
+                    value={campaignName}
+                    onChange={setCampaignName}
+                    placeholder="My Campaign"
+                />
+            </FormField>
+
+            <FormField label="Workflow" required hint="Each workflow has its own setup steps">
+                <SelectInput
+                    value={selectedWorkflow}
+                    onChange={v => {
+                        setSelectedWorkflow(v)
+                        // Reset workflow-specific data when switching
+                        setStepData(prev => ({ name: prev.name }))
+                    }}
+                    options={availableWorkflows.map(w => ({
+                        value: w.id,
+                        label: w.name,
+                        icon: w.icon,
+                    }))}
+                    placeholder="Select a workflow..."
+                />
+            </FormField>
+
+            {selectedWorkflow && (
+                <div className="mt-4 p-4 rounded-lg bg-[#0f172a] border border-gray-700">
+                    <div className="flex items-center gap-2 text-white mb-2">
+                        <span className="text-lg">{availableWorkflows.find(w => w.id === selectedWorkflow)?.icon}</span>
+                        <span className="font-medium">{availableWorkflows.find(w => w.id === selectedWorkflow)?.name}</span>
+                    </div>
+                    <p className="text-gray-400 text-sm">
+                        {availableWorkflows.find(w => w.id === selectedWorkflow)?.description || 'Configure this workflow in the following steps.'}
+                    </p>
+                    <div className="mt-3 flex gap-2 flex-wrap">
+                        {workflowSteps.map(s => (
+                            <span key={s.id} className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300">
+                                {s.icon} {s.title}
+                            </span>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
+        </div>
+    )
+
+    // ── Render current workflow step ───────────
+    const renderWorkflowStep = () => {
+        const step = workflowSteps[workflowStepIndex]
+        if (!step) {
+            return (
+                <div className="text-gray-400 text-center mt-20">
+                    Step not found
+                </div>
+            )
+        }
+        const StepComponent = step.component
+        return (
+            <StepComponent
+                data={stepData}
+                updateData={(u) => setStepData(prev => ({ ...prev, ...u }))}
+            />
         )
     }
-
-    const currentStep = steps[currentStepIndex]
-    const StepComponent = STEP_COMPONENTS[currentStep.custom_component]
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-[#1e293b] w-[860px] max-h-[90vh] flex flex-col rounded-2xl shadow-2xl border border-gray-700 overflow-hidden">
                 {/* Stepper */}
                 <div className="border-b border-gray-800 bg-[#0f172a] shrink-0">
-                    <WizardStepper steps={steps} currentIndex={currentStepIndex} />
+                    <WizardStepper steps={stepperSteps} currentIndex={currentStepIndex} />
                 </div>
 
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto p-8 min-h-[400px]">
-                    {StepComponent ? (
-                        <StepComponent
-                            data={stepData}
-                            updateData={(u) => setStepData(prev => ({ ...prev, ...u }))}
-                        />
-                    ) : (
-                        <div className="text-gray-400 text-center mt-20">
-                            Step component "{currentStep.custom_component}" not found
+                    {isStep0 ? renderStep0() : renderWorkflowStep()}
+
+                    {/* Error banner */}
+                    {stepError && (
+                        <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                            ⚠️ {stepError}
                         </div>
                     )}
                 </div>
@@ -123,12 +249,20 @@ export function CampaignWizard({ onClose, flowId = 'tiktok-repost' }: CampaignWi
                         {currentStepIndex === 0 ? 'Cancel' : '← Back'}
                     </button>
 
-                    {!isLastStep ? (
-                        <button onClick={handleNext} className="px-6 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-medium transition">
+                    {!isLastStep || workflowSteps.length === 0 ? (
+                        <button
+                            onClick={handleNext}
+                            disabled={isStep0 && (!campaignName.trim() || !selectedWorkflow)}
+                            className="px-6 py-2 rounded bg-purple-600 hover:bg-purple-700 text-white font-medium transition disabled:opacity-50"
+                        >
                             Next →
                         </button>
                     ) : (
-                        <button onClick={handleSave} disabled={isSubmitting} className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 text-white font-medium transition disabled:opacity-50">
+                        <button
+                            onClick={handleSave}
+                            disabled={isSubmitting}
+                            className="px-6 py-2 rounded bg-green-600 hover:bg-green-700 text-white font-medium transition disabled:opacity-50"
+                        >
                             {isSubmitting ? 'Saving…' : '💾 Create Campaign'}
                         </button>
                     )}

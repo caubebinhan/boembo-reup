@@ -1,3 +1,4 @@
+// ── Config Schema ────────────────────────────────
 export interface NodeConfigSchemaField {
   key: string
   label: string
@@ -12,6 +13,7 @@ export interface NodeConfigSchema {
   fields: NodeConfigSchemaField[]
 }
 
+// ── Execution Context & Result ───────────────────
 export interface NodeExecutionContext {
   campaign_id: string
   job_id?: string
@@ -36,15 +38,21 @@ export interface NodeExecutionResult {
   message?: string
 }
 
-export interface NodeDefinition {
+// ── Node Manifest (Contract) ─────────────────────
+/** Declarative metadata — describes WHAT the node is, not HOW it runs */
+export interface NodeManifest {
   id: string
   name: string
   category: 'source' | 'filter' | 'transform' | 'publish' | 'control'
   icon?: string
-
+  description?: string
   /** Schema for config UI (optional — used by wizard auto-generation) */
   config_schema?: NodeConfigSchema
+}
 
-  /** The node's execution logic. Receives input from previous node + context. */
+// ── Node Definition ──────────────────────────────
+/** Complete node: manifest (contract) + execute (backend) */
+export interface NodeDefinition {
+  manifest: NodeManifest
   execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult>
 }

@@ -4,7 +4,7 @@ export class NodeRegistry {
   private nodes = new Map<string, NodeDefinition>()
 
   register(node: NodeDefinition) {
-    this.nodes.set(node.id, node)
+    this.nodes.set(node.manifest.id, node)
   }
 
   get(id: string): NodeDefinition | undefined {
@@ -13,6 +13,10 @@ export class NodeRegistry {
 
   getAll(): NodeDefinition[] {
     return Array.from(this.nodes.values())
+  }
+
+  getAllManifests() {
+    return this.getAll().map(n => n.manifest)
   }
 }
 

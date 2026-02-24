@@ -1,0 +1,113 @@
+# src/flows/presets/upload-local.flow.yaml
+# ─────────────────────────────────────────
+# Workflow: Read local files → Loop(caption → publish → wait)
+
+# ── METADATA ─────────────────────────────
+id: upload-local
+name: Upload from File
+description: Upload local video files → Edit caption → Publish
+icon: 📁
+color: "#8b5cf6"
+version: "1.0"
+
+# ── NODES ────────────────────────────────
+nodes:
+  - node_id: core.file_source
+    instance_id: file_source_1
+
+  - node_id: core.loop
+    instance_id: video_loop
+    children: [caption_1, publisher_1, timeout_1]
+
+  - node_id: core.caption_gen
+    instance_id: caption_1
+
+  - node_id: tiktok.publisher
+    instance_id: publisher_1
+
+  - node_id: core.timeout
+    instance_id: timeout_1
+
+# ── EDGES ────────────────────────────────
+edges:
+  - from: file_source_1
+    to: video_loop
+
+# ── UI ───────────────────────────────────
+ui:
+  campaign_card:
+    stats:
+      - key: uploaded
+        label: Uploaded
+        icon: 📁
+        value_expr: "config.local_files ? config.local_files.length : 0"
+      - key: published
+        label: Published
+        icon: 📤
+        value_expr: "config.published_count || 0"
+
+    status_badges:
+      - condition_expr: "campaign.status == 'active'"
+        text: Active
+        color: "#10b981"
+      - condition_expr: "campaign.status == 'paused'"
+        text: Paused
+        color: "#eab308"
+      - condition_expr: "campaign.status == 'finished'"
+        text: Done
+        color: "#3b82f6"
+
+    subtitle_expr: "'Files: ' + (config.local_files ? config.local_files.length : 0)"
+
+  card_actions:
+    - label: "▶️ Start"
+      show_if: "campaign.status == 'idle'"
+      action:
+        type: ipc
+        event: trigger-campaign
+        payload_expr: "{ id: campaign.id }"
+
+    - label: "🗑️ Delete"
+      style: danger
+      action:
+        type: ipc
+        event: delete-campaign
+        payload_expr: "{ id: campaign.id }"
+
+  detail_page:
+    timeline_adapter: upload-local
+    show_node_status: true
+
+    header_actions:
+      - key: run
+        label: "🚀 Run Now"
+        icon: "🚀"
+        style: primary
+        show_if: "campaign.status == 'idle' || campaign.status == 'active'"
+        loading_if: "hasActiveJobs"
+        action:
+          type: ipc
+          event: trigger-campaign
+          payload_expr: "{ id: campaign.id }"
+
+    header_stats:
+      - key: uploaded
+        label: Uploaded
+        icon: 📁
+        value_expr: "config.local_files ? config.local_files.length : 0"
+      - key: published
+        label: Published
+        icon: 📤
+        value_expr: "config.published_count || 0"
+
+    sections:
+      - id: pipeline
+        title: Pipeline Status
+        component: NodePipelineView
+        icon: "📊"
+
+      - id: logs
+        title: Execution Logs
+        component: ExecutionLogView
+        icon: "📃"
+        collapsed: true

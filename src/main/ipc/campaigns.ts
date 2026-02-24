@@ -96,6 +96,16 @@ export function setupCampaignIPC() {
     }))
   })
 
+  ipcMain.handle('flow:list', async () => {
+    return flowLoader.getAll().map(f => ({
+      id: f.id,
+      name: f.name,
+      description: f.description,
+      icon: f.icon,
+      color: f.color,
+    }))
+  })
+
   ipcMain.handle('flow:get-ui-descriptor', async (_event, flowId) => {
     const flow = flowLoader.get(flowId)
     return flow?.ui || null

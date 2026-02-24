@@ -44,7 +44,7 @@ export class FlowEngine {
     }
     const startNodes = flow.nodes.filter(n => !targets.has(n.instance_id) && !loopChildren.has(n.instance_id))
 
-    console.log(`[FlowEngine] Registered nodes: ${nodeRegistry.getAll().map(n => n.id).join(', ')}`)
+    console.log(`[FlowEngine] Registered nodes: ${nodeRegistry.getAll().map(n => n.manifest.id).join(', ')}`)
     console.log(`[FlowEngine] Start nodes: ${startNodes.map(n => n.instance_id).join(', ')}`)
 
     for (const node of startNodes) {
