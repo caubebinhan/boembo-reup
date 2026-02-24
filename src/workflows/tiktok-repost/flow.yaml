@@ -11,11 +11,10 @@ color: "#00f2ea"
 version: "2.0"
 
 # ── NODES ────────────────────────────────
-# Each node only declares node_id + instance_id.
-# Nodes read their own config from campaign params (saved by wizard).
 nodes:
   - node_id: tiktok.scanner
     instance_id: scanner_1
+    timeout: 30000
 
   - node_id: core.loop
     instance_id: video_loop
@@ -32,7 +31,13 @@ nodes:
 
   - node_id: tiktok.publisher
     instance_id: publisher_1
-    on_error: stop_campaign
+    on_error: skip
+    events:
+      captcha:detected:
+        action: skip_item
+        emit: campaign:needs_captcha
+      violation:detected:
+        action: skip_item
 
   - node_id: core.timeout
     instance_id: timeout_1
@@ -41,151 +46,3 @@ nodes:
 edges:
   - from: scanner_1
     to: video_loop
-
-# ── UI ───────────────────────────────────
-ui:
-  campaign_card:
-    stats:
-      - key: scanned
-        label: Scanned
-        icon: 🔍
-        value_expr: "config.scanned_count || 0"
-      - key: downloaded
-        label: Downloaded
-        icon: ⬇️
-        value_expr: "config.downloaded_count || 0"
-      - key: published
-        label: Published
-        icon: 📤
-        value_expr: "config.published_count || 0"
-
-    status_badges:
-      - condition_expr: "campaign.status == 'active'"
-        text: Active
-        color: "#10b981"
-      - condition_expr: "campaign.status == 'paused'"
-        text: Paused
-        color: "#eab308"
-      - condition_expr: "campaign.status == 'needs_captcha'"
-        text: ⚠️ Captcha
-        color: "#f97316"
-      - condition_expr: "campaign.status == 'finished'"
-        text: Done
-        color: "#3b82f6"
-
-    subtitle_expr: "'Sources: ' + (config.sources ? config.sources.length : 0)"
-
-  card_actions:
-    - label: "▶️ Start"
-      show_if: "campaign.status == 'idle'"
-      action:
-        type: ipc
-        event: campaign:trigger
-        payload_expr: "{ id: campaign.id }"
-
-    - label: "⏸️ Pause"
-      show_if: "campaign.status == 'active'"
-      action:
-        type: ipc
-        event: campaign:pause
-        payload_expr: "{ id: campaign.id }"
-
-    - label: "🗑️ Delete"
-      style: danger
-      action:
-        type: ipc
-        event: campaign:delete
-        payload_expr: "{ id: campaign.id }"
-
-  # Wizard steps — collect input for backend nodes
-  wizard:
-    steps:
-      - id: details
-        title: Details
-        icon: 📝
-        custom_component: CampaignDetailsStep
-        description: Campaign name, type, schedule, and captions
-
-      - id: sources
-        title: Sources
-        icon: 📡
-        custom_component: SourcePickerStep
-        description: Configure channels and keywords to monitor
-        can_advance_expr: >
-          (stepData.sources && stepData.sources.length > 0) ||
-          (stepData.videos && stepData.videos.length > 0)
-
-      - id: schedule
-        title: Schedule
-        icon: 📅
-        custom_component: SchedulePreviewStep
-        description: Preview and adjust publish schedule
-
-      - id: target
-        title: Target
-        icon: 🎯
-        custom_component: AccountPickerStep
-        description: Select accounts to publish to
-
-  # Detail page layout
-  detail_page:
-    timeline_adapter: tiktok-repost
-    show_node_status: true
-
-    header_actions:
-      - key: run
-        label: "🚀 Run Now"
-        icon: "🚀"
-        style: primary
-        show_if: "campaign.status == 'idle' || campaign.status == 'active'"
-        loading_if: "hasActiveJobs"
-        action:
-          type: ipc
-          event: campaign:trigger
-          payload_expr: "{ id: campaign.id }"
-
-      - key: pause
-        label: "⏸️ Pause"
-        icon: "⏸️"
-        style: secondary
-        show_if: "campaign.status == 'active'"
-        action:
-          type: ipc
-          event: campaign:pause
-          payload_expr: "{ id: campaign.id }"
-
-      - key: resume
-        label: "▶️ Resume"
-        icon: "▶️"
-        style: primary
-        show_if: "campaign.status == 'paused'"
-        action:
-          type: ipc
-          event: campaign:resume
-          payload_expr: "{ id: campaign.id }"
-
-    header_stats:
-      - key: scanned
-        label: Scanned
-        icon: 🔍
-        value_expr: "config.scanned_count || 0"
-      - key: downloaded
-        label: Downloaded
-        icon: ⬇️
-        value_expr: "config.downloaded_count || 0"
-      - key: published
-        label: Published
-        icon: 📤
-        value_expr: "config.published_count || 0"
-
-    sections:
-      - id: pipeline
-        title: Pipeline Status
-        component: NodePipelineView
-        icon: "📊"
-
-      - id: logs
-        title: Execution Logs
-        component: ExecutionLogView
-        icon: "📃"
-        collapsed: true

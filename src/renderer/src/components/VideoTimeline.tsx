@@ -1,12 +1,16 @@
 import { useSelector } from 'react-redux'
 import { RootState } from '../store/store'
 
+/**
+ * Generic VideoTimeline — renders tasks from the core pipeline store.
+ * Workflow-specific video lists (like TikTok Repost) should use their
+ * own detail component instead of this generic timeline.
+ */
 export function VideoTimeline({ campaignId }: { campaignId: string }) {
     const tasks = useSelector((state: RootState) =>
         Object.values(state.pipeline.tasks).filter(t => t.campaignId === campaignId)
     )
 
-    // Sort by scheduledAt
     const sorted = [...tasks].sort((a, b) => (a.scheduledAt || 0) - (b.scheduledAt || 0))
 
     return (
@@ -18,9 +22,9 @@ export function VideoTimeline({ campaignId }: { campaignId: string }) {
                 {sorted.map(task => (
                     <div key={task.id} className="relative pl-6">
                         <div className={`absolute -left-2 top-1.5 w-4 h-4 rounded-full border-2 border-white ${task.status === 'posted' ? 'bg-green-500' :
-                                task.status === 'failed' ? 'bg-red-500' :
-                                    task.status === 'processing' ? 'bg-blue-500 animate-pulse' :
-                                        'bg-gray-300'
+                            task.status === 'failed' ? 'bg-red-500' :
+                                task.status === 'processing' ? 'bg-blue-500 animate-pulse' :
+                                    'bg-gray-300'
                             }`} />
 
                         <div className="bg-white border rounded shadow-sm p-4">
@@ -32,9 +36,9 @@ export function VideoTimeline({ campaignId }: { campaignId: string }) {
                                     </p>
                                 </div>
                                 <span className={`text-xs px-2 py-1 rounded-full uppercase tracking-wide font-semibold ${task.status === 'posted' ? 'bg-green-100 text-green-700' :
-                                        task.status === 'failed' ? 'bg-red-100 text-red-700' :
-                                            task.status === 'processing' ? 'bg-blue-100 text-blue-700' :
-                                                'bg-gray-100 text-gray-700'
+                                    task.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                        task.status === 'processing' ? 'bg-blue-100 text-blue-700' :
+                                            'bg-gray-100 text-gray-700'
                                     }`}>
                                     {task.status}
                                 </span>

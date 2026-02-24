@@ -121,7 +121,22 @@ export class FlowEngine {
         }
       }
 
-      const result = await NodeImpl.execute(inputData, ctx)
+      const resultPromise = NodeImpl.execute(inputData, ctx)
+      
+      let result: any
+      if (nodeDef.timeout) {
+        ExecutionLogger.log({
+          campaign_id: job.campaign_id, job_id: job.id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
+          level: 'info', event: 'node:timeout_set', message: `Setting timeout of ${nodeDef.timeout}ms`
+        })
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error(`Node timeout exceeded (${nodeDef.timeout}ms)`)), nodeDef.timeout)
+        )
+        result = await Promise.race([resultPromise, timeoutPromise])
+      } else {
+        result = await resultPromise
+      }
+
       const durationMs = Date.now() - startTime
 
       ExecutionLogger.nodeEnd(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id,
@@ -263,7 +278,22 @@ export class FlowEngine {
         }
 
         try {
-          const result = await NodeImpl.execute(currentData, ctx)
+          const resultPromise = NodeImpl.execute(currentData, ctx)
+          
+          let result: any
+          if (childDef.timeout) {
+            ExecutionLogger.log({
+              campaign_id: job.campaign_id, job_id: job.id, instance_id: childDef.instance_id, node_id: childDef.node_id,
+              level: 'info', event: 'node:timeout_set', message: `Setting timeout of ${childDef.timeout}ms`
+            })
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error(`Node timeout exceeded (${childDef.timeout}ms)`)), childDef.timeout)
+            )
+            result = await Promise.race([resultPromise, timeoutPromise])
+          } else {
+            result = await resultPromise
+          }
+
           const durationMs = Date.now() - startTime
           ExecutionLogger.nodeEnd(job.campaign_id, job.id, childDef.instance_id, childDef.node_id,
             { action: result.action }, durationMs)

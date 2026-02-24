@@ -22,9 +22,10 @@ interface TikTokVideo {
     local_path?: string
     caption?: string
     published_url?: string
-    status: 'scanned' | 'downloading' | 'downloaded' | 'captioned' | 'publishing' | 'published' | 'failed'
+    status: 'scanned' | 'downloading' | 'downloaded' | 'captioned' | 'publishing' | 'published' | 'failed' | 'captcha' | 'violation' | 'skipped'
     error?: string
     scheduledAt?: number
+    isActive?: boolean
 }
 
 interface TikTokRepostState {
@@ -35,6 +36,8 @@ interface TikTokRepostState {
     downloadedCount: number
     publishedCount: number
     failedCount: number
+    captchaCount: number
+    activeVideoId?: string
 }
 
 const INITIAL: TikTokRepostState = {
@@ -44,6 +47,7 @@ const INITIAL: TikTokRepostState = {
     downloadedCount: 0,
     publishedCount: 0,
     failedCount: 0,
+    captchaCount: 0,
 }
 
 /**
@@ -106,15 +110,17 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                 }
             })
 
-            setState({
+            setState(prev => ({
                 phase,
                 phaseMessage,
-                videos,
+                videos: videos.map(v => ({ ...v, isActive: v.platform_id === prev.activeVideoId })),
                 scannedCount: videos.length,
                 downloadedCount: videos.filter(v => ['downloaded', 'captioned', 'publishing', 'published'].includes(v.status)).length,
                 publishedCount: videos.filter(v => v.status === 'published').length,
                 failedCount: videos.filter(v => v.status === 'failed').length,
-            })
+                captchaCount: videos.filter(v => v.status === 'captcha').length,
+                activeVideoId: prev.activeVideoId,
+            }))
         } catch (err) {
             console.error('[TikTokRepostDetail] Failed to rebuild state:', err)
         }
@@ -135,11 +141,40 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
             if (ev.campaignId !== campaignId) return
             setState(prev => ({ ...prev, phaseMessage: ev.message }))
         })
+        // @ts-ignore — workflow-specific node events (captcha, active video, etc.)
+        const offNodeEvent = window.api?.on('node:event', (ev: any) => {
+            if (ev.campaignId !== campaignId) return
+            if (ev.event === 'video:active') {
+                setState(prev => ({
+                    ...prev,
+                    activeVideoId: ev.data?.videoId,
+                    videos: prev.videos.map(v => ({ ...v, isActive: v.platform_id === ev.data?.videoId })),
+                }))
+            } else if (ev.event === 'captcha:detected') {
+                setState(prev => ({
+                    ...prev,
+                    videos: prev.videos.map(v =>
+                        v.platform_id === ev.data?.videoId ? { ...v, status: 'captcha' as const } : v
+                    ),
+                    captchaCount: prev.captchaCount + 1,
+                }))
+            } else if (ev.event === 'violation:detected') {
+                setState(prev => ({
+                    ...prev,
+                    videos: prev.videos.map(v =>
+                        v.platform_id === ev.data?.videoId ? { ...v, status: 'violation' as const, error: ev.data?.error } : v
+                    ),
+                }))
+            } else if (ev.event === 'video:published') {
+                rebuild()  // full rebuild to pick up updated DB state
+            }
+        })
 
         return () => {
             clearInterval(timer)
             if (typeof offData === 'function') offData()
             if (typeof offProgress === 'function') offProgress()
+            if (typeof offNodeEvent === 'function') offNodeEvent()
         }
     }, [campaignId, rebuild])
 
@@ -153,6 +188,9 @@ function mapDbStatus(dbStatus: string): TikTokVideo['status'] {
         published: 'published',
         failed: 'failed',
         verified: 'published',
+        captcha: 'captcha',
+        violation: 'violation',
+        skipped: 'skipped',
     }
     return map[dbStatus] || 'scanned'
 }
@@ -167,6 +205,9 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
     publishing: { label: 'PUBLISHING', color: '#8b5cf6', bg: '#8b5cf615' },
     published: { label: 'PUBLISHED', color: '#10b981', bg: '#10b98115' },
     failed: { label: 'FAILED', color: '#ef4444', bg: '#ef444415' },
+    captcha: { label: '⚠️ CAPTCHA', color: '#f97316', bg: '#f9731615' },
+    violation: { label: 'VIOLATION', color: '#dc2626', bg: '#dc262615' },
+    skipped: { label: 'SKIPPED', color: '#9ca3af', bg: '#9ca3af15' },
 }
 
 function StatCard({ icon, label, value, color }: { icon: string; label: string; value: number; color: string }) {
@@ -181,8 +222,9 @@ function StatCard({ icon, label, value, color }: { icon: string; label: string; 
     )
 }
 
-function VideoCard({ video, index, gapMinutes }: { video: TikTokVideo; index: number; gapMinutes?: number }) {
+function VideoCard({ video, index, gapMinutes, campaignId }: { video: TikTokVideo; index: number; gapMinutes?: number; campaignId: string }) {
     const sc = STATUS_CONFIG[video.status] || STATUS_CONFIG.scanned
+    const isActive = video.isActive
     const scheduledTime = video.scheduledAt
         ? new Date(video.scheduledAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
         : gapMinutes
@@ -193,11 +235,14 @@ function VideoCard({ video, index, gapMinutes }: { video: TikTokVideo; index: nu
             : null
 
     return (
-        <div className="relative pl-8 pb-6">
+        <div className="relative pl-8 pb-6" style={{ opacity: video.status === 'skipped' ? 0.5 : 1 }}>
             <div className="absolute left-3 top-0 bottom-0 w-px bg-gray-800" />
             <div
-                className={`absolute left-1.5 top-2.5 w-3 h-3 rounded-full border-2 border-gray-900 ${['downloading', 'publishing'].includes(video.status) ? 'animate-pulse' : ''}`}
-                style={{ backgroundColor: sc.color }}
+                className={`absolute left-1.5 top-2.5 w-3 h-3 rounded-full border-2 border-gray-900 ${['downloading', 'publishing'].includes(video.status) || isActive ? 'animate-pulse' : ''}`}
+                style={{
+                    backgroundColor: sc.color,
+                    boxShadow: isActive ? `0 0 10px ${sc.color}, 0 0 20px ${sc.color}40` : 'none',
+                }}
             />
             {scheduledTime && (
                 <span className="absolute -left-[3px] top-7 text-[10px] text-gray-600 w-[34px] text-center">
@@ -205,7 +250,23 @@ function VideoCard({ video, index, gapMinutes }: { video: TikTokVideo; index: nu
                 </span>
             )}
 
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4 hover:border-gray-700 transition-all">
+            <div
+                className={`rounded-xl p-4 transition-all ${isActive
+                        ? 'bg-gray-900/80 border-2 hover:border-gray-600'
+                        : 'bg-gray-900/60 border border-gray-800 hover:border-gray-700'
+                    }`}
+                style={{
+                    borderColor: isActive ? sc.color : undefined,
+                    boxShadow: isActive ? `0 0 16px ${sc.color}20` : undefined,
+                }}
+            >
+                {/* Active indicator */}
+                {isActive && (
+                    <div className="flex items-center gap-1.5 mb-2 text-[10px] uppercase tracking-wider" style={{ color: sc.color }}>
+                        <span className="animate-pulse">●</span> Publishing now...
+                    </div>
+                )}
+
                 <div className="flex items-start gap-3">
                     {video.thumbnail ? (
                         <img src={video.thumbnail} alt="" className="w-16 h-16 rounded-lg object-cover flex-shrink-0 bg-gray-800" />
@@ -235,6 +296,22 @@ function VideoCard({ video, index, gapMinutes }: { video: TikTokVideo; index: nu
                         </div>
                         {video.error && (
                             <p className="text-xs text-red-400 mt-1 bg-red-500/10 rounded px-2 py-1">⚠ {video.error}</p>
+                        )}
+
+                        {/* CAPTCHA resolve button */}
+                        {video.status === 'captcha' && (
+                            <div className="mt-2 flex items-center gap-2 p-2 rounded-lg border" style={{ borderColor: '#f97316', background: '#f9731608' }}>
+                                <span className="text-[11px]" style={{ color: '#f97316' }}>⚠️ CAPTCHA verification needed</span>
+                                <button
+                                    className="ml-auto text-[10px] font-bold px-3 py-1 rounded bg-orange-500 text-white hover:bg-orange-600 transition"
+                                    onClick={() => {
+                                        // @ts-ignore
+                                        window.api?.send('captcha:resolve', { videoId: video.platform_id, campaignId })
+                                    }}
+                                >
+                                    Resolve
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -342,6 +419,7 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                 <StatCard icon="⬇️" label="Downloaded" value={state.downloadedCount} color="#3b82f6" />
                 <StatCard icon="📤" label="Published" value={state.publishedCount} color="#10b981" />
                 {state.failedCount > 0 && <StatCard icon="❌" label="Failed" value={state.failedCount} color="#ef4444" />}
+                {state.captchaCount > 0 && <StatCard icon="⚠️" label="CAPTCHA" value={state.captchaCount} color="#f97316" />}
             </div>
 
             {/* Pipeline */}
@@ -380,7 +458,7 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                 ) : (
                     <div className="max-h-[600px] overflow-y-auto pr-2">
                         {state.videos.map((video, i) => (
-                            <VideoCard key={video.platform_id || i} video={video} index={i} gapMinutes={gapMinutes} />
+                            <VideoCard key={video.platform_id || i} video={video} index={i} gapMinutes={gapMinutes} campaignId={campaignId} />
                         ))}
                     </div>
                 )}

@@ -1,4 +1,9 @@
 import { net } from 'electron'
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
+
+// ── Interfaces ──────────────────────────────────────────────────────────────────
 
 export interface ScanOptions {
     limit?: number
@@ -32,14 +37,18 @@ export interface ScanResult {
     hasMore?: boolean
 }
 
+// ── TikTok Scanner ──────────────────────────────────────────────────────────────
+
 /**
  * TikTok scanner using TikWM API for fetching video data.
- * No browser needed for scanning — only for publishing.
+ * No browser needed for scanning — publishing is handled by VideoPublisher.
  */
 export class TikTokScanner {
     private baseUrl = 'https://www.tikwm.com'
+    private readonly MAX_API_RETRIES = 3
 
-    /** Scan a user profile for videos */
+    // ── Scan Profile ────────────────────────────────────
+
     async scanProfile(username: string, opts: ScanOptions = {}): Promise<ScanResult> {
         const limit = opts.limit || 30
         const cleanName = username.replace('@', '')
@@ -47,38 +56,35 @@ export class TikTokScanner {
         try {
             console.log(`[TikTokScanner] Scanning profile: @${cleanName} (limit=${limit})`)
 
+            // '/api/user/posts' is often blocked by Cloudflare.
+            // Use '/api/feed/search' with exact username as keyword instead.
             const body = new URLSearchParams({
-                unique_id: cleanName,
+                keywords: cleanName,
                 count: String(Math.min(limit, 35)),
                 cursor: '0',
             })
 
-            const data = await this.apiRequest('/api/user/posts', body)
+            const data = await this.apiRequest('/api/feed/search', body)
 
             if (!data?.videos || !Array.isArray(data.videos)) {
-                console.warn('[TikTokScanner] No videos in response:', data)
+                console.warn('[TikTokScanner] No videos in response:', JSON.stringify(data).substring(0, 200))
                 return { videos: [] }
             }
 
-            const videos: VideoInfo[] = data.videos
-                .slice(0, limit)
-                .map((v: any) => this.mapVideo(v))
-
+            const videos = data.videos.slice(0, limit).map((v: any) => this.mapVideo(v))
             console.log(`[TikTokScanner] Found ${videos.length} videos from @${cleanName}`)
             return { videos, hasMore: data.hasMore || false, cursor: data.cursor }
-
         } catch (err: any) {
             console.error(`[TikTokScanner] Profile scan failed:`, err.message)
-
-            if (err.message?.includes('CAPTCHA') || err.message?.includes('captcha')) {
+            if (err.message?.toLowerCase().includes('captcha')) {
                 throw new Error('CAPTCHA detected — manual verification required')
             }
-
             return { videos: [] }
         }
     }
 
-    /** Scan keyword/hashtag for videos */
+    // ── Scan Keyword ────────────────────────────────────
+
     async scanKeyword(keyword: string, opts: ScanOptions = {}): Promise<ScanResult> {
         const limit = opts.limit || 30
         const cleanKw = keyword.replace('#', '')
@@ -98,31 +104,23 @@ export class TikTokScanner {
                 return { videos: [] }
             }
 
-            const videos: VideoInfo[] = data.videos
-                .slice(0, limit)
-                .map((v: any) => this.mapVideo(v))
-
+            const videos = data.videos.slice(0, limit).map((v: any) => this.mapVideo(v))
             console.log(`[TikTokScanner] Found ${videos.length} videos for #${cleanKw}`)
             return { videos, hasMore: data.hasMore || false }
-
         } catch (err: any) {
             console.error(`[TikTokScanner] Keyword scan failed:`, err.message)
             return { videos: [] }
         }
     }
 
-    /** Download video to local path */
-    async downloadVideo(videoUrl: string, videoId: string, _opts: any = {}): Promise<{ filePath: string }> {
-        const fs = require('fs')
-        const path = require('path')
-        const os = require('os')
+    // ── Download Video ──────────────────────────────────
 
+    async downloadVideo(videoUrl: string, videoId: string): Promise<{ filePath: string }> {
         const downloadDir = path.join(os.homedir(), 'boembo-downloads')
         if (!fs.existsSync(downloadDir)) fs.mkdirSync(downloadDir, { recursive: true })
 
         const filePath = path.join(downloadDir, `${videoId}.mp4`)
 
-        // If already downloaded, skip
         if (fs.existsSync(filePath)) {
             console.log(`[TikTokScanner] Already downloaded: ${filePath}`)
             return { filePath }
@@ -130,10 +128,7 @@ export class TikTokScanner {
 
         console.log(`[TikTokScanner] Downloading video ${videoId}...`)
 
-        // Use TikWM download endpoint
-        const downloadUrl = videoUrl.startsWith('http')
-            ? videoUrl
-            : `${this.baseUrl}${videoUrl}`
+        const downloadUrl = videoUrl.startsWith('http') ? videoUrl : `${this.baseUrl}${videoUrl}`
 
         return new Promise((resolve, reject) => {
             const request = net.request(downloadUrl)
@@ -158,20 +153,28 @@ export class TikTokScanner {
         })
     }
 
-    /** Publish video (stub — needs browser/puppeteer implementation) */
-    async publishVideo(_filePath: string, _caption: string, _cookies: any, _opts: any = {}): Promise<{ success: boolean, videoUrl: string, videoId: string }> {
-        // TODO: Implement via puppeteer/playwright
-        console.warn('[TikTokScanner] publishVideo is not yet implemented — requires browser automation')
-        return {
-            success: false,
-            videoUrl: '',
-            videoId: '',
-        }
-    }
-
-    // ── Private helpers ────────────────────────────
+    // ── Private: API Request with Retry ─────────────────
 
     private async apiRequest(endpoint: string, body: URLSearchParams): Promise<any> {
+        let lastErr: Error | null = null
+
+        for (let attempt = 1; attempt <= this.MAX_API_RETRIES; attempt++) {
+            try {
+                const result = await this.doRequest(endpoint, body)
+                return result
+            } catch (err: any) {
+                lastErr = err
+                console.warn(`[TikTokScanner] API attempt ${attempt}/${this.MAX_API_RETRIES} failed: ${err.message}`)
+                if (attempt < this.MAX_API_RETRIES) {
+                    await new Promise(r => setTimeout(r, 1000 * attempt)) // exponential backoff
+                }
+            }
+        }
+
+        throw lastErr || new Error('API request failed after retries')
+    }
+
+    private doRequest(endpoint: string, body: URLSearchParams): Promise<any> {
         return new Promise((resolve, reject) => {
             const request = net.request({
                 method: 'POST',
@@ -187,6 +190,13 @@ export class TikTokScanner {
                 response.on('end', () => {
                     try {
                         const text = Buffer.concat(chunks).toString()
+
+                        // Detect Cloudflare/HTML responses
+                        if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
+                            reject(new Error('Cloudflare challenge detected — HTML response instead of JSON'))
+                            return
+                        }
+
                         const json = JSON.parse(text)
 
                         if (json.code !== 0 && json.code !== undefined) {
@@ -195,7 +205,7 @@ export class TikTokScanner {
                         }
 
                         resolve(json.data || json)
-                    } catch (err) {
+                    } catch {
                         reject(new Error('Failed to parse API response'))
                     }
                 })
@@ -206,6 +216,8 @@ export class TikTokScanner {
             request.end()
         })
     }
+
+    // ── Private: Map API response to VideoInfo ──────────
 
     private mapVideo(v: any): VideoInfo {
         return {
@@ -223,7 +235,7 @@ export class TikTokScanner {
                 comments: v.comment_count || 0,
                 shares: v.share_count || 0,
             },
-            tags: (v.title || '').match(/#\w+/g) || [],
+            tags: (v.title || '').match(/#[\w\u00C0-\u024F]+/gu) || [],
             created_at: (v.create_time || 0) * 1000,
             download_url: v.play || v.wmplay || '',
         }

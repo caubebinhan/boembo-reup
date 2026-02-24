@@ -5,7 +5,7 @@ export interface VideoTask {
   campaignId: string
   title: string
   thumbnail: string
-  status: 'pending' | 'downloading' | 'processing' | 'scheduled' | 'posted' | 'failed' | 'empty'
+  status: 'pending' | 'downloading' | 'processing' | 'scheduled' | 'posted' | 'failed'
   scheduledAt?: number
   postedAt?: number
   error?: string
@@ -26,7 +26,7 @@ export const pipelineSlice = createSlice({
   initialState,
   reducers: {
     upsertTask(state, action: PayloadAction<Partial<VideoTask> & { id: string, campaignId: string }>) {
-      const id = action.payload.id || action.payload.campaignId // fallback if no video id
+      const id = action.payload.id || action.payload.campaignId
       if (state.tasks[id]) {
         state.tasks[id] = { ...state.tasks[id], ...action.payload }
       } else {

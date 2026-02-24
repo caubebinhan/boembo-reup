@@ -133,6 +133,16 @@ export class ExecutionLogger {
     this.emitToUI(event, { campaignId, ...data })
   }
 
+  /** Emit a structured node event (captcha, violation, video:active, etc.) */
+  static emitNodeEvent(campaignId: string, instanceId: string, event: string, data?: any) {
+    this.emitToUI('node:event', { campaignId, instanceId, event, data, timestamp: Date.now() })
+    this.log({
+      campaign_id: campaignId, instance_id: instanceId,
+      level: 'info', event: `node:event:${event}`,
+      message: event, data
+    })
+  }
+
   /** Get logs from DB for a campaign */
   static getLogsForCampaign(campaignId: string, limit: number = 200): any[] {
     return db.prepare(

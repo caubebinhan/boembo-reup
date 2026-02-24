@@ -53,6 +53,8 @@ export class FlowLoader {
       instance_id: n.instance_id,
       children: n.children,
       on_error: n.on_error,
+      timeout: n.timeout ? Number(n.timeout) : undefined,
+      events: n.events || undefined,
     }))
 
     const edges = raw.edges.map((e: any) => ({
