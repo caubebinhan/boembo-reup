@@ -22,17 +22,19 @@ interface TikTokVideo {
     local_path?: string
     caption?: string
     published_url?: string
-    status: 'scanned' | 'downloading' | 'downloaded' | 'captioned' | 'publishing' | 'published' | 'failed' | 'captcha' | 'violation' | 'skipped'
+    status: 'queued' | 'scanned' | 'downloading' | 'downloaded' | 'captioned' | 'publishing' | 'published' | 'failed' | 'captcha' | 'violation' | 'skipped' | 'processing'
     error?: string
     scheduledAt?: number
     isActive?: boolean
+    queueIndex?: number
 }
 
 interface TikTokRepostState {
-    phase: 'idle' | 'scanning' | 'downloading' | 'publishing' | 'finished' | 'error'
+    phase: 'idle' | 'scanning' | 'scheduling' | 'downloading' | 'publishing' | 'finished' | 'error'
     phaseMessage?: string
     videos: TikTokVideo[]
     scannedCount: number
+    queuedCount: number
     downloadedCount: number
     publishedCount: number
     failedCount: number
@@ -44,6 +46,7 @@ const INITIAL: TikTokRepostState = {
     phase: 'idle',
     videos: [],
     scannedCount: 0,
+    queuedCount: 0,
     downloadedCount: 0,
     publishedCount: 0,
     failedCount: 0,
@@ -107,6 +110,8 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                     published_url: v.publish_url,
                     status: mapDbStatus(v.status),
                     error: undefined,
+                    scheduledAt: v.scheduled_for || undefined,
+                    queueIndex: v.queue_index ?? undefined,
                 }
             })
 
@@ -115,6 +120,7 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                 phaseMessage,
                 videos: videos.map(v => ({ ...v, isActive: v.platform_id === prev.activeVideoId })),
                 scannedCount: videos.length,
+                queuedCount: videos.filter(v => v.status === 'queued').length,
                 downloadedCount: videos.filter(v => ['downloaded', 'captioned', 'publishing', 'published'].includes(v.status)).length,
                 publishedCount: videos.filter(v => v.status === 'published').length,
                 failedCount: videos.filter(v => v.status === 'failed').length,
@@ -183,7 +189,9 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
 
 function mapDbStatus(dbStatus: string): TikTokVideo['status'] {
     const map: Record<string, TikTokVideo['status']> = {
-        pending: 'scanned',
+        queued: 'queued',
+        pending: 'queued',
+        processing: 'downloading',
         downloaded: 'downloaded',
         published: 'published',
         failed: 'failed',
@@ -192,13 +200,14 @@ function mapDbStatus(dbStatus: string): TikTokVideo['status'] {
         violation: 'violation',
         skipped: 'skipped',
     }
-    return map[dbStatus] || 'scanned'
+    return map[dbStatus] || 'queued'
 }
 
 // ── UI Components (TikTok-specific) ─────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-    scanned: { label: 'QUEUED', color: '#eab308', bg: '#eab30815' },
+    queued: { label: 'QUEUED', color: '#eab308', bg: '#eab30815' },
+    scanned: { label: 'SCANNED', color: '#a855f7', bg: '#a855f715' },
     downloading: { label: 'DOWNLOADING', color: '#3b82f6', bg: '#3b82f615' },
     downloaded: { label: 'DOWNLOADED', color: '#06b6d4', bg: '#06b6d415' },
     captioned: { label: 'CAPTIONED', color: '#0ea5e9', bg: '#0ea5e915' },
@@ -208,6 +217,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
     captcha: { label: '⚠️ CAPTCHA', color: '#f97316', bg: '#f9731615' },
     violation: { label: 'VIOLATION', color: '#dc2626', bg: '#dc262615' },
     skipped: { label: 'SKIPPED', color: '#9ca3af', bg: '#9ca3af15' },
+    processing: { label: 'PROCESSING', color: '#f59e0b', bg: '#f59e0b15' },
 }
 
 function StatCard({ icon, label, value, color }: { icon: string; label: string; value: number; color: string }) {
@@ -223,16 +233,11 @@ function StatCard({ icon, label, value, color }: { icon: string; label: string; 
 }
 
 function VideoCard({ video, index, gapMinutes, campaignId }: { video: TikTokVideo; index: number; gapMinutes?: number; campaignId: string }) {
-    const sc = STATUS_CONFIG[video.status] || STATUS_CONFIG.scanned
+    const sc = STATUS_CONFIG[video.status] || STATUS_CONFIG.queued
     const isActive = video.isActive
     const scheduledTime = video.scheduledAt
         ? new Date(video.scheduledAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-        : gapMinutes
-            ? (() => {
-                const t = new Date(Date.now() + index * gapMinutes * 60000)
-                return t.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-            })()
-            : null
+        : null
 
     return (
         <div className="relative pl-8 pb-6" style={{ opacity: video.status === 'skipped' ? 0.5 : 1 }}>
@@ -252,8 +257,8 @@ function VideoCard({ video, index, gapMinutes, campaignId }: { video: TikTokVide
 
             <div
                 className={`rounded-xl p-4 transition-all ${isActive
-                        ? 'bg-gray-900/80 border-2 hover:border-gray-600'
-                        : 'bg-gray-900/60 border border-gray-800 hover:border-gray-700'
+                    ? 'bg-gray-900/80 border-2 hover:border-gray-600'
+                    : 'bg-gray-900/60 border border-gray-800 hover:border-gray-700'
                     }`}
                 style={{
                     borderColor: isActive ? sc.color : undefined,
@@ -290,6 +295,17 @@ function VideoCard({ video, index, gapMinutes, campaignId }: { video: TikTokVide
                             {video.stats?.views != null && <span>👁 {fmt(video.stats.views)}</span>}
                             {video.stats?.likes != null && <span>❤ {fmt(video.stats.likes)}</span>}
                             {video.local_path && <span className="text-green-600">✓ Downloaded</span>}
+                            {video.local_path && (
+                                <button
+                                    className="text-cyan-400 hover:text-cyan-300 transition cursor-pointer"
+                                    onClick={() => {
+                                        // @ts-ignore
+                                        window.api?.invoke('video:show-in-explorer', { path: video.local_path })
+                                    }}
+                                >
+                                    📂 Open
+                                </button>
+                            )}
                             {video.published_url && (
                                 <a href={video.published_url} className="text-purple-400 hover:underline" target="_blank" rel="noreferrer">🔗 View</a>
                             )}
@@ -414,8 +430,9 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
             </div>
 
             {/* Stats */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 flex-wrap">
                 <StatCard icon="🔍" label="Scanned" value={state.scannedCount} color="#8b5cf6" />
+                <StatCard icon="📋" label="Queued" value={state.queuedCount} color="#eab308" />
                 <StatCard icon="⬇️" label="Downloaded" value={state.downloadedCount} color="#3b82f6" />
                 <StatCard icon="📤" label="Published" value={state.publishedCount} color="#10b981" />
                 {state.failedCount > 0 && <StatCard icon="❌" label="Failed" value={state.failedCount} color="#ef4444" />}

@@ -77,6 +77,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
   })
 
   ctx.logger.info(`Scanner found ${allVideos.length} videos from ${sources.length} sources`)
+  ctx.onProgress(`🔍 Scanned ${allVideos.length} videos`)
   return { data: allVideos }
 }
 

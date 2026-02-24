@@ -21,6 +21,8 @@ interface FlowEdge {
 const NODE_META: Record<string, { icon: string; label: string; color: string; desc: string }> = {
     'tiktok.scanner': { icon: '🔍', label: 'Scanner', color: '#8b5cf6', desc: 'Scan TikTok sources' },
     'core.file_source': { icon: '📁', label: 'Files', color: '#8b5cf6', desc: 'Load local video files' },
+    'core.video_scheduler': { icon: '📋', label: 'Scheduler', color: '#eab308', desc: 'Schedule videos with times' },
+    'core.check_in_time': { icon: '⏰', label: 'Time Check', color: '#f59e0b', desc: 'Check active hours window' },
     'core.deduplicator': { icon: '🔄', label: 'Dedup', color: '#6366f1', desc: 'Skip processed videos' },
     'core.quality_filter': { icon: '🎯', label: 'Quality', color: '#6366f1', desc: 'Filter content' },
     'core.limit': { icon: '🔢', label: 'Limit', color: '#6366f1', desc: 'Limit numbers' },
@@ -29,6 +31,7 @@ const NODE_META: Record<string, { icon: string; label: string; color: string; de
     'tiktok.publisher': { icon: '📤', label: 'Publish', color: '#ec4899', desc: 'Upload to TikTok' },
     'core.timeout': { icon: '⏳', label: 'Wait', color: '#6b7280', desc: 'Delay between items' },
     'core.loop': { icon: '🔁', label: 'Loop', color: '#3b82f6', desc: 'Process each item' },
+    'core.campaign_finish': { icon: '🏁', label: 'Finish', color: '#10b981', desc: 'Finish campaign' },
 }
 
 type NodeStatus = 'idle' | 'running' | 'done' | 'error'

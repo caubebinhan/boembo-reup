@@ -8,6 +8,7 @@ import { PostSubmitter } from './PostSubmitter'
 import { PublishVerifier } from './PublishVerifier'
 import { PublishOptions, PublishResult, PublishErrorType } from './types'
 import { DebugHelper } from './helpers/DebugHelper'
+import { OverlayHelper } from './helpers/OverlayHelper'
 
 // ── VideoPublisher: orchestrates the full TikTok upload flow ─────────────────
 
@@ -76,6 +77,11 @@ export class VideoPublisher {
             await captionSetter.setCaption(finalCaption)
 
             if (page.isClosed()) throw new Error('Browser closed unexpectedly before posting')
+
+            // ── Clean overlays before submit ──────────────
+            if (onProgress) onProgress('Cleaning overlays...')
+            const overlayHelper = new OverlayHelper(page, onProgress)
+            await overlayHelper.clean()
 
             // ── Submit post ───────────────────────────────
             const submitter = new PostSubmitter(page, onProgress)

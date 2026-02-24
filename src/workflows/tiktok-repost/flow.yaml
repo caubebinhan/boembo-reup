@@ -1,14 +1,14 @@
 # src/flows/presets/tiktok-repost.flow.yaml
 # ─────────────────────────────────────────
-# Workflow: Scan TikTok → Loop(dedup → download → caption → publish → wait)
+# Workflow: Scan → Schedule → Loop(checkTime → dedup → download → caption → publish) → Finish
 
 # ── METADATA ─────────────────────────────
 id: tiktok-repost
 name: TikTok Repost
-description: Scan TikTok channels → Download → Edit caption → Publish
+description: Scan TikTok channels → Schedule → Download → Edit caption → Publish
 icon: 🔄
 color: "#00f2ea"
-version: "2.0"
+version: "2.3"
 
 # ── NODES ────────────────────────────────
 nodes:
@@ -16,9 +16,15 @@ nodes:
     instance_id: scanner_1
     timeout: 30000
 
+  - node_id: core.video_scheduler
+    instance_id: scheduler_1
+
   - node_id: core.loop
     instance_id: video_loop
-    children: [dedup_1, downloader_1, caption_1, publisher_1, timeout_1]
+    children: [check_time_1, dedup_1, downloader_1, caption_1, publisher_1]
+
+  - node_id: core.check_in_time
+    instance_id: check_time_1
 
   - node_id: core.deduplicator
     instance_id: dedup_1
@@ -39,10 +45,14 @@ nodes:
       violation:detected:
         action: skip_item
 
-  - node_id: core.timeout
-    instance_id: timeout_1
+  - node_id: core.campaign_finish
+    instance_id: finish_1
 
 # ── EDGES ────────────────────────────────
 edges:
   - from: scanner_1
+    to: scheduler_1
+  - from: scheduler_1
     to: video_loop
+  - from: video_loop
+    to: finish_1

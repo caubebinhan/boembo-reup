@@ -5,23 +5,60 @@ export class OverlayHelper {
 
     async clean() {
         try {
-            // Remove obstructing overlays that block clicks
+            // Step 1: Press Escape to dismiss any modal/dialog
+            await this.page.keyboard.press('Escape').catch(() => {})
+            await this.page.waitForTimeout(300)
+
+            // Step 2: Click known close buttons
+            const closeSelectors = [
+                '[data-e2e="modal-close"]',
+                'button[aria-label="Close"]',
+                'button[aria-label="close"]',
+                'button[aria-label="Đóng"]',
+                'div[role="dialog"] button:has(svg)',  // generic X icon buttons in dialogs
+            ]
+
+            for (const sel of closeSelectors) {
+                try {
+                    const btn = this.page.locator(sel).first()
+                    if (await btn.isVisible({ timeout: 500 })) {
+                        await btn.click()
+                        console.log(`[OverlayHelper] Dismissed overlay via: ${sel}`)
+                        await this.page.waitForTimeout(500)
+                    }
+                } catch {}
+            }
+
+            // Step 3: Remove obstructing overlays that block clicks
             await this.page.evaluate(() => {
                 const selectors = [
                     'div[role="dialog"]',
                     '.modal',
-                    '[class*="overlay"]'
+                    '[class*="overlay"]',
+                    '[class*="Overlay"]',
+                    '[class*="cookie"]',
+                    '[class*="Cookie"]',
+                    '[class*="notification"]',
+                    '[class*="banner"]',
                 ]
                 selectors.forEach(sel => {
                     document.querySelectorAll(sel).forEach(el => {
                         const style = window.getComputedStyle(el)
-                        if (style.zIndex && parseInt(style.zIndex) > 100) {
-                            (el as HTMLElement).style.display = 'none'
+                        const zIndex = parseInt(style.zIndex) || 0
+                        const position = style.position
+                        // Remove high z-index overlays or fixed/sticky positioned overlays
+                        if (zIndex > 100 || position === 'fixed' || position === 'sticky') {
+                            // Don't remove the main upload container
+                            if (el.querySelector('input[type="file"]')) return
+                            if (el.querySelector('[data-e2e="post_video_button"]')) return
+                            ;(el as HTMLElement).style.display = 'none'
                         }
                     })
                 })
             })
-        } catch (e) { }
+        } catch (e) {
+            console.log('[OverlayHelper] Clean failed (non-critical):', e)
+        }
     }
 
     async interactWithRetry(action: () => Promise<void>, contextMsg?: string) {

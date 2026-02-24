@@ -213,13 +213,17 @@ export class FlowEngine {
     const items = Array.isArray(inputData) ? inputData : (inputData.videos || inputData.items || [inputData])
     const children = loopDef.children || []
 
+    // ── Resume from last processed index ──────────────
+    const campaignRow = db.prepare('SELECT last_processed_index FROM campaigns WHERE id = ?').get(job.campaign_id) as any
+    const startIndex = campaignRow?.last_processed_index ?? 0
+
     ExecutionLogger.log({
       campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
       level: 'info', event: 'loop:start',
-      message: `Loop "${loopDef.instance_id}" processing ${items.length} items through ${children.length} children`
+      message: `Loop "${loopDef.instance_id}" processing ${items.length} items through ${children.length} children${startIndex > 0 ? ` (resuming from index ${startIndex})` : ''}`
     })
 
-    for (let i = 0; i < items.length; i++) {
+    for (let i = startIndex; i < items.length; i++) {
       const item = items[i]
       let currentData = item
       let skipToNextItem = false  // set when a node skips the item but rest of pipeline should still run
@@ -362,6 +366,18 @@ export class FlowEngine {
           skipToNextItem = true
         }
       }
+
+      // ── Save progress: update last_processed_index ────
+      try {
+        db.prepare('UPDATE campaigns SET last_processed_index = ? WHERE id = ?').run(i + 1, job.campaign_id)
+
+        // Update video status in DB based on what happened
+        const videoId = item?.platform_id || item?.id
+        if (videoId && !skipToNextItem) {
+          db.prepare(`UPDATE videos SET status = 'processing' WHERE platform_id = ? AND campaign_id = ? AND status = 'queued'`)
+            .run(videoId, job.campaign_id)
+        }
+      } catch { /* non-critical */ }
     }
 
     // Loop done — continue to edges after loop node

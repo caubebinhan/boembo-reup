@@ -22,12 +22,15 @@ export function initDb() {
     );
 
     CREATE TABLE IF NOT EXISTS videos (
-      platform_id TEXT PRIMARY KEY,
+      platform_id TEXT NOT NULL,
       campaign_id TEXT NOT NULL,
-      status TEXT DEFAULT 'pending',
+      status TEXT DEFAULT 'queued',
       publish_url TEXT,
       local_path TEXT,
-      data_json TEXT
+      data_json TEXT,
+      scheduled_for INTEGER,
+      queue_index INTEGER DEFAULT 0,
+      PRIMARY KEY (platform_id, campaign_id)
     );
 
     CREATE TABLE IF NOT EXISTS jobs (
@@ -79,8 +82,41 @@ export function initDb() {
   // Migrations for existing DBs
   const migrations = [
     'ALTER TABLE videos ADD COLUMN data_json TEXT',
+    'ALTER TABLE videos ADD COLUMN scheduled_for INTEGER',
+    'ALTER TABLE videos ADD COLUMN queue_index INTEGER DEFAULT 0',
+    'ALTER TABLE campaigns ADD COLUMN last_processed_index INTEGER DEFAULT 0',
   ]
   for (const sql of migrations) {
     try { db.exec(sql) } catch { /* column already exists */ }
+  }
+
+  // Migrate videos table from old single-column PK to composite PK
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info('videos')").all() as any[]
+    const pkColumns = tableInfo.filter((c: any) => c.pk > 0)
+    // Old schema has single PK on platform_id; new schema has composite PK
+    if (pkColumns.length === 1 && pkColumns[0].name === 'platform_id') {
+      console.log('[DB Migration] Migrating videos table to composite PK (platform_id, campaign_id)...')
+      db.exec(`
+        ALTER TABLE videos RENAME TO videos_old;
+        CREATE TABLE videos (
+          platform_id TEXT NOT NULL,
+          campaign_id TEXT NOT NULL,
+          status TEXT DEFAULT 'queued',
+          publish_url TEXT,
+          local_path TEXT,
+          data_json TEXT,
+          scheduled_for INTEGER,
+          queue_index INTEGER DEFAULT 0,
+          PRIMARY KEY (platform_id, campaign_id)
+        );
+        INSERT OR IGNORE INTO videos (platform_id, campaign_id, status, publish_url, local_path, data_json, scheduled_for, queue_index)
+          SELECT platform_id, COALESCE(campaign_id, ''), status, publish_url, local_path, data_json, scheduled_for, queue_index FROM videos_old;
+        DROP TABLE videos_old;
+      `)
+      console.log('[DB Migration] Videos table migrated successfully')
+    }
+  } catch (e) {
+    console.error('[DB Migration] Videos PK migration failed (may already be done):', e)
   }
 }

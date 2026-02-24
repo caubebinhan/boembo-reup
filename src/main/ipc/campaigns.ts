@@ -135,12 +135,26 @@ export function setupCampaignIPC() {
   // ── Videos by campaign ─────────────────────────────
   ipcMain.handle('campaign:get-videos', async (_event, { id }) => {
     return db.prepare(
-      'SELECT * FROM videos WHERE campaign_id = ? ORDER BY rowid DESC'
+      'SELECT * FROM videos WHERE campaign_id = ? ORDER BY queue_index ASC'
     ).all(id) as any[]
   })
 
   // ── Execution Logs ───────────────────────────────
   ipcMain.handle('campaign:get-logs', async (_event, { id, limit }) => {
     return ExecutionLogger.getLogsForCampaign(id, limit || 200)
+  })
+
+  // ── Show video file in system explorer ────────────
+  ipcMain.handle('video:show-in-explorer', async (_event, { path }) => {
+    const { shell } = await import('electron')
+    if (path) shell.showItemInFolder(path)
+  })
+
+  // ── Reschedule a video's scheduled_for time ───────
+  ipcMain.handle('video:reschedule', async (_event, { platformId, campaignId, scheduledFor }) => {
+    db.prepare(
+      'UPDATE videos SET scheduled_for = ? WHERE platform_id = ? AND campaign_id = ?'
+    ).run(scheduledFor, platformId, campaignId)
+    return { success: true }
   })
 }
