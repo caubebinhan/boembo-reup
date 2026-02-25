@@ -53,7 +53,7 @@ interface TikTokVideo {
     local_path?: string
     caption?: string
     published_url?: string
-    status: 'queued' | 'scanned' | 'downloading' | 'downloaded' | 'captioned' | 'publishing' | 'published' | 'failed' | 'captcha' | 'violation' | 'skipped' | 'processing' | 'under_review' | 'verifying_publish' | 'duplicate'
+    status: 'queued' | 'scanned' | 'downloading' | 'downloaded' | 'captioned' | 'publishing' | 'published' | 'verification_incomplete' | 'failed' | 'captcha' | 'violation' | 'skipped' | 'processing' | 'under_review' | 'verifying_publish' | 'duplicate'
     error?: string
     statusMessage?: string
     reviewRetry?: {
@@ -168,8 +168,8 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                 }),
                 scannedCount: videos.length,
                 queuedCount: videos.filter(v => v.status === 'queued').length,
-                downloadedCount: videos.filter(v => ['downloaded', 'captioned', 'publishing', 'published'].includes(v.status)).length,
-                publishedCount: videos.filter(v => v.status === 'published').length,
+                downloadedCount: videos.filter(v => ['downloaded', 'captioned', 'publishing', 'published', 'verification_incomplete'].includes(v.status)).length,
+                publishedCount: videos.filter(v => ['published', 'verification_incomplete'].includes(v.status)).length,
                 failedCount: videos.filter(v => v.status === 'failed').length,
                 captchaCount: videos.filter(v => v.status === 'captcha').length,
                 activeVideoId: prev.activeVideoId,
@@ -276,6 +276,7 @@ function mapDbStatus(dbStatus: string): TikTokVideo['status'] {
         processing: 'downloading',
         downloaded: 'downloaded',
         published: 'published',
+        verification_incomplete: 'verification_incomplete',
         under_review: 'under_review',
         verifying_publish: 'verifying_publish',
         duplicate: 'duplicate',
@@ -298,6 +299,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
     captioned: { label: 'CAPTIONED', color: '#0ea5e9', bg: '#0ea5e915' },
     publishing: { label: 'PUBLISHING', color: '#8b5cf6', bg: '#8b5cf615' },
     published: { label: 'PUBLISHED', color: '#10b981', bg: '#10b98115' },
+    verification_incomplete: { label: 'VERIFY UNKNOWN', color: '#f59e0b', bg: '#f59e0b15' },
     under_review: { label: 'UNDER REVIEW', color: '#f59e0b', bg: '#f59e0b15' },
     verifying_publish: { label: 'VERIFYING', color: '#22c55e', bg: '#22c55e15' },
     duplicate: { label: 'DUPLICATE', color: '#f97316', bg: '#f9731615' },
@@ -435,10 +437,12 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
                             </p>
                         )}
 
-                        {video.statusMessage && (video.status === 'under_review' || video.status === 'verifying_publish' || video.status === 'duplicate') && (
+                        {video.statusMessage && (video.status === 'under_review' || video.status === 'verifying_publish' || video.status === 'verification_incomplete' || video.status === 'duplicate') && (
                             <p className={`text-[10px] mt-2 rounded px-2 py-1 leading-relaxed border ${video.status === 'duplicate'
                                 ? 'text-orange-300 bg-orange-500/10 border-orange-500/20'
-                                : 'text-amber-300 bg-amber-500/10 border-amber-500/20'
+                                : video.status === 'verification_incomplete'
+                                    ? 'text-yellow-300 bg-yellow-500/10 border-yellow-500/20'
+                                    : 'text-amber-300 bg-amber-500/10 border-amber-500/20'
                                 }`}>
                                 {video.statusMessage}
                                 {video.reviewRetry?.nextRetryAt && video.status === 'under_review' && (

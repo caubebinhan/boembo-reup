@@ -151,7 +151,12 @@ export class VideoPublisher {
                 expectedCaption: finalCaption,
                 username: options?.username, onProgress,
             })
-            await recorder?.checkpoint(verifyResult.success ? 'verify_success' : 'verify_failed')
+            const verifyCheckpointLabel = !verifyResult.success
+                ? 'verify_failed'
+                : verifyResult.publishStatus === 'verification_incomplete'
+                    ? 'verify_incomplete'
+                    : 'verify_success'
+            await recorder?.checkpoint(verifyCheckpointLabel)
             const recorderArtifacts = recorder
                 ? await recorder.finalize(verifyResult.success ? 'success' : 'failed')
                 : null

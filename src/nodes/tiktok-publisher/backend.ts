@@ -171,6 +171,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       ...payload,
     })
   }
+  const isVerificationIncomplete = !!(result.verificationIncomplete || result.publishStatus === 'verification_incomplete')
 
   const publishHistoryId = insertPublishHistoryRecord({
     accountId: account.id,
@@ -186,6 +187,51 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     status: result.isReviewing ? 'under_review' : 'published',
     mediaSignature,
   })
+
+  if (isVerificationIncomplete) {
+    try {
+      db.prepare(`UPDATE videos SET status = 'verification_incomplete', publish_url = ? WHERE platform_id = ? AND campaign_id = ?`)
+        .run(result.videoUrl || null, video.platform_id, ctx.campaign_id)
+    } catch (err) {
+      ctx.logger.error('Failed to update verification_incomplete status', err)
+    }
+
+    updatePublishHistoryRecord(publishHistoryId, {
+      status: 'published',
+      publishedVideoId: result.videoId,
+      publishedUrl: result.videoUrl,
+      mediaSignature,
+    })
+
+    emitPublishStatus({
+      status: 'verification_incomplete',
+      videoUrl: result.videoUrl,
+      message: 'Upload submitted, but dashboard verification was incomplete. Skipping review retries. Check TikTok Studio manually.',
+      attempts: 0,
+      maxRetries: 0,
+    })
+
+    ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:published', {
+      videoId: video.platform_id,
+      videoUrl: result.videoUrl,
+      warning: [result.warning, 'dashboard_verification_incomplete'].filter(Boolean).join(' | '),
+      isReviewing: false,
+      verificationIncomplete: true,
+      debugArtifacts: result.debugArtifacts,
+    })
+
+    if (result.warning) ctx.logger.info(`Publish warning: ${result.warning}`)
+    ctx.logger.info(`Published (verification incomplete): ${result.videoUrl || 'unknown url'}`)
+    return {
+      data: {
+        ...video,
+        published_url: result.videoUrl,
+        published: true,
+        status: 'verification_incomplete',
+        verification_incomplete: true,
+      }
+    }
+  }
 
   if (result.isReviewing) {
     try {
@@ -260,6 +306,50 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
           maxRetries,
         })
         continue
+      }
+
+      if (recheck.verificationIncomplete || recheck.publishStatus === 'verification_incomplete') {
+        finalResult = { ...finalResult, ...recheck, videoUrl: recheck.videoUrl || finalResult.videoUrl }
+        updatePublishHistoryRecord(publishHistoryId, {
+          status: 'published',
+          publishedVideoId: finalResult.videoId || recheck.videoId,
+          publishedUrl: finalResult.videoUrl || recheck.videoUrl,
+          mediaSignature,
+        })
+        try {
+          db.prepare(`UPDATE videos SET status = 'verification_incomplete', publish_url = ? WHERE platform_id = ? AND campaign_id = ?`)
+            .run(finalResult.videoUrl || result.videoUrl || null, video.platform_id, ctx.campaign_id)
+        } catch (err) {
+          ctx.logger.error('Failed to update verification_incomplete status after retry', err)
+        }
+        emitPublishStatus({
+          status: 'verification_incomplete',
+          videoUrl: finalResult.videoUrl || result.videoUrl,
+          message: `Retry ${attempt}/${maxRetries}: dashboard verification still incomplete. Stopping retries; check TikTok Studio manually.`,
+          attempts: attempt,
+          maxRetries,
+        })
+
+        ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:published', {
+          videoId: video.platform_id,
+          videoUrl: finalResult.videoUrl || result.videoUrl,
+          warning: [finalResult.warning, 'dashboard_verification_incomplete_after_retry'].filter(Boolean).join(' | '),
+          isReviewing: false,
+          verificationIncomplete: true,
+          debugArtifacts: finalResult.debugArtifacts,
+        })
+
+        if (finalResult.warning) ctx.logger.info(`Publish warning: ${finalResult.warning}`)
+        ctx.logger.info(`Published (verification incomplete after retry): ${finalResult.videoUrl || result.videoUrl}`)
+        return {
+          data: {
+            ...video,
+            published_url: finalResult.videoUrl || result.videoUrl,
+            published: true,
+            status: 'verification_incomplete',
+            verification_incomplete: true,
+          }
+        }
       }
 
       finalResult = { ...finalResult, ...recheck, videoUrl: recheck.videoUrl || finalResult.videoUrl }

@@ -11,7 +11,8 @@ export interface PublishResult {
     videoId?: string
     videoUrl?: string
     isReviewing?: boolean
-    publishStatus?: 'public' | 'under_review'
+    publishStatus?: 'public' | 'under_review' | 'verification_incomplete'
+    verificationIncomplete?: boolean
     error?: string
     errorType?: PublishErrorType
     warning?: string

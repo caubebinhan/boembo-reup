@@ -275,8 +275,9 @@ export class PublishVerifier {
         return {
             success: true,
             warning: 'Verification incomplete - check dashboard manually',
-            isReviewing: true,
-            publishStatus: 'under_review',
+            verificationIncomplete: true,
+            isReviewing: false,
+            publishStatus: 'verification_incomplete',
             debugArtifacts: artifacts,
         }
     }
@@ -355,7 +356,29 @@ export class PublishVerifier {
 
     private async probeDashboardUiStatus(expectedVideoId: string | null, expectedCaption?: string): Promise<any | null> {
         return this.page.evaluate(({ expectedId, expectedCaptionRaw }) => {
-            const rows = Array.from(document.querySelectorAll('div[data-e2e="recent-post-item"], tr'))
+            const rowSet = new Set<Element>()
+            const linkNodes = Array.from(document.querySelectorAll('a[href*="/video/"]'))
+
+            // Prefer deriving rows from actual video links because TikTok Studio
+            // frequently changes row wrappers (e2e -> data-tt div layout).
+            for (const link of linkNodes) {
+                const row =
+                    link.closest('div[data-e2e="recent-post-item"]') ||
+                    link.closest('tr') ||
+                    link.closest('div[data-tt="components_RowLayout_FlexRow"]') ||
+                    link.closest('div[data-tt="components_PostInfoCell_FlexRow"]') ||
+                    link.parentElement
+                if (row) rowSet.add(row)
+            }
+
+            // Legacy fallback selectors (kept for older layouts)
+            for (const row of Array.from(document.querySelectorAll(
+                'div[data-e2e="recent-post-item"], tr, div[data-tt="components_RowLayout_FlexRow"]'
+            ))) {
+                if ((row as HTMLElement)?.querySelector?.('a[href*="/video/"]')) rowSet.add(row)
+            }
+
+            const rows = Array.from(rowSet)
             if (rows.length === 0) return null
 
             const normalizeId = (raw: string) => {
@@ -385,7 +408,7 @@ export class PublishVerifier {
                 const h = row as HTMLElement
                 const linkEl = row.querySelector('a[href*="/video/"]')
                 const href = linkEl?.getAttribute('href') || ''
-                const text = (h.innerText || '').slice(0, 240)
+                const text = (h.innerText || '').slice(0, 400)
                 const id = normalizeId(href) || normalizeId(text)
                 const captionScore = scoreCaption(text)
                 const normalized = text.toLowerCase()
