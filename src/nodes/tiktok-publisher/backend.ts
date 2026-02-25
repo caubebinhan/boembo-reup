@@ -248,6 +248,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
         uploadStartTime: Math.floor(publishStartedAt / 1000),
         expectedVideoId: finalResult.videoId || result.videoId,
         expectedVideoUrl: finalResult.videoUrl || result.videoUrl,
+        expectedCaption: caption,
       })
 
       if (!recheck.success) {

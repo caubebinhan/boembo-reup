@@ -1,6 +1,7 @@
-import { useEffect, useState, useMemo, useRef, useLayoutEffect } from 'react'
-import { useSelector } from 'react-redux'
+﻿import { useEffect, useState, useMemo, useRef, useLayoutEffect } from 'react'
+import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../../store/store'
+import { updateNodeProgress } from '../../store/nodeEventsSlice'
 
 interface PipelineVisualizerProps {
     campaignId: string
@@ -130,7 +131,9 @@ function NodeCard({
     if (isSelected) borderColor = '#a855f7'
 
     const isTimeout = node.node_id === 'core.timeout'
+    const isBatchNode = ['tiktok.scanner', 'core.file_source', 'core.video_scheduler', 'core.check_in_time', 'core.campaign_finish'].includes(node.node_id)
     const waitMinutes = isTimeout ? (campaignParams?.intervalMinutes || '?') : null
+    const showRawStats = !isTimeout && !isBatchNode && stat.total > 0
 
     return (
         <div className="relative group z-10" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
@@ -171,7 +174,7 @@ function NodeCard({
 
                 {isTimeout && waitMinutes && <p className="text-[9px] text-gray-400 mt-1 font-medium bg-black/20 rounded px-1.5 py-0.5 inline-block border border-white/5">Wait {waitMinutes} min</p>}
 
-                {!isTimeout && stat.total > 0 && (
+                {showRawStats && (
                     <div className="flex items-center gap-1.5 text-[9px] mt-1 font-medium">
                         {stat.completed > 0 && <span className="text-emerald-400 drop-shadow-sm">✓{stat.completed}</span>}
                         {stat.running > 0 && <span className="text-blue-400 drop-shadow-sm animate-pulse">▶{stat.running}</span>}
@@ -179,8 +182,11 @@ function NodeCard({
                     </div>
                 )}
 
-                {progressMsg && status === 'running' && (
+                {progressMsg && (
                     <p className="text-[9px] truncate mt-1.5 font-medium" style={{ color: meta.color }}>{progressMsg}</p>
+                )}
+                {isBatchNode && !progressMsg && stat.completed > 0 && (
+                    <p className="text-[9px] mt-1 font-medium text-emerald-400">✓ Done</p>
                 )}
             </div>
         </div>
@@ -518,6 +524,7 @@ export function PipelineVisualizer({ campaignId, workflowId }: PipelineVisualize
     const [selectedNode, setSelectedNode] = useState<FlowNodeInfo | null>(null)
     const [campaignParams, setCampaignParams] = useState<any>({})
     const containerRef = useRef<HTMLDivElement>(null)
+    const dispatch = useDispatch()
 
     useEffect(() => {
         // @ts-ignore
@@ -529,7 +536,21 @@ export function PipelineVisualizer({ campaignId, workflowId }: PipelineVisualize
         window.api.invoke('campaign:get', { id: campaignId })
             .then((data: any) => setCampaignParams(typeof data?.params === 'string' ? JSON.parse(data.params) : data?.params || {}))
             .catch(() => { /* ok */ })
-    }, [workflowId, campaignId])
+
+        // Restore latest progress messages from execution_logs
+        // @ts-ignore
+        window.api.invoke('campaign:get-node-progress', { id: campaignId })
+            .then((logs: { instance_id: string, message: string }[]) => {
+                logs.forEach(log => {
+                    dispatch(updateNodeProgress({
+                        campaignId,
+                        instanceId: log.instance_id,
+                        message: log.message
+                    }))
+                })
+            })
+            .catch((err: any) => console.error('[PipelineVisualizer] Failed progress:', err))
+    }, [workflowId, campaignId, dispatch])
 
     const { layers, allChildren } = useMemo(() => {
         if (!flowData) return { layers: [], allChildren: [] }

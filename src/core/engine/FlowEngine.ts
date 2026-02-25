@@ -230,7 +230,14 @@ export class FlowEngine {
     inputData: any,
     params: Record<string, any>
   ) {
-    const items = Array.isArray(inputData) ? inputData : (inputData.videos || inputData.items || [inputData])
+    let items = Array.isArray(inputData) ? inputData : (inputData.videos || inputData.items || [inputData])
+    // Always process in scheduled_for ASC order (videos may arrive in scanner/insertion order)
+    if (items.length > 1 && items[0]?.scheduled_for != null) {
+      items = [...items].sort((a, b) => (a.scheduled_for ?? 0) - (b.scheduled_for ?? 0))
+    } else if (items.length > 1 && items[0]?.queue_index != null) {
+      items = [...items].sort((a, b) => (a.queue_index ?? 0) - (b.queue_index ?? 0))
+    }
+
     const children = loopDef.children || []
 
     // ── Resume from last processed index ──────────────

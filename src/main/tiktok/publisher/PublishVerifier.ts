@@ -2,7 +2,7 @@ import { Page, Response } from 'playwright-core'
 import { TIKTOK_SELECTORS } from './constants/selectors'
 import { PublishResult } from './types'
 import { DebugHelper } from './helpers/DebugHelper'
-import * as Sentry from '@sentry/electron/main'
+import { SentryMain as Sentry } from '../../sentry'
 import fs from 'fs-extra'
 import path from 'path'
 
@@ -13,6 +13,7 @@ interface VerifyOptions {
     username?: string
     expectedVideoId?: string
     expectedVideoUrl?: string
+    expectedCaption?: string
     onProgress?: (msg: string) => void
 }
 
@@ -182,12 +183,13 @@ export class PublishVerifier {
                 if (this.page.isClosed()) break
                 await this.page.waitForTimeout(5000).catch(() => {})
                 await this.captureWarningsFromPage()
-                const uiStatus = await this.probeDashboardUiStatus(expectedVideoId)
+                const uiStatus = await this.probeDashboardUiStatus(expectedVideoId, opts.expectedCaption)
                 lastUiProbe = uiStatus
                 if (uiStatus?.text) this.captureWarningText(uiStatus.text)
 
                 if (apiData?.length > 0) {
-                    const match = this.pickDashboardApiMatch(apiData, opts, expectedVideoId)
+                    const apiMatch = this.pickDashboardApiMatch(apiData, opts, expectedVideoId, opts.expectedCaption)
+                    const match = apiMatch?.item
 
                     if (match) {
                         this.page.off('response', handler)
@@ -197,6 +199,8 @@ export class PublishVerifier {
                         let reviewing = detected.isReviewing
                         console.log('[PublishVerifier] Dashboard status detection', {
                             itemId: match.item_id,
+                            matchedBy: apiMatch?.matchedBy || 'unknown',
+                            matchScore: apiMatch?.matchScore,
                             reviewing,
                             source: detected.source,
                             reason: detected.reason,
@@ -235,6 +239,14 @@ export class PublishVerifier {
                 }
                 if (uiStatus?.id) {
                     this.page.off('response', handler)
+                    console.log('[PublishVerifier] Dashboard UI fallback detection', {
+                        itemId: uiStatus.id,
+                        matchedBy: uiStatus.selectedBy || (expectedVideoId ? 'ui:id' : 'ui:fallback'),
+                        captionScore: uiStatus.captionScore,
+                        reviewing: !!uiStatus.isReviewing,
+                        rowCount: uiStatus.rowCount,
+                        candidates: uiStatus.candidates,
+                    })
                     return {
                         success: true,
                         videoId: uiStatus.id,
@@ -276,19 +288,25 @@ export class PublishVerifier {
         return match?.[1] || null
     }
 
-    private pickDashboardApiMatch(apiData: any[], opts: VerifyOptions, expectedVideoId: string | null): any | null {
+    private pickDashboardApiMatch(
+        apiData: any[],
+        opts: VerifyOptions,
+        expectedVideoId: string | null,
+        expectedCaption?: string
+    ): { item: any; matchedBy: string; matchScore?: number } | null {
         if (!Array.isArray(apiData) || apiData.length === 0) return null
 
         if (expectedVideoId) {
             const exact = apiData.find((v: any) => this.normalizeVideoId(v?.item_id || v?.id) === expectedVideoId)
-            if (exact) return exact
+            if (exact) return { item: exact, matchedBy: 'api:video_id_exact', matchScore: 1 }
         }
 
         if (opts.useUniqueTag && opts.uniqueTag) {
             const tagged = apiData.find((v: any) => String(v?.desc || '').includes(opts.uniqueTag))
-            if (tagged) return tagged
+            if (tagged) return { item: tagged, matchedBy: 'api:unique_tag', matchScore: 1 }
         }
 
+        const expectedCaptionNorm = this.normalizeCaptionText(expectedCaption)
         const now = Math.floor(Date.now() / 1000)
         const uploadStart = Number(opts.uploadStartTime) || now
         const lowerBound = Math.max(0, uploadStart - 900)
@@ -300,17 +318,67 @@ export class PublishVerifier {
             })
             .sort((a: any, b: any) => Number(b?.create_time || 0) - Number(a?.create_time || 0))
 
-        return recent[0] || apiData[0] || null
+        if (expectedCaptionNorm) {
+            const bestRecentByCaption = recent
+                .map((item: any) => ({
+                    item,
+                    score: this.scoreCaptionMatch(expectedCaptionNorm, this.extractDashboardItemCaption(item)),
+                }))
+                .sort((a, b) => b.score - a.score)[0]
+            if (bestRecentByCaption && bestRecentByCaption.score >= 0.55) {
+                return {
+                    item: bestRecentByCaption.item,
+                    matchedBy: 'api:caption_recent_window',
+                    matchScore: bestRecentByCaption.score,
+                }
+            }
+
+            const bestAnyByCaption = apiData
+                .map((item: any) => ({
+                    item,
+                    score: this.scoreCaptionMatch(expectedCaptionNorm, this.extractDashboardItemCaption(item)),
+                }))
+                .sort((a, b) => b.score - a.score)[0]
+            if (bestAnyByCaption && bestAnyByCaption.score >= 0.7) {
+                return {
+                    item: bestAnyByCaption.item,
+                    matchedBy: 'api:caption_any',
+                    matchScore: bestAnyByCaption.score,
+                }
+            }
+        }
+
+        if (recent[0]) return { item: recent[0], matchedBy: 'api:time_window_latest' }
+        if (apiData[0]) return { item: apiData[0], matchedBy: 'api:fallback_first_item' }
+        return null
     }
 
-    private async probeDashboardUiStatus(expectedVideoId: string | null): Promise<any | null> {
-        return this.page.evaluate((expectedId) => {
+    private async probeDashboardUiStatus(expectedVideoId: string | null, expectedCaption?: string): Promise<any | null> {
+        return this.page.evaluate(({ expectedId, expectedCaptionRaw }) => {
             const rows = Array.from(document.querySelectorAll('div[data-e2e="recent-post-item"], tr'))
             if (rows.length === 0) return null
 
             const normalizeId = (raw: string) => {
                 const m = (raw || '').match(/(\d{8,})/)
                 return m?.[1] || null
+            }
+            const normalizeCaption = (raw: string) => (raw || '').replace(/\s+/g, ' ').trim().toLowerCase()
+            const expectedCaption = normalizeCaption(String(expectedCaptionRaw || ''))
+            const scoreCaption = (candidateRaw: string) => {
+                if (!expectedCaption) return 0
+                const candidate = normalizeCaption(candidateRaw)
+                if (!candidate) return 0
+                if (candidate === expectedCaption) return 1
+                if (candidate.includes(expectedCaption) || expectedCaption.includes(candidate)) return 0.95
+                const a = expectedCaption.slice(0, 120)
+                const b = candidate.slice(0, 120)
+                if (a && b && (b.includes(a) || a.includes(b))) return 0.9
+                const aTokens = Array.from(new Set(expectedCaption.split(/[^a-z0-9]+/).filter(t => t.length >= 2)))
+                const bTokens = new Set(candidate.split(/[^a-z0-9]+/).filter(t => t.length >= 2))
+                if (aTokens.length === 0 || bTokens.size === 0) return 0
+                let hits = 0
+                for (const t of aTokens) if (bTokens.has(t)) hits++
+                return hits / aTokens.length
             }
 
             const candidates = rows.slice(0, 20).map((row) => {
@@ -319,28 +387,70 @@ export class PublishVerifier {
                 const href = linkEl?.getAttribute('href') || ''
                 const text = (h.innerText || '').slice(0, 240)
                 const id = normalizeId(href) || normalizeId(text)
+                const captionScore = scoreCaption(text)
                 const normalized = text.toLowerCase()
                 const isReviewing =
                     normalized.includes('under review') ||
                     normalized.includes('in review') ||
-                    normalized.includes('processing') ||
-                    normalized.includes('审核') ||
-                    normalized.includes('審核') ||
-                    normalized.includes('đang xét duyệt')
-                return { id, url: href || null, isReviewing, text }
+                    normalized.includes('processing')
+                return { id, url: href || null, isReviewing, text, captionScore }
             })
 
             const selected = expectedId
                 ? candidates.find(c => c.id === expectedId) || null
-                : candidates[0] || null
+                : (() => {
+                    const best = expectedCaption
+                        ? [...candidates].sort((a, b) => (b.captionScore || 0) - (a.captionScore || 0))[0]
+                        : null
+                    if (best && (best.captionScore || 0) >= 0.55) return best
+                    return candidates[0] || null
+                })()
             if (!selected) return null
+            const selectedBy = expectedId
+                ? 'ui:video_id_exact'
+                : ((selected.captionScore || 0) >= 0.55 && expectedCaption ? 'ui:caption' : 'ui:first_row')
 
             return {
                 ...selected,
+                selectedBy,
                 rowCount: rows.length,
-                candidates: candidates.slice(0, 5).map(c => ({ id: c.id, url: c.url, isReviewing: c.isReviewing })),
+                candidates: candidates.slice(0, 5).map(c => ({ id: c.id, url: c.url, isReviewing: c.isReviewing, captionScore: c.captionScore })),
             }
-        }, expectedVideoId).catch(() => null)
+        }, { expectedId: expectedVideoId, expectedCaptionRaw: expectedCaption }).catch(() => null)
+    }
+
+    private normalizeCaptionText(raw?: string): string {
+        return String(raw || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase()
+    }
+
+    private extractDashboardItemCaption(item: any): string {
+        return String(item?.desc ?? item?.caption ?? item?.title ?? item?.text ?? '')
+    }
+
+    private scoreCaptionMatch(expectedCaptionNorm: string, candidateRaw: string): number {
+        const expected = this.normalizeCaptionText(expectedCaptionNorm)
+        const candidate = this.normalizeCaptionText(candidateRaw)
+        if (!expected || !candidate) return 0
+        if (expected === candidate) return 1
+        if (candidate.includes(expected) || expected.includes(candidate)) return 0.95
+
+        const expectedShort = expected.slice(0, 120)
+        const candidateShort = candidate.slice(0, 120)
+        if (expectedShort && candidateShort && (candidateShort.includes(expectedShort) || expectedShort.includes(candidateShort))) {
+            return 0.9
+        }
+
+        const expectedTokens = Array.from(new Set(expected.split(/[^a-z0-9]+/).filter(t => t.length >= 2)))
+        const candidateTokens = new Set(candidate.split(/[^a-z0-9]+/).filter(t => t.length >= 2))
+        if (expectedTokens.length === 0 || candidateTokens.size === 0) return 0
+        let hit = 0
+        for (const token of expectedTokens) {
+            if (candidateTokens.has(token)) hit++
+        }
+        return hit / expectedTokens.length
     }
 
     private async captureWarningsFromPage(): Promise<void> {

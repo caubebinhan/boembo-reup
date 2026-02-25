@@ -339,11 +339,6 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
                 }}
             />
 
-            {scheduledTime && (
-                <span className="absolute -left-[3px] top-7 text-[10px] text-gray-600 w-[34px] text-center">
-                    {scheduledTime}
-                </span>
-            )}
 
             <div
                 className={`rounded-xl p-4 transition-all ${isActive
@@ -441,11 +436,10 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
                         )}
 
                         {video.statusMessage && (video.status === 'under_review' || video.status === 'verifying_publish' || video.status === 'duplicate') && (
-                            <p className={`text-[10px] mt-2 rounded px-2 py-1 leading-relaxed border ${
-                                video.status === 'duplicate'
-                                    ? 'text-orange-300 bg-orange-500/10 border-orange-500/20'
-                                    : 'text-amber-300 bg-amber-500/10 border-amber-500/20'
-                            }`}>
+                            <p className={`text-[10px] mt-2 rounded px-2 py-1 leading-relaxed border ${video.status === 'duplicate'
+                                ? 'text-orange-300 bg-orange-500/10 border-orange-500/20'
+                                : 'text-amber-300 bg-amber-500/10 border-amber-500/20'
+                                }`}>
                                 {video.statusMessage}
                                 {video.reviewRetry?.nextRetryAt && video.status === 'under_review' && (
                                     <span className="text-amber-200/80">
@@ -608,7 +602,7 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                     </div>
                 ) : (
                     <div className="max-h-[600px] overflow-y-auto pr-2">
-                        {state.videos.map((video, i) => (
+                        {[...state.videos].sort((a, b) => (a.scheduledAt || 0) - (b.scheduledAt || 0)).map((video, i) => (
                             <VideoCard key={video.platform_id || i} video={video} index={i} gapMinutes={gapMinutes} campaignId={campaignId} />
                         ))}
                     </div>

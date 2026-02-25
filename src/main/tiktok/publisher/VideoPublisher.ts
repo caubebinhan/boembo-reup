@@ -1,6 +1,6 @@
 import { Page } from 'playwright-core'
 import { browserService } from '../../services/BrowserService'
-import * as Sentry from '@sentry/electron/main'
+import { SentryMain as Sentry } from '../../sentry'
 import { sanitizeCookies } from './helpers/CookieHelper'
 import { FileUploader } from './FileUploader'
 import { CaptionSetter } from './CaptionSetter'
@@ -148,6 +148,7 @@ export class VideoPublisher {
             currentStage = 'verify_publish'
             const verifyResult = await verifier.verify({
                 useUniqueTag, uniqueTag, uploadStartTime,
+                expectedCaption: finalCaption,
                 username: options?.username, onProgress,
             })
             await recorder?.checkpoint(verifyResult.success ? 'verify_success' : 'verify_failed')
@@ -236,6 +237,7 @@ export class VideoPublisher {
             uploadStartTime?: number
             expectedVideoId?: string
             expectedVideoUrl?: string
+            expectedCaption?: string
         }
     ): Promise<PublishResult> {
         let page: Page | null = null
@@ -252,6 +254,7 @@ export class VideoPublisher {
                 username: options?.username,
                 expectedVideoId: options?.expectedVideoId,
                 expectedVideoUrl: options?.expectedVideoUrl,
+                expectedCaption: options?.expectedCaption,
                 onProgress,
             })
         } catch (error: any) {

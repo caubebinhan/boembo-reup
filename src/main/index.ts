@@ -15,11 +15,12 @@ import { setupSettingsIPC } from './ipc/settings'
 import { setupTroubleshootingIPC } from './ipc/troubleshooting'
 import { CrashRecoveryService } from './services/CrashRecovery'
 import { flowLoader } from '../core/flow/FlowLoader'
-import { runFullPublishE2ETest } from './tiktok/publisher/test-publish'
-import { PublishAccountService } from './services/PublishAccountService'
 // Importing the nodes barrel triggers self-registration of all nodes.
 // To add a new node: create the file, export + call nodeRegistry.register(), then add to src/nodes/index.ts
 import '../nodes'
+// Importing the workflows barrel triggers auto-discovery of all workflow modules
+// (recovery, ipc, services, events) — no manual imports needed.
+import '../workflows'
 
 // Sentry
 if (!app.isPackaged || process.env.NODE_ENV === 'development') {

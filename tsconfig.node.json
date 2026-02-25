@@ -6,7 +6,8 @@
     "src/preload/**/*",
     "src/shared/**/*",
     "src/core/**/*",
-    "src/nodes/**/*"
+    "src/nodes/**/*",
+    "src/workflows/**/*"
   ],
   "compilerOptions": {
     "composite": true,
