@@ -7,6 +7,8 @@ import { updateNodeStatus, updateNodeProgress } from './store/nodeEventsSlice'
 
 import { CampaignList } from './components/CampaignList'
 import { CampaignDetail } from './components/CampaignDetail'
+import { SettingsPanel } from './components/SettingsPanel'
+import { TroubleShottingPanel } from './components/TroubleShottingPanel'
 
 import { CampaignWizard } from './components/CampaignWizard'
 
@@ -72,6 +74,7 @@ function AppContent() {
   const [showFlowPicker, setShowFlowPicker] = useState(false)
   const [selectedFlowId, setSelectedFlowId] = useState<string>('tiktok-repost')
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null)
+  const [homeTab, setHomeTab] = useState<'campaigns' | 'settings' | 'troubleshooting'>('campaigns')
   const dispatch = useDispatch()
 
   useEffect(() => {
@@ -169,10 +172,54 @@ function AppContent() {
           onBack={() => setSelectedCampaignId(null)}
         />
       ) : (
-        <CampaignList
-          onOpenWizard={handleNewCampaign}
-          onAction={handleCampaignAction}
-        />
+        <div className="flex-1 flex flex-col min-w-0 bg-gray-900">
+          <div className="px-6 pt-4 pb-2 border-b border-gray-800 bg-gray-900/95">
+            <div className="inline-flex rounded-xl border border-gray-800 bg-gray-950 p-1">
+              <button
+                onClick={() => setHomeTab('campaigns')}
+                className={`px-3 py-1.5 rounded-lg text-sm transition ${
+                  homeTab === 'campaigns'
+                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Campaigns
+              </button>
+              <button
+                onClick={() => setHomeTab('settings')}
+                className={`px-3 py-1.5 rounded-lg text-sm transition ${
+                  homeTab === 'settings'
+                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Settings
+              </button>
+              <button
+                onClick={() => setHomeTab('troubleshooting')}
+                className={`px-3 py-1.5 rounded-lg text-sm transition ${
+                  homeTab === 'troubleshooting'
+                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                TroubleShotting
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0">
+            {homeTab === 'campaigns' ? (
+              <CampaignList
+                onOpenWizard={handleNewCampaign}
+                onAction={handleCampaignAction}
+              />
+            ) : homeTab === 'settings' ? (
+              <SettingsPanel />
+            ) : (
+              <TroubleShottingPanel />
+            )}
+          </div>
+        </div>
       )}
       {showFlowPicker && (
         <WorkflowPicker

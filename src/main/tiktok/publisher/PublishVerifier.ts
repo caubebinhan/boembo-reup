@@ -2,73 +2,107 @@ import { Page, Response } from 'playwright-core'
 import { TIKTOK_SELECTORS } from './constants/selectors'
 import { PublishResult } from './types'
 import { DebugHelper } from './helpers/DebugHelper'
-
-// ── Post verification via TikTok Content Dashboard ──────────────────────────
+import * as Sentry from '@sentry/electron/main'
+import fs from 'fs-extra'
+import path from 'path'
 
 interface VerifyOptions {
     useUniqueTag: boolean
     uniqueTag: string
     uploadStartTime: number
     username?: string
+    expectedVideoId?: string
+    expectedVideoUrl?: string
     onProgress?: (msg: string) => void
 }
 
 export class PublishVerifier {
+    private warnings = new Set<string>()
+    private static indicatorDriftReportCache = new Map<string, number>()
+
     constructor(private page: Page) {}
 
     async verify(opts: VerifyOptions): Promise<PublishResult> {
         console.log('[PublishVerifier] Verifying publication...')
-        if (opts.onProgress) opts.onProgress('Verifying publication...')
+        opts.onProgress?.('Verifying publication...')
+        this.warnings.clear()
 
         const indicator = await this.waitForSuccessIndicator()
+        if (indicator !== true) {
+            return this.withWarnings(indicator as PublishResult)
+        }
 
-        // If waitForSuccessIndicator returned a PublishResult (violation), bubble it up
-        if (indicator !== true) return indicator as PublishResult
-
-        // Navigate to Content Dashboard for strict verification
-        return this.verifyViaDashboard(opts)
+        const result = await this.verifyViaDashboard(opts)
+        return this.withWarnings(result)
     }
 
-    // ── Wait for success or violation ────────────────────
+    async recheckDashboardStatus(opts: VerifyOptions): Promise<PublishResult> {
+        console.log('[PublishVerifier] Rechecking dashboard status...')
+        opts.onProgress?.('Rechecking dashboard status...')
+        this.warnings.clear()
+        const result = await this.verifyViaDashboard(opts)
+        return this.withWarnings(result)
+    }
+
+    private withWarnings(result: PublishResult): PublishResult {
+        if (this.warnings.size === 0) return result
+        return {
+            ...result,
+            warning: [result.warning, ...this.warnings].filter(Boolean).join(' | '),
+        }
+    }
 
     private async waitForSuccessIndicator(): Promise<PublishResult | true> {
         for (let i = 0; i < 120; i++) {
             if (this.page.isClosed()) throw new Error('Browser page closed during verification')
             try { await this.page.waitForTimeout(1000) } catch { break }
 
-            // Still uploading?
             const uploading = await this.page.$('text="Your video is being uploaded"')
-                ?? await this.page.$('text="Video của bạn đang được tải lên"')
-            if (uploading && await uploading.isVisible().catch(() => false)) continue
+                ?? await this.page.$('text="Video c盻ｧa b蘯｡n ﾄ疎ng ﾄ柁ｰ盻｣c t蘯｣i lﾃｪn"')
+            if (uploading && await uploading.isVisible().catch(() => false)) {
+                await this.captureWarningsFromPage()
+                continue
+            }
 
-            // CAPTCHA check during verification
             for (const sel of TIKTOK_SELECTORS.CAPTCHA.INDICATORS) {
                 const captcha = await this.page.$(sel).catch(() => null)
                 if (captcha && await captcha.isVisible().catch(() => false)) {
-                    await DebugHelper.dumpPageState(this.page, 'captcha_during_verify')
-                    return { success: false, errorType: 'captcha', error: 'CAPTCHA_DETECTED: Captcha required during verification' }
+                    const artifacts = await DebugHelper.dumpPageState(this.page, 'captcha_during_verify')
+                    return {
+                        success: false,
+                        errorType: 'captcha',
+                        error: 'CAPTCHA_DETECTED: Captcha required during verification',
+                        debugArtifacts: artifacts,
+                    }
                 }
             }
 
-            // Success indicators (data-e2e first)
+            await this.captureWarningsFromPage()
+
             for (const sel of TIKTOK_SELECTORS.SUCCESS.INDICATORS) {
                 if (await this.page.$(sel).catch(() => null)) {
                     console.log(`[PublishVerifier] Success indicator: ${sel}`)
+                    await DebugHelper.dumpPageState(this.page, 'verify_success_indicator').catch(() => {})
                     return true
                 }
             }
 
-            // Check visible modal dialogs for violations
             const modalResult = await this.checkModalDialogs()
             if (modalResult !== null) return modalResult
         }
 
-        // Timeout
-        await DebugHelper.dumpPageState(this.page, 'verify_timeout')
-        return { success: false, errorType: 'unknown', error: 'Upload timed out — success message not found' }
+        const artifacts = await DebugHelper.dumpPageState(this.page, 'verify_timeout').catch(() => undefined)
+        await this.reportIndicatorDriftToSentry('success_indicator_timeout', {
+            expectedSuccessSelectors: TIKTOK_SELECTORS.SUCCESS.INDICATORS,
+            note: 'Upload submit likely succeeded but success indicator was not found before timeout. TikTok UI/indicator may have changed.',
+        }, artifacts, 'verify_success_indicator')
+        return {
+            success: false,
+            errorType: 'unknown',
+            error: 'Upload timed out - success message not found',
+            debugArtifacts: artifacts,
+        }
     }
-
-    // ── Modal dialog check ───────────────────────────────
 
     private async checkModalDialogs(): Promise<PublishResult | null> {
         try {
@@ -77,15 +111,29 @@ export class PublishVerifier {
 
             for (let d = 0; d < count; d++) {
                 const dialog = dialogs.nth(d)
-                if (!await dialog.isVisible()) continue
+                if (!await dialog.isVisible().catch(() => false)) continue
 
-                const text = ((await dialog.innerText()) || '').replace(/\n+/g, ' ').trim()
+                const text = ((await dialog.innerText().catch(() => '')) || '').replace(/\n+/g, ' ').trim()
+                if (!text) continue
 
-                // Check success keywords
-                const successKeywords = ['Manage your posts', 'View Profile', 'Upload complete', 'Quản lý bài đăng']
-                if (successKeywords.some(kw => text.includes(kw))) return null // not violation — continue
+                this.captureWarningText(text)
 
-                // Non-trivial dialog content = potential violation
+                const successKeywords = ['Manage your posts', 'View Profile', 'Upload complete', 'Manage posts']
+                if (successKeywords.some(kw => text.includes(kw))) return null
+
+                const nonViolationConfirmKeywords = [
+                    'proceed to post',
+                    'copyright check',
+                    'check is not completed',
+                    'post now',
+                    '投稿に進みますか',
+                    '著作権侵害のチェックが完了していません',
+                    '今すぐ投稿',
+                ]
+                if (nonViolationConfirmKeywords.some(kw => text.toLowerCase().includes(kw.toLowerCase()))) {
+                    return null
+                }
+
                 if (text.length > 10) {
                     const artifacts = await DebugHelper.dumpPageState(this.page, 'violation_modal')
                     return {
@@ -100,11 +148,13 @@ export class PublishVerifier {
         return null
     }
 
-    // ── Dashboard verification ───────────────────────────
-
     private async verifyViaDashboard(opts: VerifyOptions): Promise<PublishResult> {
         console.log('[PublishVerifier] Navigating to Content Dashboard...')
-        if (opts.onProgress) opts.onProgress('Checking video status on dashboard...')
+        opts.onProgress?.('Checking video status on dashboard...')
+        let sawContentListResponse = false
+        let lastApiResponseShape: any = null
+        let lastUiProbe: any = null
+        const expectedVideoId = this.normalizeVideoId(opts.expectedVideoId || opts.expectedVideoUrl)
 
         try {
             let apiData: any = null
@@ -112,7 +162,14 @@ export class PublishVerifier {
             const handler = async (response: Response) => {
                 try {
                     if (response.url().includes('tiktokstudio/content/list')) {
+                        sawContentListResponse = true
                         const json = await response.json()
+                        lastApiResponseShape = {
+                            topKeys: json && typeof json === 'object' ? Object.keys(json).slice(0, 20) : [],
+                            dataKeys: json?.data && typeof json.data === 'object' ? Object.keys(json.data).slice(0, 20) : [],
+                            postListType: Array.isArray(json?.data?.post_list) ? 'array' : typeof json?.data?.post_list,
+                            postListLength: Array.isArray(json?.data?.post_list) ? json.data.post_list.length : undefined,
+                        }
                         if (json?.data?.post_list) apiData = json.data.post_list
                     }
                 } catch {}
@@ -124,49 +181,450 @@ export class PublishVerifier {
             for (let check = 1; check <= 5; check++) {
                 if (this.page.isClosed()) break
                 await this.page.waitForTimeout(5000).catch(() => {})
+                await this.captureWarningsFromPage()
+                const uiStatus = await this.probeDashboardUiStatus(expectedVideoId)
+                lastUiProbe = uiStatus
+                if (uiStatus?.text) this.captureWarningText(uiStatus.text)
 
-                // ── API data match ──────────────────────
                 if (apiData?.length > 0) {
-                    const now = Math.floor(Date.now() / 1000)
-                    const match = apiData.find((v: any) => {
-                        if (opts.useUniqueTag && v.desc?.includes(opts.uniqueTag)) return true
-                        return parseInt(v.create_time) >= (now - 900)
-                    }) || apiData[0]
+                    const match = this.pickDashboardApiMatch(apiData, opts, expectedVideoId)
 
                     if (match) {
                         this.page.off('response', handler)
                         const uname = opts.username || 'user'
                         const finalUrl = `https://www.tiktok.com/@${uname}/video/${match.item_id}`
-                        return { success: true, videoId: match.item_id, videoUrl: finalUrl, isReviewing: match.privacy_level !== 1 }
+                        const detected = this.deriveDashboardReviewState(match)
+                        let reviewing = detected.isReviewing
+                        console.log('[PublishVerifier] Dashboard status detection', {
+                            itemId: match.item_id,
+                            reviewing,
+                            source: detected.source,
+                            reason: detected.reason,
+                            evidence: detected.evidence,
+                        })
+                        opts.onProgress?.(
+                            reviewing
+                                ? `Dashboard status: under review (${detected.source})`
+                                : `Dashboard status: public (${detected.source})`
+                        )
+                        if (
+                            reviewing &&
+                            expectedVideoId &&
+                            uiStatus?.id &&
+                            this.normalizeVideoId(uiStatus.id) === expectedVideoId &&
+                            !uiStatus.isReviewing
+                        ) {
+                            reviewing = false
+                        }
+                        if (detected.source === 'fallback:unknown') {
+                            await this.reportIndicatorDriftToSentry('dashboard_status_indicator_unknown', {
+                                itemId: match.item_id,
+                                detection: detected,
+                                note: 'Dashboard item schema does not expose known review/public indicators.',
+                            }, undefined, 'verify_dashboard_status_detection')
+                        }
+                        if (reviewing) this.captureWarningText('TikTok marked post as under review/private after publish')
+                        return {
+                            success: true,
+                            videoId: match.item_id,
+                            videoUrl: finalUrl,
+                            isReviewing: reviewing,
+                            publishStatus: reviewing ? 'under_review' : 'public',
+                        }
                     }
                 }
-
-                // ── UI table match ──────────────────────
-                const uiStatus = await this.page.evaluate(() => {
-                    const rows = Array.from(document.querySelectorAll('div[data-e2e="recent-post-item"], tr'))
-                    if (rows.length > 0) {
-                        const row = rows[0] as HTMLElement
-                        const linkEl = row.querySelector('a[href*="/video/"]')
-                        const href = linkEl?.getAttribute('href')
-                        const idMatch = href?.match(/\/video\/(\d+)/)
-                        const text = row.innerText
-                        const isReviewing = text.includes('Under review') || text.includes('Đang xét duyệt')
-                        return { id: idMatch?.[1] ?? null, url: href, isReviewing }
-                    }
-                    return null
-                })
-
                 if (uiStatus?.id) {
                     this.page.off('response', handler)
-                    return { success: true, videoId: uiStatus.id, videoUrl: uiStatus.url || undefined, isReviewing: uiStatus.isReviewing }
+                    return {
+                        success: true,
+                        videoId: uiStatus.id,
+                        videoUrl: uiStatus.url || undefined,
+                        isReviewing: !!uiStatus.isReviewing,
+                        publishStatus: uiStatus.isReviewing ? 'under_review' : 'public',
+                    }
                 }
             }
 
             this.page.off('response', handler)
-        } catch (e) {
+        } catch (e: any) {
             console.error('[PublishVerifier] Dashboard check error:', e)
+            this.captureWarningText(`dashboard check error: ${e?.message || String(e)}`)
         }
 
-        return { success: true, warning: 'Verification incomplete — check dashboard manually', isReviewing: true }
+        const artifacts = await DebugHelper.dumpPageState(this.page, 'verify_dashboard_incomplete').catch(() => undefined)
+        await this.reportIndicatorDriftToSentry('dashboard_verification_incomplete', {
+            note: 'Could not confirm dashboard publish status from API/UI probes. TikTok dashboard selectors or API schema may have changed.',
+            diagnostics: {
+                sawContentListResponse,
+                lastApiResponseShape,
+                lastUiProbe,
+            },
+        }, artifacts, 'verify_dashboard_recheck')
+        return {
+            success: true,
+            warning: 'Verification incomplete - check dashboard manually',
+            isReviewing: true,
+            publishStatus: 'under_review',
+            debugArtifacts: artifacts,
+        }
+    }
+
+    private normalizeVideoId(raw?: any): string | null {
+        const value = String(raw || '').trim()
+        if (!value) return null
+        const match = value.match(/(\d{8,})/)
+        return match?.[1] || null
+    }
+
+    private pickDashboardApiMatch(apiData: any[], opts: VerifyOptions, expectedVideoId: string | null): any | null {
+        if (!Array.isArray(apiData) || apiData.length === 0) return null
+
+        if (expectedVideoId) {
+            const exact = apiData.find((v: any) => this.normalizeVideoId(v?.item_id || v?.id) === expectedVideoId)
+            if (exact) return exact
+        }
+
+        if (opts.useUniqueTag && opts.uniqueTag) {
+            const tagged = apiData.find((v: any) => String(v?.desc || '').includes(opts.uniqueTag))
+            if (tagged) return tagged
+        }
+
+        const now = Math.floor(Date.now() / 1000)
+        const uploadStart = Number(opts.uploadStartTime) || now
+        const lowerBound = Math.max(0, uploadStart - 900)
+        const upperBound = now + 120
+        const recent = apiData
+            .filter((v: any) => {
+                const createTime = Number.parseInt(String(v?.create_time || '0'), 10)
+                return Number.isFinite(createTime) && createTime >= lowerBound && createTime <= upperBound
+            })
+            .sort((a: any, b: any) => Number(b?.create_time || 0) - Number(a?.create_time || 0))
+
+        return recent[0] || apiData[0] || null
+    }
+
+    private async probeDashboardUiStatus(expectedVideoId: string | null): Promise<any | null> {
+        return this.page.evaluate((expectedId) => {
+            const rows = Array.from(document.querySelectorAll('div[data-e2e="recent-post-item"], tr'))
+            if (rows.length === 0) return null
+
+            const normalizeId = (raw: string) => {
+                const m = (raw || '').match(/(\d{8,})/)
+                return m?.[1] || null
+            }
+
+            const candidates = rows.slice(0, 20).map((row) => {
+                const h = row as HTMLElement
+                const linkEl = row.querySelector('a[href*="/video/"]')
+                const href = linkEl?.getAttribute('href') || ''
+                const text = (h.innerText || '').slice(0, 240)
+                const id = normalizeId(href) || normalizeId(text)
+                const normalized = text.toLowerCase()
+                const isReviewing =
+                    normalized.includes('under review') ||
+                    normalized.includes('in review') ||
+                    normalized.includes('processing') ||
+                    normalized.includes('审核') ||
+                    normalized.includes('審核') ||
+                    normalized.includes('đang xét duyệt')
+                return { id, url: href || null, isReviewing, text }
+            })
+
+            const selected = expectedId
+                ? candidates.find(c => c.id === expectedId) || null
+                : candidates[0] || null
+            if (!selected) return null
+
+            return {
+                ...selected,
+                rowCount: rows.length,
+                candidates: candidates.slice(0, 5).map(c => ({ id: c.id, url: c.url, isReviewing: c.isReviewing })),
+            }
+        }, expectedVideoId).catch(() => null)
+    }
+
+    private async captureWarningsFromPage(): Promise<void> {
+        try {
+            const texts = await this.page.evaluate(() => {
+                const selectors = [
+                    '[role="alert"]',
+                    '[data-e2e="toast-message"]',
+                    '.tiktok-toast',
+                    'div[role="dialog"]',
+                ]
+                const visibleTexts: string[] = []
+                const seen = new Set<Element>()
+                for (const sel of selectors) {
+                    for (const el of Array.from(document.querySelectorAll(sel))) {
+                        if (seen.has(el)) continue
+                        seen.add(el)
+                        const h = el as HTMLElement
+                        const style = window.getComputedStyle(h)
+                        const visible = !!(h.offsetWidth || h.offsetHeight || h.getClientRects().length) &&
+                            style.visibility !== 'hidden' && style.display !== 'none'
+                        if (!visible) continue
+                        const text = (h.innerText || '').replace(/\s+/g, ' ').trim()
+                        if (text) visibleTexts.push(text)
+                    }
+                }
+                return visibleTexts.slice(0, 10)
+            })
+            for (const text of texts) this.captureWarningText(text)
+        } catch {}
+    }
+
+    private captureWarningText(text: string) {
+        const normalized = (text || '').replace(/\s+/g, ' ').trim()
+        if (!normalized) return
+        const lower = normalized.toLowerCase()
+        const keywords = [
+            'review',
+            'processing',
+            'violation',
+            'restricted',
+            'copyright',
+            'failed',
+            'warning',
+            'try again',
+            'captcha',
+        ]
+        if (keywords.some(k => lower.includes(k))) {
+            this.warnings.add(normalized.slice(0, 240))
+        }
+    }
+
+    private async reportIndicatorDriftToSentry(
+        issue: string,
+        data: Record<string, any>,
+        existingArtifacts?: { screenshot?: string; html?: string },
+        stage?: string
+    ): Promise<void> {
+        try {
+            const pageUrl = this.page.url()
+            const cacheKey = `${stage || 'unknown'}:${issue}:${pageUrl.split('?')[0]}`
+            const now = Date.now()
+            const last = PublishVerifier.indicatorDriftReportCache.get(cacheKey) || 0
+            // Throttle duplicate mails/events for same page+issue during retry loops.
+            if (now - last < 10 * 60 * 1000) return
+            PublishVerifier.indicatorDriftReportCache.set(cacheKey, now)
+
+            const artifacts = existingArtifacts || await DebugHelper.dumpPageState(this.page, `indicator_drift_${issue}`).catch(() => undefined)
+            const signals = await DebugHelper.collectPageSignals(this.page).catch(() => null)
+            const signalsPath = signals ? await DebugHelper.dumpJson(`indicator_drift_${issue}_signals`, signals).catch(() => undefined) : undefined
+
+            const attachments: any[] = []
+            const screenshotAttachment = await this.buildFileAttachment(
+                artifacts?.screenshot,
+                'image/png',
+                false,
+            )
+            if (screenshotAttachment) attachments.push(screenshotAttachment)
+
+            const htmlAttachment = await this.buildFileAttachment(
+                artifacts?.html,
+                'text/html; charset=utf-8',
+                true,
+                512 * 1024,
+            )
+            if (htmlAttachment) attachments.push(htmlAttachment)
+
+            const signalsAttachment = await this.buildFileAttachment(
+                signalsPath,
+                'application/json',
+                true,
+                256 * 1024,
+            )
+            if (signalsAttachment) attachments.push(signalsAttachment)
+
+            Sentry.withScope(scope => {
+                scope.setLevel('warning')
+                scope.setTag('module', 'tiktok')
+                scope.setTag('operation', 'publish_verify')
+                scope.setTag('issue_type', 'indicator_drift')
+                scope.setTag('issue', issue)
+                scope.setTag('stage', stage || 'unknown')
+                scope.setExtra('page_url', pageUrl)
+                scope.setExtra('verify_stage', stage || 'unknown')
+                scope.setExtra('artifacts_screenshot_path', artifacts?.screenshot || '')
+                scope.setExtra('artifacts_html_path', artifacts?.html || '')
+                scope.setExtra('artifacts_signals_path', signalsPath || '')
+                scope.setExtra('warning_snapshot', Array.from(this.warnings).slice(0, 10))
+                scope.setContext('indicator_drift', {
+                    issue,
+                    stage: stage || 'unknown',
+                    ...this.limitDeepData(data),
+                    pageUrl,
+                } as any)
+
+                for (const attachment of attachments) {
+                    try { scope.addAttachment(attachment) } catch {}
+                }
+
+                Sentry.captureMessage(`[TikTok][PublishVerifier] Indicator drift suspected: ${issue} (${stage || 'unknown'})`)
+            })
+        } catch (err) {
+            console.warn('[PublishVerifier] Failed to report indicator drift to Sentry:', err)
+        }
+    }
+
+    private async buildFileAttachment(
+        filePath?: string,
+        contentType?: string,
+        asText = false,
+        maxBytes = 1024 * 1024
+    ): Promise<any | null> {
+        if (!filePath) return null
+        try {
+            const exists = await fs.pathExists(filePath)
+            if (!exists) return null
+
+            if (asText) {
+                const text = await fs.readFile(filePath, 'utf8')
+                const clipped = text.length > maxBytes ? `${text.slice(0, maxBytes)}\n\n<!-- truncated -->` : text
+                return {
+                    filename: path.basename(filePath),
+                    data: clipped,
+                    contentType,
+                }
+            }
+
+            let buf = await fs.readFile(filePath)
+            if (buf.length > maxBytes) buf = buf.subarray(0, maxBytes)
+            return {
+                filename: path.basename(filePath),
+                data: new Uint8Array(buf),
+                contentType,
+            }
+        } catch {
+            return null
+        }
+    }
+
+    private limitDeepData(data: any) {
+        try {
+            const raw = JSON.stringify(data)
+            if (!raw) return data
+            if (raw.length <= 10_000) return data
+            return {
+                _truncated: true,
+                preview: raw.slice(0, 10_000),
+            }
+        } catch {
+            return { _unserializable: true }
+        }
+    }
+
+    private deriveDashboardReviewState(item: any): {
+        isReviewing: boolean
+        source: string
+        reason: string
+        evidence: Record<string, any>
+    } {
+        const evidence: Record<string, any> = {
+            privacy_level: item?.privacy_level,
+            privacyLevel: item?.privacyLevel,
+            public_status: item?.public_status,
+            publicStatus: item?.publicStatus,
+            status: item?.status,
+            post_status: item?.post_status,
+            review_status: item?.review_status,
+            audit_status: item?.audit_status,
+            visibility: item?.visibility,
+            is_reviewing: item?.is_reviewing,
+            under_review: item?.under_review,
+        }
+
+        if (typeof item?.is_reviewing === 'boolean') {
+            return {
+                isReviewing: item.is_reviewing,
+                source: 'api:is_reviewing',
+                reason: `is_reviewing=${item.is_reviewing}`,
+                evidence,
+            }
+        }
+        if (typeof item?.under_review === 'boolean') {
+            return {
+                isReviewing: item.under_review,
+                source: 'api:under_review',
+                reason: `under_review=${item.under_review}`,
+                evidence,
+            }
+        }
+
+        const candidates = [
+            ['public_status', item?.public_status],
+            ['publicStatus', item?.publicStatus],
+            ['status', item?.status],
+            ['post_status', item?.post_status],
+            ['review_status', item?.review_status],
+            ['audit_status', item?.audit_status],
+            ['visibility', item?.visibility],
+        ] as const
+
+        for (const [key, raw] of candidates) {
+            if (raw == null) continue
+            const normalized = String(raw).trim().toLowerCase()
+            if (!normalized) continue
+
+            if (
+                normalized.includes('under review') ||
+                normalized.includes('in review') ||
+                normalized.includes('reviewing') ||
+                normalized.includes('processing') ||
+                normalized.includes('pending') ||
+                normalized.includes('audit') ||
+                normalized.includes('checking') ||
+                normalized.includes('审核') ||
+                normalized.includes('審核')
+            ) {
+                return {
+                    isReviewing: true,
+                    source: `api:${key}`,
+                    reason: `${key}=${String(raw)}`,
+                    evidence,
+                }
+            }
+
+            if (
+                normalized === 'public' ||
+                normalized === 'published' ||
+                normalized.includes('public') ||
+                normalized.includes('published')
+            ) {
+                return {
+                    isReviewing: false,
+                    source: `api:${key}`,
+                    reason: `${key}=${String(raw)}`,
+                    evidence,
+                }
+            }
+        }
+
+        if (typeof item?.privacy_level === 'number') {
+            const isReviewing = item.privacy_level !== 1
+            return {
+                isReviewing,
+                source: 'api:privacy_level',
+                reason: `privacy_level=${item.privacy_level}`,
+                evidence,
+            }
+        }
+
+        if (typeof item?.privacyLevel === 'number') {
+            const isReviewing = item.privacyLevel !== 1
+            return {
+                isReviewing,
+                source: 'api:privacyLevel',
+                reason: `privacyLevel=${item.privacyLevel}`,
+                evidence,
+            }
+        }
+
+        return {
+            isReviewing: true,
+            source: 'fallback:unknown',
+            reason: 'No reliable dashboard status indicator found',
+            evidence,
+        }
     }
 }

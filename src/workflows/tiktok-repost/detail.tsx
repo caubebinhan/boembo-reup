@@ -22,6 +22,27 @@ const fmt = (num: number) => {
     return num.toString()
 }
 
+const pickThumbnail = (meta: any): string => {
+    if (!meta || typeof meta !== 'object') return ''
+    return (
+        meta.thumbnail ||
+        meta.thumb ||
+        meta.cover ||
+        meta.origin_cover ||
+        meta.cover_url ||
+        meta.coverUrl ||
+        meta.image ||
+        meta.poster ||
+        meta.video?.cover ||
+        meta.video?.cover_url ||
+        meta.video?.origin_cover ||
+        meta.aweme_detail?.video?.cover?.url_list?.[0] ||
+        meta.aweme_detail?.video?.origin_cover?.url_list?.[0] ||
+        meta.imagePost?.cover?.urlList?.[0] ||
+        ''
+    )
+}
+
 // ── TikTok Repost State ──────────────────────────────
 interface TikTokVideo {
     platform_id: string
@@ -32,8 +53,16 @@ interface TikTokVideo {
     local_path?: string
     caption?: string
     published_url?: string
-    status: 'queued' | 'scanned' | 'downloading' | 'downloaded' | 'captioned' | 'publishing' | 'published' | 'failed' | 'captcha' | 'violation' | 'skipped' | 'processing'
+    status: 'queued' | 'scanned' | 'downloading' | 'downloaded' | 'captioned' | 'publishing' | 'published' | 'failed' | 'captcha' | 'violation' | 'skipped' | 'processing' | 'under_review' | 'verifying_publish' | 'duplicate'
     error?: string
+    statusMessage?: string
+    reviewRetry?: {
+        attempts?: number
+        maxRetries?: number
+        nextRetryAt?: number
+        predictedReviewMs?: number
+        actualReviewMs?: number
+    }
     scheduledAt?: number
     isActive?: boolean
     queueIndex?: number
@@ -113,7 +142,7 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                     platform_id: v.platform_id,
                     description: meta?.description || '',
                     author: meta?.author || '',
-                    thumbnail: meta?.thumbnail || '',
+                    thumbnail: pickThumbnail(meta),
                     stats: meta?.stats,
                     local_path: v.local_path,
                     caption: meta?.generated_caption || meta?.description || '',
@@ -128,7 +157,15 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
             setState(prev => ({
                 phase,
                 phaseMessage,
-                videos: videos.map(v => ({ ...v, isActive: v.platform_id === prev.activeVideoId })),
+                videos: videos.map(v => {
+                    const prevVideo = prev.videos.find(p => p.platform_id === v.platform_id)
+                    return {
+                        ...v,
+                        isActive: v.platform_id === prev.activeVideoId,
+                        statusMessage: prevVideo?.statusMessage,
+                        reviewRetry: prevVideo?.reviewRetry,
+                    }
+                }),
                 scannedCount: videos.length,
                 queuedCount: videos.filter(v => v.status === 'queued').length,
                 downloadedCount: videos.filter(v => ['downloaded', 'captioned', 'publishing', 'published'].includes(v.status)).length,
@@ -183,6 +220,41 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                 }))
             } else if (ev.event === 'video:published') {
                 rebuild()  // full rebuild to pick up updated DB state
+            } else if (ev.event === 'video:publish-status') {
+                setState(prev => ({
+                    ...prev,
+                    videos: prev.videos.map(v =>
+                        v.platform_id === ev.data?.videoId
+                            ? {
+                                ...v,
+                                status: (ev.data?.status || v.status) as TikTokVideo['status'],
+                                published_url: ev.data?.videoUrl || v.published_url,
+                                statusMessage: ev.data?.message || v.statusMessage,
+                                reviewRetry: {
+                                    attempts: ev.data?.attempts,
+                                    maxRetries: ev.data?.maxRetries,
+                                    nextRetryAt: ev.data?.nextRetryAt,
+                                    predictedReviewMs: ev.data?.predictedReviewMs,
+                                    actualReviewMs: ev.data?.actualReviewMs,
+                                },
+                            }
+                            : v
+                    ),
+                }))
+            } else if (ev.event === 'video:duplicate-detected') {
+                setState(prev => ({
+                    ...prev,
+                    videos: prev.videos.map(v =>
+                        v.platform_id === ev.data?.videoId
+                            ? {
+                                ...v,
+                                status: 'duplicate' as const,
+                                published_url: ev.data?.existingVideoUrl || v.published_url,
+                                statusMessage: `Duplicate on @${ev.data?.accountUsername || 'unknown'} (${ev.data?.matchedBy || 'match'})${ev.data?.existingVideoUrl ? ` — ${ev.data.existingVideoUrl}` : ''}`,
+                            }
+                            : v
+                    ),
+                }))
             }
         })
 
@@ -204,6 +276,9 @@ function mapDbStatus(dbStatus: string): TikTokVideo['status'] {
         processing: 'downloading',
         downloaded: 'downloaded',
         published: 'published',
+        under_review: 'under_review',
+        verifying_publish: 'verifying_publish',
+        duplicate: 'duplicate',
         failed: 'failed',
         verified: 'published',
         captcha: 'captcha',
@@ -223,6 +298,9 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
     captioned: { label: 'CAPTIONED', color: '#0ea5e9', bg: '#0ea5e915' },
     publishing: { label: 'PUBLISHING', color: '#8b5cf6', bg: '#8b5cf615' },
     published: { label: 'PUBLISHED', color: '#10b981', bg: '#10b98115' },
+    under_review: { label: 'UNDER REVIEW', color: '#f59e0b', bg: '#f59e0b15' },
+    verifying_publish: { label: 'VERIFYING', color: '#22c55e', bg: '#22c55e15' },
+    duplicate: { label: 'DUPLICATE', color: '#f97316', bg: '#f9731615' },
     failed: { label: 'FAILED', color: '#ef4444', bg: '#ef444415' },
     captcha: { label: '⚠️ CAPTCHA', color: '#f97316', bg: '#f9731615' },
     violation: { label: 'VIOLATION', color: '#dc2626', bg: '#dc262615' },
@@ -242,7 +320,8 @@ function StatCard({ icon, label, value, color }: { icon: string; label: string; 
     )
 }
 
-function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: number; campaignId: string }) {
+function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: number; campaignId: string; gapMinutes?: number }) {
+    const api = (window as any).api
     const sc = STATUS_CONFIG[video.status] || STATUS_CONFIG.queued
     const isActive = video.isActive
     const scheduledTime = video.scheduledAt
@@ -253,7 +332,7 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
         <div className="relative pl-8 pb-6" style={{ opacity: video.status === 'skipped' ? 0.5 : 1 }}>
             <div className="absolute left-3 top-0 bottom-0 w-px bg-gray-800" />
             <div
-                className={`absolute left-1.5 top-2.5 w-3 h-3 rounded-full border-2 border-gray-900 ${['downloading', 'publishing'].includes(video.status) || isActive ? 'animate-pulse' : ''}`}
+                className={`absolute left-1.5 top-2.5 w-3 h-3 rounded-full border-2 border-gray-900 ${['downloading', 'publishing', 'under_review', 'verifying_publish'].includes(video.status) || isActive ? 'animate-pulse' : ''}`}
                 style={{
                     backgroundColor: sc.color,
                     boxShadow: isActive ? `0 0 10px ${sc.color}, 0 0 20px ${sc.color}40` : 'none',
@@ -302,7 +381,7 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
                                                 const [h, m] = e.target.value.split(':').map(Number)
                                                 const newDate = new Date(video.scheduledAt!)
                                                 newDate.setHours(h, m, 0, 0)
-                                                await window.api.invoke('video:reschedule', {
+                                                await api.invoke('video:reschedule', {
                                                     platformId: video.platform_id,
                                                     campaignId,
                                                     scheduledFor: newDate.getTime()
@@ -342,7 +421,7 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
                                 {video.local_path && (
                                     <button
                                         className="text-[10px] text-cyan-500 hover:text-cyan-400 font-bold tracking-wider uppercase transition cursor-pointer"
-                                        onClick={() => window.api.invoke('video:show-in-explorer', video.local_path)}
+                                        onClick={() => api.invoke('video:show-in-explorer', { path: video.local_path })}
                                     >
                                         📂 Open
                                     </button>
@@ -361,10 +440,25 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
                             </p>
                         )}
 
+                        {video.statusMessage && (video.status === 'under_review' || video.status === 'verifying_publish' || video.status === 'duplicate') && (
+                            <p className={`text-[10px] mt-2 rounded px-2 py-1 leading-relaxed border ${
+                                video.status === 'duplicate'
+                                    ? 'text-orange-300 bg-orange-500/10 border-orange-500/20'
+                                    : 'text-amber-300 bg-amber-500/10 border-amber-500/20'
+                            }`}>
+                                {video.statusMessage}
+                                {video.reviewRetry?.nextRetryAt && video.status === 'under_review' && (
+                                    <span className="text-amber-200/80">
+                                        {' '}Next check: {new Date(video.reviewRetry.nextRetryAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                )}
+                            </p>
+                        )}
+
                         {video.status === 'captcha' && (
                             <button
                                 className="mt-2 w-full text-[10px] font-bold px-3 py-1.5 rounded bg-orange-500 text-white hover:bg-orange-600 transition uppercase tracking-wider shadow-lg shadow-orange-500/20"
-                                onClick={() => window.api?.send('captcha:resolve', { videoId: video.platform_id, campaignId })}
+                                onClick={() => api?.send('captcha:resolve', { videoId: video.platform_id, campaignId })}
                             >
                                 Resolve CAPTCHA
                             </button>

@@ -1,15 +1,13 @@
-// ── TikTok Studio data-e2e selectors ────────────────────────────────────────
-// Prefer data-e2e attributes over text-matches. Fall back to text only as last resort.
+// TikTok Studio selectors.
+// Prefer data-e2e attributes over text matches when possible.
 
 export const TIKTOK_SELECTORS = {
     UPLOAD: {
-        /** File input triggers — tried in order */
         FILE_INPUT: 'input[type="file"]',
         UPLOAD_BUTTONS: [
             '[data-e2e="select-file"]',
             '[data-e2e="upload-card"]',
         ],
-        /** Indicators that the video file has been processed and is ready */
         READY_INDICATORS: [
             '[data-e2e="upload-complete"]',
             '[data-e2e="post_video_button"]',
@@ -18,7 +16,6 @@ export const TIKTOK_SELECTORS = {
         ],
     },
     CAPTION: {
-        /** Caption editor selectors — tried in order */
         EDITOR: [
             '[data-e2e="caption-editor"]',
             '[data-contents="true"]',
@@ -27,17 +24,16 @@ export const TIKTOK_SELECTORS = {
         ],
     },
     POST: {
-        /** Primary post button */
         BUTTON: '[data-e2e="post_video_button"]',
-        /** Confirm dialogs after clicking post */
         CONFIRM_BUTTONS: [
             'div[role="dialog"] [data-e2e="post_video_button"]',
             'div[role="dialog"] button:has-text("Post")',
+            'div[role="dialog"] button:has-text("Post now")',
+            'div[role="dialog"] button:has-text("今すぐ投稿")',
             'div[role="dialog"] button:has-text("Đăng")',
         ],
     },
     CAPTCHA: {
-        /** CAPTCHA container selectors */
         INDICATORS: [
             '[data-e2e="captcha-container"]',
             'iframe[src*="captcha"]',
@@ -55,11 +51,10 @@ export const TIKTOK_SELECTORS = {
         ],
     },
     SUCCESS: {
-        /** Post-publish success indicators */
         INDICATORS: [
             '[data-e2e="manage-posts"]',
             '[data-e2e="upload-success"]',
             'div[data-tt="components_PostTable_Container"]',
         ],
     },
-}
+} as const

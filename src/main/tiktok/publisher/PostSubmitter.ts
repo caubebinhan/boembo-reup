@@ -126,6 +126,28 @@ export class PostSubmitter {
                 }
             } catch {}
         }
+
+        // Fallback: score visible dialog buttons by text for locale-specific confirms.
+        try {
+            const dialogButtons = this.page.locator('div[role="dialog"] button, div[role="dialog"] div[role="button"]')
+            const count = await dialogButtons.count()
+            const positiveTexts = ['post', 'post now', 'publish', 'đăng', '今すぐ投稿']
+            const negativeTexts = ['cancel', 'hủy', 'キャンセル', 'back']
+
+            for (let i = 0; i < count; i++) {
+                const btn = dialogButtons.nth(i)
+                if (!await btn.isVisible().catch(() => false)) continue
+                const text = ((await btn.innerText().catch(() => '')) || '').trim().toLowerCase()
+                if (!text) continue
+                if (negativeTexts.some(t => text.includes(t))) continue
+                if (!positiveTexts.some(t => text.includes(t))) continue
+
+                console.log(`[PostSubmitter] Confirming via fallback text: "${text}"`)
+                await btn.click().catch(() => {})
+                await this.page.waitForTimeout(2000)
+                return
+            }
+        } catch {}
     }
 
     private progress(msg: string) {

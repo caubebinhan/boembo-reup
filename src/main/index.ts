@@ -11,8 +11,12 @@ import { initSentry } from './sentry'
 import { flowEngine } from '../core/engine/FlowEngine'
 import { setupCampaignIPC } from './ipc/campaigns'
 import { setupScannerIPC } from './ipc/scanner'
+import { setupSettingsIPC } from './ipc/settings'
+import { setupTroubleshootingIPC } from './ipc/troubleshooting'
 import { CrashRecoveryService } from './services/CrashRecovery'
 import { flowLoader } from '../core/flow/FlowLoader'
+import { runFullPublishE2ETest } from './tiktok/publisher/test-publish'
+import { PublishAccountService } from './services/PublishAccountService'
 // Importing the nodes barrel triggers self-registration of all nodes.
 // To add a new node: create the file, export + call nodeRegistry.register(), then add to src/nodes/index.ts
 import '../nodes'
@@ -123,8 +127,34 @@ app.whenReady().then(() => {
   setupCampaignIPC()
   setupScannerIPC()
   setupWizardIPC()
+  setupSettingsIPC()
+  setupTroubleshootingIPC()
   
   createWindow()
+
+  if (process.env.TIKTOK_RUN_PUBLISH_E2E === '1') {
+    setTimeout(() => {
+      void runFullPublishE2ETest().catch((err) => {
+        console.error('[E2E Publish Test] Failed:', err)
+      })
+    }, 3000)
+  }
+
+  if (process.env.TIKTOK_TEST_ADD_ACCOUNT === '1') {
+    setTimeout(() => {
+      const parent = BrowserWindow.getAllWindows()[0]
+      void PublishAccountService.addAccountViaLogin(parent).then((account) => {
+        console.log('[AddAccount Test] Result:', account ? {
+          id: account.id,
+          username: account.username,
+          handle: account.handle,
+          avatar: account.avatar,
+        } : null)
+      }).catch((err) => {
+        console.error('[AddAccount Test] Failed:', err)
+      })
+    }, 2000)
+  }
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

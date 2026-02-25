@@ -11,6 +11,7 @@ export interface PublishResult {
     videoId?: string
     videoUrl?: string
     isReviewing?: boolean
+    publishStatus?: 'public' | 'under_review'
     error?: string
     errorType?: PublishErrorType
     warning?: string
@@ -18,5 +19,10 @@ export interface PublishResult {
         screenshot?: string
         html?: string
         logs?: string[]
+        sessionLog?: string
+        checkpoints?: string[]
+        cookieSnapshot?: string
+        cookieInputSnapshot?: string
+        videoMetadata?: string
     }
 }

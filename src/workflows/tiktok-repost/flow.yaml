@@ -8,7 +8,7 @@ name: TikTok Repost
 description: Scan TikTok channels → Schedule → Download → Edit caption → Publish
 icon: 🔄
 color: "#00f2ea"
-version: "2.4"
+version: "2.5"
 
 # ── NODES ────────────────────────────────
 nodes:
@@ -28,6 +28,7 @@ nodes:
       - dedup_1
       - downloader_1
       - caption_1
+      - account_dedup_1
       - publisher_1
       - cond_violation_1
       - notify_violation_1
@@ -45,6 +46,9 @@ nodes:
 
   - node_id: core.caption_gen
     instance_id: caption_1
+
+  - node_id: tiktok.account_dedup
+    instance_id: account_dedup_1
 
   - node_id: tiktok.publisher
     instance_id: publisher_1

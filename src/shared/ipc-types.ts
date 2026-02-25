@@ -23,6 +23,8 @@ export const IPC_CHANNELS = {
   CAMPAIGN_PAUSE: 'campaign:pause',
   CAMPAIGN_RESUME: 'campaign:resume',
   CAMPAIGN_TOGGLE_STATUS: 'toggle-campaign-status',
+  CAMPAIGN_UPDATE_PARAMS: 'campaign:update-params',
+  CAMPAIGN_RESCHEDULE_ALL: 'campaign:reschedule-all',
 
   SCANNER_OPEN_WINDOW: 'open-scanner-window',
   SCANNER_IMPORT: 'scanner:import',

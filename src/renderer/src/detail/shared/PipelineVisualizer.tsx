@@ -203,10 +203,10 @@ function LoopBlock({
     else if (isDone) borderColor = 'rgba(16, 185, 129, 0.4)' // emerald
 
     return (
-        <div className="relative mt-8 mb-4 min-w-[350px] z-0">
+        <div className="relative min-w-[350px] z-0">
             {/* Hidden anchor for SvgOverlay incoming arrows — aligns exactly with nodes' vertical center */}
-            <div id={`vis-loop-in-${node.instance_id}`} className="absolute left-0 top-0 h-[80px] w-[1px] pointer-events-none" />
-            <div id={`vis-loop-out-${node.instance_id}`} className="absolute right-0 top-0 h-[80px] w-[1px] pointer-events-none" />
+            <div id={`vis-loop-in-${node.instance_id}`} className="absolute left-0 top-0 h-[64px] w-[1px] pointer-events-none" />
+            <div id={`vis-loop-out-${node.instance_id}`} className="absolute right-0 top-0 h-[64px] w-[1px] pointer-events-none" />
 
             {/* The Background Frame (The Loop Border) */}
             <div className="absolute left-0 right-0 top-[40px] h-[160px] rounded-[32px] border-[3px] border-dashed transition-all duration-700 z-0"
@@ -215,7 +215,6 @@ function LoopBlock({
                     background: isRunning ? 'linear-gradient(135deg, rgba(14,165,233,0.05), rgba(15,23,42,0.3))' : 'rgba(15,23,42,0.2)',
                     boxShadow: isRunning ? '0 0 40px rgba(56,189,248,0.1) inset' : 'none',
                 }}>
-
                 {/* Animated Glowing Flow Around the Border */}
                 {isRunning && (
                     <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ overflow: 'visible' }}>
@@ -249,18 +248,19 @@ function LoopBlock({
 
             {/* The Nodes Sitting Exactly On the Top Border */}
             <div className="flex items-center gap-[45px] relative z-10 px-[40px] pb-[160px] w-max">
-                {childNodes.map((child, i) => (
-                    <div key={child.instance_id} className="relative z-10 flex items-center">
-                        <NodeCard node={child} campaignId={campaignId} compact isSelected={selectedId === child.instance_id} onSelect={onSelect} campaignParams={campaignParams} />
+                {
+                    childNodes.map((child, i) => (
+                        <div key={child.instance_id} className="relative z-10 flex items-center">
+                            <NodeCard node={child} campaignId={campaignId} compact isSelected={selectedId === child.instance_id} onSelect={onSelect} campaignParams={campaignParams} />
 
-                        {/* Connection arrow between nodes sitting on the border */}
-                        {i < childNodes.length - 1 && (
-                            <div className="absolute left-[100%] top-[40px] -translate-y-1/2 w-[45px] flex justify-center text-sky-500/40 text-[10px] pointer-events-none z-0">
-                                ▶
-                            </div>
-                        )}
-                    </div>
-                ))}
+                            {/* Connection arrow between nodes sitting on the border */}
+                            {i < childNodes.length - 1 && (
+                                <div className="absolute left-[100%] top-[40px] -translate-y-1/2 w-[45px] flex justify-center text-sky-500/40 text-[10px] pointer-events-none z-0">
+                                    ▶
+                                </div>
+                            )}
+                        </div>
+                    ))}
             </div>
         </div>
     )
@@ -299,24 +299,53 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
 
                 const x1 = r1.right - containerRect.left
                 const y1 = r1.top + r1.height / 2 - containerRect.top
-                const x2 = r2.left - containerRect.left
-                const y2 = r2.top + r2.height / 2 - containerRect.top
+                let x2 = r2.left - containerRect.left
+                let y2 = r2.top + r2.height / 2 - containerRect.top
+
+                // If it's a loop returning to itself or an earlier node
+                const isBackward = x2 <= x1
 
                 const siblings = outgoingBySource.get(edge.from) || []
-                const branchIndex = siblings.findIndex(e => e.from === edge.from && e.to === edge.to && e.when === edge.when)
-                const branchOffset = siblings.length > 1
-                    ? (branchIndex - (siblings.length - 1) / 2) * 28
-                    : 0
 
-                const c1x = x1 + 40
-                const c1y = y1 + branchOffset
-                const c2x = x2 - 40
-                const c2y = y2 + branchOffset
-                const endX = x2 - 10
-                const d = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${y2}`
+                // Group branches
+                const edgesToSameTarget = siblings.filter(e => e.to === edge.to)
+                const branchIndexTarget = edgesToSameTarget.findIndex(e => e.when === edge.when)
+                const branchIndexGlobal = siblings.findIndex(e => e.to === edge.to && e.when === edge.when)
+
+                const isBranchingSource = siblings.length > 1
+                // Vertical spread for multiple outgoing branches
+                const verticalOffset = isBranchingSource ? (branchIndexGlobal - (siblings.length - 1) / 2) * 50 : 0
+
+                let d = ''
                 const targetId = edge.to
                 const sourceNode = nodeByInstance.get(edge.from)
                 const isConditionSource = sourceNode?.node_id === 'core.condition'
+
+                // Handle backward routing cleanly around loops
+                if (isBackward) {
+                    // Connect to bottom of the target loop instead of the left side (avoids clipping)
+                    x2 = r2.left + r2.width / 2 - containerRect.left
+                    y2 = r2.bottom - containerRect.top
+
+                    const dropY = Math.max(r1.bottom, r2.bottom) - containerRect.top + 40 + (branchIndexGlobal * 15)
+                    d = `M ${x1} ${y1} C ${x1 + 30} ${y1}, ${x1 + 30} ${dropY}, ${x1} ${dropY} L ${x2} ${dropY} L ${x2} ${y2 + 10}`
+                }
+                else {
+                    const controlDist = Math.max(40, (x2 - x1) / 2.5)
+
+                    if (edgesToSameTarget.length > 1 && branchIndexTarget > 0) {
+                        // Exact same path, we just stack labels
+                        d = `M ${x1} ${y1} C ${x1 + controlDist} ${y1}, ${x2 - controlDist} ${y2}, ${x2 - 10} ${y2}`
+                    } else {
+                        // Spread out paths that go to different targets from a condition node
+                        const c1y = y1 + verticalOffset
+                        const c2y = y2
+                        d = `M ${x1} ${y1} C ${x1 + controlDist} ${c1y}, ${x2 - controlDist} ${c2y}, ${x2 - 10} ${y2}`
+                    }
+                }
+
+                // Stack labels if going to the exact same target
+                const labelOffset = edgesToSameTarget.length > 1 ? (branchIndexTarget - (edgesToSameTarget.length - 1) / 2) * 20 : 0
 
                 const tStat = stats?.[targetId] || { running: 0, completed: 0, failed: 0 }
                 const tAct = active?.[targetId]
@@ -324,14 +353,24 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
                 const isRunning = tAct?.status === 'running' || tStat.running > 0
                 const isDone = tStat.completed > 0 && !isRunning && !isError
 
+                let labelX = x1 + (x2 - x1) / 2
+                let labelY = ((y1 + y2) / 2) - 12 + labelOffset
+
+                if (isBackward) {
+                    labelX = x1 - 40
+                    labelY = Math.max(r1.bottom, r2.bottom) - containerRect.top + 25 + (branchIndexGlobal * 15)
+                } else if (isBranchingSource) {
+                    labelY += verticalOffset / 1.5
+                }
+
                 newPaths.push({
                     d,
                     isRunning,
                     isError,
                     isDone,
-                    label: edge.when?.trim() || (isConditionSource && siblings.length > 1 ? 'else' : undefined),
-                    labelX: (x1 + x2) / 2,
-                    labelY: ((y1 + y2) / 2) + branchOffset - 12
+                    label: edge.when?.trim() || (isConditionSource && siblings.length > 1 && branchIndexGlobal > 0 ? 'else' : isConditionSource ? 'if' : undefined),
+                    labelX,
+                    labelY
                 })
             }
         }

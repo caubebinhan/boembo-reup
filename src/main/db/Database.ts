@@ -77,6 +77,38 @@ export function initDb() {
       created_at INTEGER,
       updated_at INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS publish_history (
+      id TEXT PRIMARY KEY,
+      platform TEXT NOT NULL DEFAULT 'tiktok',
+      account_id TEXT NOT NULL,
+      account_username TEXT,
+      campaign_id TEXT,
+      source_platform_id TEXT,
+      source_local_path TEXT,
+      file_fingerprint TEXT,
+      caption_hash TEXT,
+      caption_preview TEXT,
+      published_video_id TEXT,
+      published_url TEXT,
+      status TEXT NOT NULL DEFAULT 'under_review',
+      duplicate_reason TEXT,
+      media_signature_json TEXT,
+      media_signature_version TEXT,
+      created_at INTEGER,
+      updated_at INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_publish_history_account_source
+      ON publish_history(account_id, source_platform_id, updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_publish_history_account_fingerprint
+      ON publish_history(account_id, file_fingerprint, updated_at DESC);
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value_json TEXT,
+      updated_at INTEGER
+    );
   `)
 
   // Migrations for existing DBs
@@ -85,6 +117,8 @@ export function initDb() {
     'ALTER TABLE videos ADD COLUMN scheduled_for INTEGER',
     'ALTER TABLE videos ADD COLUMN queue_index INTEGER DEFAULT 0',
     'ALTER TABLE campaigns ADD COLUMN last_processed_index INTEGER DEFAULT 0',
+    'ALTER TABLE publish_history ADD COLUMN media_signature_json TEXT',
+    'ALTER TABLE publish_history ADD COLUMN media_signature_version TEXT',
   ]
   for (const sql of migrations) {
     try { db.exec(sql) } catch { /* column already exists */ }

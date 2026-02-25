@@ -48,7 +48,7 @@ export function CampaignList({ onOpenWizard, onAction }: CampaignListProps) {
     }
 
     return (
-        <div className="flex-1 overflow-y-auto bg-gray-900 p-6 h-screen text-white">
+        <div className="flex-1 overflow-y-auto bg-gray-900 p-6 h-full text-white">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold">All Campaigns ({campaigns.length})</h1>
                 <button

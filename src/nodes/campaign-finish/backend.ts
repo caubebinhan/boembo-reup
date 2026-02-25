@@ -17,7 +17,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       COUNT(*) as total,
       SUM(CASE WHEN status = 'published' OR status = 'verified' THEN 1 ELSE 0 END) as published,
       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-      SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) as skipped,
+      SUM(CASE WHEN status IN ('skipped', 'duplicate') THEN 1 ELSE 0 END) as skipped,
       SUM(CASE WHEN status = 'queued' THEN 1 ELSE 0 END) as remaining
     FROM videos WHERE campaign_id = ?
   `).get(campaignId) as any

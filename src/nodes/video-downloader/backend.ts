@@ -16,13 +16,21 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
   try {
     db.prepare(`
-      INSERT OR REPLACE INTO videos (platform_id, campaign_id, local_path, status, data_json)
-      VALUES (?, ?, ?, 'downloaded', ?)
+      UPDATE videos 
+      SET local_path = ?, 
+          status = 'downloaded', 
+          data_json = json_patch(data_json, ?)
+      WHERE platform_id = ? AND campaign_id = ?
     `).run(
-      video.platform_id,
-      ctx.campaign_id,
       result.filePath,
-      JSON.stringify({ description: video.description, author: video.author, stats: video.stats })
+      JSON.stringify({
+        description: video.description,
+        author: video.author,
+        stats: video.stats,
+        thumbnail: video.thumbnail || '',
+      }),
+      video.platform_id,
+      ctx.campaign_id
     )
   } catch (err) {
     ctx.logger.error('Failed to save video to DB', err)

@@ -48,6 +48,10 @@ export interface NodeManifest {
   description?: string
   /** Schema for config UI (optional — used by wizard auto-generation) */
   config_schema?: NodeConfigSchema
+  /** Settings editable in the visualizer InspectPanel (auto-rendered form) */
+  editable_settings?: NodeConfigSchema
+  /** Event name to emit when user saves editable_settings (e.g. 'reschedule') */
+  on_save_event?: string
 }
 
 // ── Node Definition ──────────────────────────────

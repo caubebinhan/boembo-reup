@@ -149,8 +149,9 @@ export function setupCampaignIPC() {
   })
 
   // ── Show video file in system explorer ────────────
-  ipcMain.handle('video:show-in-explorer', async (_event, { path }) => {
+  ipcMain.handle('video:show-in-explorer', async (_event, payload) => {
     const { shell } = await import('electron')
+    const path = typeof payload === 'string' ? payload : payload?.path
     if (path) shell.showItemInFolder(path)
   })
 

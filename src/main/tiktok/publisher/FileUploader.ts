@@ -5,6 +5,8 @@ import { DebugHelper } from './helpers/DebugHelper'
 // ── File uploader for TikTok Studio ─────────────────────────────────────────
 
 export class FileUploader {
+    private lastUploadError: string | null = null
+
     constructor(private page: Page, private onProgress?: (msg: string) => void) {}
 
     async upload(filePath: string): Promise<void> {
@@ -23,7 +25,7 @@ export class FileUploader {
             }
         }
 
-        throw new Error(`File upload failed after ${MAX_RETRIES} attempts`)
+        throw new Error(this.lastUploadError || `File upload failed after ${MAX_RETRIES} attempts`)
     }
 
     private async attemptUpload(filePath: string): Promise<boolean> {
@@ -81,6 +83,8 @@ export class FileUploader {
                 if (await toast.isVisible({ timeout: 500 })) {
                     const errText = await toast.textContent()
                     console.log(`[FileUploader] Upload error: "${errText}"`)
+                    this.lastUploadError = `Upload toast error: ${(errText || '').trim()}`
+                    await DebugHelper.dumpPageState(this.page, 'upload_toast_error').catch(() => {})
                     return false
                 }
             } catch {}
