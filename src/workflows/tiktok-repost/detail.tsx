@@ -540,7 +540,7 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
     })()
 
     const sources = config.sources || []
-    const gapMinutes = config.schedule?.interval_minutes || config.gap_minutes
+    const gapMinutes = config.intervalMinutes
     const phase = PHASE_UI[state.phase] || PHASE_UI.idle
 
     return (

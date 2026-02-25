@@ -4,8 +4,8 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
 import { PipelineEventBus } from '../core/engine/PipelineEventBus'
-import { VideoQueueRepo } from './db/VideoQueueRepo'
-import { initDb, db } from './db/Database'
+
+import { initDb } from './db/Database'
 import { setupWizardIPC } from './ipc/wizard'
 import { initSentry } from './sentry'
 import { flowEngine } from '../core/engine/FlowEngine'
@@ -40,22 +40,6 @@ function createWindow(): void {
     }
   })
 
-  // Wire PipelineEventBus to renderer
-  PipelineEventBus.on('node:done', ({ result, ctx }) => {
-    if (result.data?.video_id || ctx.variables.current_video?.id) {
-      const vid = result.data?.video_id || ctx.variables.current_video?.id
-      // Update DB
-      VideoQueueRepo.updateStatus(vid, result.status)
-      // Push to UI
-      mainWindow.webContents.send('pipeline:update', {
-        campaignId: ctx.campaignId,
-        videoId: vid,
-        status: result.status,
-        scheduledAt: result.data?.scheduled_at
-      })
-    }
-  })
-
   PipelineEventBus.on('pipeline:interaction_waiting', (payload) => {
     mainWindow.webContents.send('pipeline:interaction_waiting', payload)
   })
@@ -66,33 +50,6 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
-  })
-
-  // Handle wizard completion
-  PipelineEventBus.on('wizard:done', ({ session }) => {
-    const campaignId = require('crypto').randomBytes(4).toString('hex')
-    const campaign = {
-      id: campaignId,
-      name: `Campaign ${new Date().toLocaleString()}`,
-      workflow_id: session.workflowId,
-      params: JSON.stringify(session.outputs),
-      status: 'idle',
-      created_at: Date.now(),
-      updated_at: Date.now()
-    }
-    
-    try {
-      db.prepare(`
-        INSERT INTO campaigns (id, name, workflow_id, params, status, created_at, updated_at)
-        VALUES (@id, @name, @workflow_id, @params, @status, @created_at, @updated_at)
-      `).run(campaign)
-
-      mainWindow.webContents.send('campaign:created', { ...campaign, params: session.outputs })
-      
-      flowEngine.triggerCampaign(campaignId)
-    } catch (err) {
-      console.error('Failed to save campaign:', err)
-    }
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -130,32 +87,7 @@ app.whenReady().then(() => {
   setupWizardIPC()
   setupSettingsIPC()
   setupTroubleshootingIPC()
-  
   createWindow()
-
-  if (process.env.TIKTOK_RUN_PUBLISH_E2E === '1') {
-    setTimeout(() => {
-      void runFullPublishE2ETest().catch((err) => {
-        console.error('[E2E Publish Test] Failed:', err)
-      })
-    }, 3000)
-  }
-
-  if (process.env.TIKTOK_TEST_ADD_ACCOUNT === '1') {
-    setTimeout(() => {
-      const parent = BrowserWindow.getAllWindows()[0]
-      void PublishAccountService.addAccountViaLogin(parent).then((account) => {
-        console.log('[AddAccount Test] Result:', account ? {
-          id: account.id,
-          username: account.username,
-          handle: account.handle,
-          avatar: account.avatar,
-        } : null)
-      }).catch((err) => {
-        console.error('[AddAccount Test] Failed:', err)
-      })
-    }, 2000)
-  }
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
