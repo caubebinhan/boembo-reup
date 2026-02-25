@@ -50,9 +50,9 @@ export function normalizeTimeRanges(params: Record<string, any>): TimeRange[] {
   }
 
   // Format B — legacy single window
-  const start = params.activeHoursStart ?? params.schedule?.start_time ?? '00:00'
-  const end = params.activeHoursEnd ?? params.schedule?.end_time ?? '23:59'
-  const days = normalizeDays(params.activeDays ?? params.schedule?.active_days ?? [0, 1, 2, 3, 4, 5, 6])
+  const start = params.activeHoursStart ?? '00:00'
+  const end = params.activeHoursEnd ?? '23:59'
+  const days = normalizeDays(params.activeDays ?? [0, 1, 2, 3, 4, 5, 6])
   return [{ days, start, end }]
 }
 

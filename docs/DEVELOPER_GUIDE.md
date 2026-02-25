@@ -15,116 +15,158 @@ src/
 │   └── nodes/
 │       └── NodeRegistry.ts  # Global node registry (auto-populated)
 ├── nodes/                   # Node implementations (auto-discovered)
+│   ├── _shared/
+│   │   └── timeWindow.ts    # Shared time-window utilities (normalizeTimeRanges, nextValidSlot)
 │   ├── tiktok-scanner/      # Each node = folder with manifest + backend
-│   ├── video-downloader/
-│   ├── deduplicator/
+│   ├── video-scheduler/
+│   ├── check-in-time/
+│   ├── timeout/
+│   ├── caption-generator/
+│   ├── tiktok-publisher/
+│   ├── limit/
 │   └── ...
 ├── workflows/               # Workflow definitions (auto-discovered)
-│   ├── tiktok-repost/       # Each workflow = folder with all related files
-│   │   ├── flow.yaml        # Pipeline definition + UI config
-│   │   ├── wizard.ts        # Wizard step configuration
-│   │   ├── detail.tsx       # Campaign detail view + state
-│   │   └── card.tsx         # Campaign list card component
-│   └── upload-local/
+│   └── tiktok-repost/
+│       └── flow.yaml        # Pipeline definition
 ├── renderer/src/            # React frontend
-│   ├── detail/
-│   │   └── WorkflowDetailRegistry.ts  # Auto-discovers detail.tsx
-│   ├── wizard/
-│   │   └── workflowWizardRegistry.ts  # Auto-discovers wizard.ts
-│   └── components/
-│       ├── CampaignCard.tsx  # Auto-discovers card.tsx per workflow
-│       └── CampaignDetail.tsx
+│   ├── components/wizard/   # Shared wizard step components
+│   │   ├── Step1_Details.tsx
+│   │   ├── Step2_Sources.tsx
+│   │   ├── Step4_Schedule.tsx
+│   │   └── Step5_Target.tsx
+│   └── detail/shared/
+│       └── PipelineVisualizer.tsx # Campaign pipeline visualization
 └── main/                    # Electron main process
+    ├── services/
+    │   └── CrashRecovery.ts # On-startup: reset interrupted jobs, reschedule missed videos
     ├── ipc/                 # IPC handlers
     └── db/                  # SQLite database
 ```
 
 ---
 
+## Campaign Parameters (Source of Truth)
+
+The campaign wizard saves a flat JSON object (`params`) into the `campaigns` table. All backend nodes receive this via `ctx.params`. Below is the **canonical parameter list** — use these exact names. Do NOT create aliases or additional fallbacks.
+
+| Parameter | Type | Set By | Purpose |
+|---|---|---|---|
+| `name` | `string` | Step1 | Campaign display name |
+| `campaignType` | `'scan_video' \| 'scan_channel'` | Step1 | Workflow mode |
+| `captionTemplate` | `string` | Step1 | Caption template with `[Original Desc]`, `[Author]`, `[Tags]`, `[Time (HH:mm)]`, `[Date (YYYY-MM-DD)]` tags |
+| `removeHashtags` | `boolean` | Step1 (optional) | Strip hashtags from original caption |
+| `appendTags` | `string` | Step1 (optional) | Tags to append to the end of caption |
+| `advancedVerification` | `boolean` | Step1 | Append unique tag to bypass dup checks |
+| `autoSchedule` | `boolean` | Step1 | Auto-schedule or require manual approval |
+| `missedJobHandling` | `'auto' \| 'manual'` | Step1 | What to do with missed scheduled videos |
+| `firstRunAt` | `string (datetime-local)` | Step1/Step4 | Campaign start time |
+| `intervalMinutes` | `number` | Step1/Step4 | **Gap (minutes) between videos.** Default: `60` |
+| `enableJitter` | `boolean` | Step1 | Apply ±50% random jitter to the interval |
+| `activeHoursStart` | `string (HH:mm)` | Step1 | Daily window start (legacy single-window) |
+| `activeHoursEnd` | `string (HH:mm)` | Step1 | Daily window end (legacy single-window) |
+| `activeDays` | `string[]` | Step1 | Active days as name array, e.g. `['Mon','Tue']` |
+| `timeRanges` | `TimeRange[]` | Step4 | **Preferred** multi-slot active schedule (overrides `activeHoursStart/End`) |
+| `sources` | `Source[]` | Step2 | TikTok channels/keywords to scan |
+| `maxVideos` | `number` | Step3 (optional) | Max videos to process per run. Default: `100` |
+| `selectedAccounts` | `string[]` | Step5 | Publish account IDs to use (round-robin) |
+| `privacy` | `string` | Step5 (optional) | TikTok privacy setting. Default: `'public'` |
+
+### TimeRange shape
+
+```typescript
+interface TimeRange {
+  days: number[]   // 0=Sun, 1=Mon ... 6=Sat
+  start: string    // "HH:mm"
+  end: string      // "HH:mm"
+}
+```
+
+### Priority order for time ranges
+
+When backend nodes need to determine active hours, they use `normalizeTimeRanges(ctx.params)` from `nodes/_shared/timeWindow.ts`:
+1. If `timeRanges` is present and non-empty → use it (multi-slot format, set by Step4).
+2. Otherwise fall back to `activeHoursStart`, `activeHoursEnd`, `activeDays` (legacy single-window from Step1).
+3. If nothing is set → 24/7 (all days, 00:00–23:59).
+
+---
+
 ## How to Write a Node
 
-### 1. Create the folder
+Each node is a self-contained folder under `src/nodes/`. It is auto-discovered at runtime.
 
 ```
 src/nodes/my-node/
 ├── manifest.ts    # Node metadata
 ├── backend.ts     # Execution logic
-└── index.ts       # Entry point (combines manifest + backend)
+└── index.ts       # Entry point
 ```
 
-### 2. manifest.ts
+### manifest.ts
 
 ```typescript
 export const manifest = {
-  id: 'my-namespace.my-node',  // Unique ID: namespace.name
+  id: 'my-namespace.my-node',   // Unique ID used in flow.yaml
   name: 'My Node',
   description: 'What this node does',
   category: 'processing',
-  inputs: ['video'],           // What data types this node accepts
-  outputs: ['video'],          // What data types this node produces
 }
 ```
 
-### 3. backend.ts
+### backend.ts
 
 ```typescript
 import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
 
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
-  // input: data from previous node in the pipeline
-  // ctx.params: campaign parameters (from wizard)
-  // ctx.campaign_id: current campaign ID
-  // ctx.logger.info('message')  — logs to execution_logs table
-  // ctx.logger.error('message', err)
-  // ctx.onProgress('message')   — shows in UI
+  // ctx.params      — campaign params (see table above — use canonical names only)
+  // ctx.campaign_id — running campaign ID
+  // ctx.logger.info / ctx.logger.error  — logs to DB (visible in UI)
+  // ctx.onProgress('message')           — shows current status in PipelineVisualizer
 
-  // Do your work here
-  ctx.onProgress('Processing...')
-  const result = doSomething(input)
-
-  // Return result
   return {
-    data: result,            // Passed to next node as input
-    action: 'continue',     // 'continue' (default) | 'finish' (stop campaign) | 'recall' (jump to node)
-    message: 'Done',        // Optional status message
+    data: result,        // Passed as `input` to the next node
+    action: 'continue',  // 'continue' | 'finish' (stop campaign)
+    message: 'Done',     // Optional
   }
 }
 ```
 
-### 4. index.ts
+### Key Rules
+
+- **Use only canonical `ctx.params` names** (see the table above). Never add `?? ctx.params.some_legacy_alias` fallbacks — this causes drift.
+- **Return `{ data: null }`** to signal skip (e.g., deduplication).
+- **Throw errors** for hard failures — the engine catches them and handles via the node's `on_error` config.
+- **Use `ctx.logger`**, not `console.log`. Logs go to DB and show in the execution log UI.
+- **Auto-discovery**: Create your folder + `index.ts` — it registers automatically via `import.meta.glob`.
+
+### Shared Utilities
 
 ```typescript
-import { manifest } from './manifest'
-import { execute } from './backend'
+import { normalizeTimeRanges, isWithinAnyWindow, nextValidSlot } from '../_shared/timeWindow'
 
-export default { manifest, execute }
+// Get active time windows from campaign params
+const ranges = normalizeTimeRanges(ctx.params)
+
+// Check if current time is within any active window
+if (!isWithinAnyWindow(new Date(), ranges)) { /* outside hours */ }
+
+// Get timestamp of next valid slot (for scheduling)
+const nextSlot = nextValidSlot(Date.now(), ranges)
 ```
-
-### Key Rules
-- **Input/Output contract**: Your node receives `input` from the previous node. Return `{ data }` for the next node.
-- **Return `null` data** to skip this item (e.g., dedup node returns `{ data: null, action: 'continue' }`).
-- **Throw errors** for failures — the engine catches them and handles via `on_error` config.
-- **Use `ctx.logger`** for logging, NOT `console.log`. Logs go to DB and are visible in the UI.
-- **Auto-discovery**: Just create the folder. The node is auto-registered via `import.meta.glob`.
 
 ---
 
 ## How to Write a Workflow
 
-### 1. Create the workflow folder
-
 ```
 src/workflows/my-workflow/
-├── flow.yaml      # Required: pipeline definition
-├── wizard.ts      # Optional: wizard step configuration
-├── detail.tsx     # Optional: custom detail view
-└── card.tsx       # Optional: custom campaign card
+├── flow.yaml        # Required: pipeline definition
+└── wizard/          # Optional: wizard step configuration
 ```
 
-### 2. flow.yaml — Pipeline Definition
+### flow.yaml
 
 ```yaml
-# Metadata
 id: my-workflow
 name: My Workflow
 description: What this workflow does
@@ -132,98 +174,75 @@ icon: 🔧
 color: "#8b5cf6"
 version: "1.0"
 
-# Pipeline nodes
 nodes:
-  - node_id: my-namespace.scanner    # References a node from src/nodes/
-    instance_id: scanner_1           # Unique instance name within this flow
+  - node_id: tiktok.scanner
+    instance_id: scanner_1
+    timeout: 30000           # Optional: node-level timeout (ms)
 
-  - node_id: core.loop               # Loop node — processes items one by one
+  - node_id: core.video_scheduler
+    instance_id: scheduler_1
+
+  # Loop node — runs children sequentially for each item
+  - node_id: core.loop
     instance_id: video_loop
-    children: [processor_1, publisher_1, timeout_1]  # Children run sequentially per item
+    children:
+      - check_time_1         # Always first: waits for active hours + scheduled_for
+      - dedup_1
+      - downloader_1
+      - caption_1
+      - publisher_1
 
-  - node_id: my-namespace.processor
-    instance_id: processor_1
-    on_error: stop_campaign           # 'skip' (default) | 'stop_campaign'
+  - node_id: core.check_in_time
+    instance_id: check_time_1
 
-  - node_id: my-namespace.publisher
+  - node_id: core.deduplicator
+    instance_id: dedup_1
+
+  - node_id: core.downloader
+    instance_id: downloader_1
+
+  - node_id: core.caption_gen
+    instance_id: caption_1
+
+  - node_id: tiktok.publisher
     instance_id: publisher_1
+    on_error: skip           # 'skip' (default) | 'stop_campaign'
 
-  - node_id: core.timeout
-    instance_id: timeout_1
+  - node_id: core.campaign_finish
+    instance_id: finish_1
 
-# Edges: connect nodes (top-level only, children are in-order)
 edges:
   - from: scanner_1
+    to: scheduler_1
+  - from: scheduler_1
     to: video_loop
-
-# UI configuration (drives campaign cards and detail page)
-ui:
-  campaign_card:
-    stats: [...]
-    status_badges: [...]
-  card_actions: [...]
-  detail_page:
-    header_actions: [...]
-    header_stats: [...]
+  - from: video_loop
+    to: finish_1
 ```
 
-### 3. wizard.ts — Wizard Steps
+> **Note:** The `ui:` section and `wizard:` sections were removed from `flow.yaml` in v2.4.
+> Wizard steps are React components registered separately (see below).
 
-```typescript
-import { WizardStepConfig } from '@renderer/wizard/WizardStepTypes'
-import SomeStepComponent from '@renderer/wizard/shared/SomeStep'
+### Adding wizard steps
 
-const steps: WizardStepConfig[] = [
-  {
-    id: 'details',
-    title: 'Details',
-    icon: '📝',
-    component: SomeStepComponent,
-  },
-  // ... more steps
-]
-
-export default steps
-```
-
-### 4. detail.tsx — Custom Detail View
+Wizard step components live in `src/renderer/src/components/wizard/`:
 
 ```tsx
-import type { WorkflowDetailProps } from '@renderer/detail/WorkflowDetailRegistry'
-import { PipelineVisualizer } from '@renderer/detail/shared/PipelineVisualizer'
-
-function MyWorkflowDetail({ campaignId, campaign, workflowId }: WorkflowDetailProps) {
-  // Own your state here — fetch logs, build video lists, etc.
-  return (
-    <div>
-      <PipelineVisualizer campaignId={campaignId} workflowId={workflowId} />
-      {/* Your custom UI */}
-    </div>
-  )
+interface MyStepProps {
+  data: Record<string, any>
+  updateData: (updates: Record<string, any>) => void
 }
 
-export default MyWorkflowDetail
-```
-
-### 5. card.tsx — Custom Campaign Card
-
-```tsx
-interface CardProps {
-  campaign: any
-  onAction: (event: string, payload: any) => void
-}
-
-export default function MyWorkflowCard({ campaign, onAction }: CardProps) {
-  return (
-    <div>
-      <h3>{campaign.name}</h3>
-      <button onClick={() => onAction('campaign:trigger', { id: campaign.id })}>
-        Run
-      </button>
-    </div>
-  )
+export function Step_MyStep({ data, updateData }: MyStepProps) {
+  // Initialize defaults on mount with useEffect
+  // Call updateData({ key: value }) to write into campaign params
+  return <div>...</div>
 }
 ```
+
+Each step component must:
+- **Initialize its defaults via `useEffect`** on mount (so the value is written to `params` even if the user never changes the field).
+- **Always use canonical parameter names** when calling `updateData`.
 
 ---
 
@@ -231,28 +250,53 @@ export default function MyWorkflowCard({ campaign, onAction }: CardProps) {
 
 ```
 1. User creates campaign via Wizard
-   └─> campaign:create IPC → saves to DB with workflow_id + params
+   └─> campaign:create IPC → saves to DB with workflow_id + params (JSON)
 
-2. User clicks "Run" on campaign card
-   └─> campaign:trigger IPC → FlowEngine.triggerCampaign()
+2. User clicks "Run" → campaign:trigger IPC → FlowEngine.triggerCampaign()
 
-3. FlowEngine loads flow.yaml, finds first node, creates a Job
-   └─> Job saved to `jobs` table with status='pending'
+3. FlowEngine loads flow.yaml, creates first Job → saved to `jobs` table
 
 4. FlowEngine.tick() polls pending jobs every 500ms
    └─> Picks up job → executes node → logs to execution_logs
 
-5. For LOOP nodes:
-   └─> Receives array of items from previous node
-   └─> For each item: runs children sequentially (dedup → download → caption → publish → timeout)
-   └─> Checks campaign status between items (supports pause)
-   └─> Per-node on_error: 'skip' continues to next item, 'stop_campaign' stops everything
+5. core.video_scheduler:
+   └─> Assigns a scheduled_for timestamp to each video using time ranges + intervalMinutes
+   └─> Videos saved to `videos` table with status='queued'
 
-6. UI updates via:
+6. core.loop:
+   └─> Iterates over each video item
+   └─> Runs children: check_time → dedup → download → caption → publish
+   └─> Checks campaign status between items (supports pause mid-loop)
+
+7. core.check_in_time (first child in loop):
+   └─> Step 1: If NOW is outside active hours → sleeps until next valid slot (nextValidSlot)
+   └─> Step 2: If video has scheduled_for in the future → sleeps until that time
+
+8. UI updates via:
    └─> Polling: campaign list refreshes every 3s
-   └─> IPC events: execution:node-data, node:progress sent to renderer
-   └─> Detail view rebuilds state from execution_logs
+   └─> IPC events: execution:node-data, node:progress → PipelineVisualizer re-renders
 ```
+
+---
+
+## Built-in Nodes Reference
+
+| Node ID | Purpose | Key `ctx.params` it reads |
+|---|---|---|
+| `tiktok.scanner` | Scans TikTok channels/keywords for new videos | `sources`, `campaignType` |
+| `core.video_scheduler` | Assigns `scheduled_for` to each video | `intervalMinutes`, `timeRanges` / `activeHoursStart/End/Days` |
+| `core.check_in_time` | Waits for active hours + per-video scheduled time | `timeRanges` / `activeHoursStart/End/Days` (via `normalizeTimeRanges`) |
+| `core.deduplicator` | Skips already-processed videos | — |
+| `core.downloader` | Downloads video to local disk | — |
+| `core.caption_gen` | Generates caption from template | `captionTemplate`, `removeHashtags`, `appendTags` |
+| `tiktok.publisher` | Publishes video to TikTok | `selectedAccounts`, `privacy` |
+| `core.timeout` | Waits N minutes between videos (legacy) | `intervalMinutes`, `enableJitter` |
+| `core.limit` | Limits number of items | `maxVideos` (default 100) |
+| `core.condition` | Branches on an expression | `expression` (node-level param) |
+| `core.notify` | Sends desktop notification | `title`, `body`, `sound` (node-level params) |
+| `core.campaign_finish` | Marks campaign as complete | — |
+
+> ⚠️ `core.timeout` is a **legacy** node. The current TikTok Repost workflow uses `core.check_in_time` as the first loop child instead, which handles both active-hours gating and per-video scheduling.
 
 ---
 
@@ -260,25 +304,24 @@ export default function MyWorkflowCard({ campaign, onAction }: CardProps) {
 
 ### Per-Node `on_error` Config
 ```yaml
-nodes:
-  - node_id: tiktok.publisher
-    instance_id: publisher_1
-    on_error: stop_campaign    # Stop entire campaign if this node fails
+- node_id: tiktok.publisher
+  instance_id: publisher_1
+  on_error: stop_campaign    # Halt entire campaign on failure
 ```
+- `skip` *(default)*: Skip the current item, continue with the next
+- `stop_campaign`: Set campaign status to `'error'` and halt
 
-Options:
-- `skip` (default): Skip the current item, continue to next
-- `stop_campaign`: Set campaign status to 'error' and stop
-
-### Input Validation
-The engine validates input before each node execution. If a node receives `null` input, it logs an error and skips to the next item.
+### Captcha / Violation (Publisher-specific)
+The publisher node handles these internally (does not throw):
+- `captcha`: Returns `{ action: 'continue', data: { ...video, status: 'captcha' } }` → triggers `cond_captcha_1` branch.
+- `violation`: Returns `{ action: 'continue', data: { ...video, status: 'violation' } }` → triggers `cond_violation_1` branch.
 
 ---
 
 ## IPC Event Names
 
 | Event | Direction | Description |
-|-------|-----------|-------------|
+|---|---|---|
 | `campaign:list` | renderer → main | List all campaigns |
 | `campaign:get` | renderer → main | Get single campaign |
 | `campaign:create` | renderer → main | Create campaign |
@@ -288,6 +331,7 @@ The engine validates input before each node execution. If a node receives `null`
 | `campaign:delete` | renderer → main | Delete campaign |
 | `campaign:get-jobs` | renderer → main | Get jobs for campaign |
 | `campaign:get-logs` | renderer → main | Get execution logs |
-| `campaign:get-flow-nodes` | renderer → main | Get flow definition |
-| `flow:get-ui-descriptor` | renderer → main | Get UI config from flow.yaml |
+| `campaign:get-flow-nodes` | renderer → main | Get flow definition for visualizer |
 | `flow:get-presets` | renderer → main | List available workflows |
+| `account:list` | renderer → main | List publish accounts |
+| `account:add` | renderer → main | Add new TikTok publish account |

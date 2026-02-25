@@ -128,7 +128,11 @@ export function setupCampaignIPC() {
         children: n.children,
         execution: n.execution
       })),
-      edges: flow.edges
+      edges: flow.edges.map(e => ({
+        from: e.from,
+        to: e.to,
+        when: e.when
+      }))
     }
   })
 

@@ -2,9 +2,9 @@ import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/Node
 
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const video = input
-  const template = ctx.params.captionTemplate || ctx.params.caption_template || '{original}'
-  const removeHashtags = ctx.params.removeHashtags ?? ctx.params.remove_hashtags ?? false
-  const appendTags = ctx.params.appendTags || ctx.params.append_tags || ''
+  const template = ctx.params.captionTemplate || '{original}'
+  const removeHashtags = ctx.params.removeHashtags ?? false
+  const appendTags = ctx.params.appendTags || ''
 
   let original = video.description || ''
   if (removeHashtags) {

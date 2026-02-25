@@ -18,7 +18,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     return { data: videos, action: 'continue', message: 'No videos to schedule' }
   }
 
-  const intervalMinutes = ctx.params.intervalMinutes ?? ctx.params.schedule?.interval_minutes ?? 1
+  const intervalMinutes = ctx.params.intervalMinutes ?? 60
   const intervalMs = intervalMinutes * 60 * 1000
 
   // Resolve time ranges (multi-range or legacy single window)

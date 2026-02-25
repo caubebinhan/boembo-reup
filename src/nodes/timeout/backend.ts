@@ -6,8 +6,6 @@ const DEFAULT_GAP_MINUTES = 60
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   // Read gap from wizard params — Step4_Schedule / Step1_Details saves as "intervalMinutes"
   const rawGap = ctx.params.intervalMinutes
-    ?? ctx.params.schedule?.interval_minutes
-    ?? ctx.params.gap_minutes
 
   // Full params dump for debugging — helps confirm whether params arrived correctly
   ctx.logger.info(`[Timeout] ctx.params = ${JSON.stringify(ctx.params)}`)

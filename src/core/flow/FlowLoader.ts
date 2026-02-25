@@ -60,6 +60,7 @@ export class FlowLoader {
     const edges = raw.edges.map((e: any) => ({
       from: e.from,
       to: e.to,
+      when: e.when,
     }))
 
     const ui = raw.ui ? this.parseUI(raw.ui) : undefined

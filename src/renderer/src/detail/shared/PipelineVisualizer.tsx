@@ -16,6 +16,7 @@ interface FlowNodeInfo {
 interface FlowEdge {
     from: string
     to: string
+    when?: string
 }
 
 const NODE_META: Record<string, { icon: string; label: string; color: string; desc: string }> = {
@@ -129,7 +130,7 @@ function NodeCard({
     if (isSelected) borderColor = '#a855f7'
 
     const isTimeout = node.node_id === 'core.timeout'
-    const waitMinutes = isTimeout ? (campaignParams?.intervalMinutes || campaignParams?.gap_minutes || '?') : null
+    const waitMinutes = isTimeout ? (campaignParams?.intervalMinutes || '?') : null
 
     return (
         <div className="relative group z-10" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
@@ -204,7 +205,8 @@ function LoopBlock({
     return (
         <div className="relative mt-8 mb-4 min-w-[350px] z-0">
             {/* Hidden anchor for SvgOverlay incoming arrows — aligns exactly with nodes' vertical center */}
-            <div id={`vis-loop-${node.instance_id}`} className="absolute left-0 top-0 h-[80px] w-[1px] pointer-events-none" />
+            <div id={`vis-loop-in-${node.instance_id}`} className="absolute left-0 top-0 h-[80px] w-[1px] pointer-events-none" />
+            <div id={`vis-loop-out-${node.instance_id}`} className="absolute right-0 top-0 h-[80px] w-[1px] pointer-events-none" />
 
             {/* The Background Frame (The Loop Border) */}
             <div className="absolute left-0 right-0 top-[40px] h-[160px] rounded-[32px] border-[3px] border-dashed transition-all duration-700 z-0"
@@ -265,18 +267,31 @@ function LoopBlock({
 }
 
 function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: FlowEdge[], flowData: { nodes: FlowNodeInfo[] }, containerRef: any, campaignId: string }) {
-    const [paths, setPaths] = useState<{ d: string, isRunning: boolean, isError: boolean, isDone: boolean }[]>([])
+    const [paths, setPaths] = useState<{ d: string, isRunning: boolean, isError: boolean, isDone: boolean, label?: string, labelX?: number, labelY?: number }[]>([])
     const stats = useSelector((s: RootState) => s.nodeEvents.byCampaign[campaignId]?.nodeStats)
     const active = useSelector((s: RootState) => s.nodeEvents.activeNodes?.[campaignId])
 
     const updatePaths = () => {
         if (!containerRef.current) return
         const containerRect = containerRef.current.getBoundingClientRect()
-        const newPaths: { d: string, isRunning: boolean, isError: boolean, isDone: boolean }[] = []
+        const newPaths: { d: string, isRunning: boolean, isError: boolean, isDone: boolean, label?: string, labelX?: number, labelY?: number }[] = []
+        const outgoingBySource = new Map<string, FlowEdge[]>()
+        const nodeByInstance = new Map(flowData.nodes.map(n => [n.instance_id, n] as const))
 
         for (const edge of edges) {
-            const elFrom = document.getElementById(`vis-node-${edge.from}`) || document.getElementById(`vis-loop-${edge.from}`)
-            const elTo = document.getElementById(`vis-node-${edge.to}`) || document.getElementById(`vis-loop-${edge.to}`)
+            if (!outgoingBySource.has(edge.from)) outgoingBySource.set(edge.from, [])
+            outgoingBySource.get(edge.from)!.push(edge)
+        }
+
+        for (const edge of edges) {
+            const elFrom =
+                document.getElementById(`vis-node-${edge.from}`) ||
+                document.getElementById(`vis-loop-out-${edge.from}`) ||
+                document.getElementById(`vis-loop-${edge.from}`)
+            const elTo =
+                document.getElementById(`vis-node-${edge.to}`) ||
+                document.getElementById(`vis-loop-in-${edge.to}`) ||
+                document.getElementById(`vis-loop-${edge.to}`)
 
             if (elFrom && elTo) {
                 const r1 = elFrom.getBoundingClientRect()
@@ -287,18 +302,37 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
                 const x2 = r2.left - containerRect.left
                 const y2 = r2.top + r2.height / 2 - containerRect.top
 
-                // Bezier curve
-                const d = `M ${x1} ${y1} C ${x1 + 40} ${y1}, ${x2 - 40} ${y2}, ${x2 - 10} ${y2}`
-                const targetId = edge.to
+                const siblings = outgoingBySource.get(edge.from) || []
+                const branchIndex = siblings.findIndex(e => e.from === edge.from && e.to === edge.to && e.when === edge.when)
+                const branchOffset = siblings.length > 1
+                    ? (branchIndex - (siblings.length - 1) / 2) * 28
+                    : 0
 
-                // Determine edge status based on the destination node's status
+                const c1x = x1 + 40
+                const c1y = y1 + branchOffset
+                const c2x = x2 - 40
+                const c2y = y2 + branchOffset
+                const endX = x2 - 10
+                const d = `M ${x1} ${y1} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${endX} ${y2}`
+                const targetId = edge.to
+                const sourceNode = nodeByInstance.get(edge.from)
+                const isConditionSource = sourceNode?.node_id === 'core.condition'
+
                 const tStat = stats?.[targetId] || { running: 0, completed: 0, failed: 0 }
                 const tAct = active?.[targetId]
                 const isError = tAct?.status === 'failed' || tStat.failed > 0
                 const isRunning = tAct?.status === 'running' || tStat.running > 0
                 const isDone = tStat.completed > 0 && !isRunning && !isError
 
-                newPaths.push({ d, isRunning, isError, isDone })
+                newPaths.push({
+                    d,
+                    isRunning,
+                    isError,
+                    isDone,
+                    label: edge.when?.trim() || (isConditionSource && siblings.length > 1 ? 'else' : undefined),
+                    labelX: (x1 + x2) / 2,
+                    labelY: ((y1 + y2) / 2) + branchOffset - 12
+                })
             }
         }
         setPaths(newPaths)
@@ -324,33 +358,55 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#10B981" />
                 </marker>
 
-                {/* Glow filter */}
                 <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
                     <feGaussianBlur stdDeviation="3" result="blur" />
                     <feComposite in="SourceGraphic" in2="blur" operator="over" />
                 </filter>
             </defs>
-            {paths.map((p, i) => (
-                <g key={i}>
-                    {/* Base faint line */}
-                    <path d={p.d} fill="none" stroke="#374151" strokeWidth="2" markerEnd="url(#arrow-idle)" />
+            {paths.map((p, i) => {
+                const labelW = p.label ? Math.max(48, Math.min(220, p.label.length * 6.4 + 20)) : 0
+                return (
+                    <g key={i}>
+                        <path d={p.d} fill="none" stroke="#374151" strokeWidth="2" markerEnd="url(#arrow-idle)" />
 
-                    {/* Done green line */}
-                    {p.isDone && <path d={p.d} fill="none" stroke="#10b981" strokeWidth="2" opacity="0.6" markerEnd="url(#arrow-done)" />}
+                        {p.isDone && <path d={p.d} fill="none" stroke="#10b981" strokeWidth="2" opacity="0.6" markerEnd="url(#arrow-done)" />}
 
-                    {/* Highlighted animated running line */}
-                    {p.isRunning && (
-                        <path d={p.d} fill="none" stroke="#3b82f6" strokeWidth="3" markerEnd="url(#arrow-run)" filter="url(#glow)" strokeDasharray="6 6" className="animate-[dash_1s_linear_infinite]" />
-                    )}
+                        {p.isRunning && (
+                            <path d={p.d} fill="none" stroke="#3b82f6" strokeWidth="3" markerEnd="url(#arrow-run)" filter="url(#glow)" strokeDasharray="6 6" className="animate-[dash_1s_linear_infinite]" />
+                        )}
 
-                    {/* Flowing particles for running lines */}
-                    {p.isRunning && (
-                        <circle r="3" fill="#60a5fa" filter="url(#glow)">
-                            <animateMotion dur="2s" repeatCount="indefinite" path={p.d} />
-                        </circle>
-                    )}
-                </g>
-            ))}
+                        {p.isRunning && (
+                            <circle r="3" fill="#60a5fa" filter="url(#glow)">
+                                <animateMotion dur="2s" repeatCount="indefinite" path={p.d} />
+                            </circle>
+                        )}
+
+                        {p.label && p.labelX != null && p.labelY != null && (
+                            <>
+                                <rect
+                                    x={p.labelX - (labelW / 2)}
+                                    y={p.labelY - 8}
+                                    width={labelW}
+                                    height="16"
+                                    rx="8"
+                                    fill="rgba(15,23,42,0.95)"
+                                    stroke="rgba(249,115,22,0.35)"
+                                />
+                                <text
+                                    x={p.labelX}
+                                    y={p.labelY + 4}
+                                    textAnchor="middle"
+                                    fontSize="9"
+                                    fontWeight="700"
+                                    fill="#fb923c"
+                                >
+                                    {p.label}
+                                </text>
+                            </>
+                        )}
+                    </g>
+                )
+            })}
         </svg>
     )
 }

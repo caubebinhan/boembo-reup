@@ -7,7 +7,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   const video = input
   if (!video?.local_path) throw new Error('No local video file to publish')
 
-  const selectedAccounts = ctx.params.selectedAccounts || ctx.params.accounts || []
+  const selectedAccounts = ctx.params.selectedAccounts || []
   if (selectedAccounts.length === 0) throw new Error('No publish accounts configured')
 
   // Round-robin account selection
