@@ -6,6 +6,13 @@ import { FlowDefinition, WorkflowUIDescriptor } from './ExecutionContracts'
 export class FlowLoader {
   private cache = new Map<string, FlowDefinition>()
 
+  private parseTimeout(value: unknown): number | undefined {
+    if (value === undefined || value === null || value === '') return undefined
+    const parsed = Number(value)
+    if (!Number.isFinite(parsed) || parsed < 0) return undefined
+    return parsed
+  }
+
   public loadAll(workflowsDir: string): FlowDefinition[] {
     if (!fs.existsSync(workflowsDir)) return []
     
@@ -53,7 +60,7 @@ export class FlowLoader {
       instance_id: n.instance_id,
       children: n.children,
       on_error: n.on_error,
-      timeout: n.timeout ? Number(n.timeout) : undefined,
+      timeout: this.parseTimeout(n.timeout),
       events: n.events || undefined,
     }))
 
@@ -80,8 +87,7 @@ export class FlowLoader {
 
   private parseUI(raw: any): WorkflowUIDescriptor {
     if (!raw) return {}
-    const ui = JSON.parse(JSON.stringify(raw))
-    return this.stripYamlMultilineStrings(ui)
+    return this.stripYamlMultilineStrings(raw)
   }
 
   private stripYamlMultilineStrings(obj: any): any {

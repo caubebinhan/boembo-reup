@@ -153,7 +153,7 @@ export class FlowEngine {
       const resultPromise = NodeImpl.execute(inputData, ctx)
       
       let result: any
-      if (nodeDef.timeout) {
+      if (typeof nodeDef.timeout === 'number') {
         ExecutionLogger.log({
           campaign_id: job.campaign_id, job_id: job.id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
           level: 'info', event: 'node:timeout_set', message: `Setting timeout of ${nodeDef.timeout}ms`
@@ -328,16 +328,16 @@ export class FlowEngine {
           const resultPromise = NodeImpl.execute(skipToNextItem ? {} : currentData, ctx)
           
           let result: any
-          if (childDef.timeout) {
+          if (typeof childDef.timeout === 'number') {
             ExecutionLogger.log({
               campaign_id: job.campaign_id, job_id: job.id, instance_id: childDef.instance_id, node_id: childDef.node_id,
               level: 'info', event: 'node:timeout_set', message: `Setting timeout of ${childDef.timeout}ms`
             })
             const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error(`Node timeout exceeded (${childDef.timeout}ms)`)), childDef.timeout)
-            )
-            result = await Promise.race([resultPromise, timeoutPromise])
-          } else {
+                setTimeout(() => reject(new Error(`Node timeout exceeded (${childDef.timeout}ms)`)), childDef.timeout)
+              )
+              result = await Promise.race([resultPromise, timeoutPromise])
+            } else {
             result = await resultPromise
           }
 
