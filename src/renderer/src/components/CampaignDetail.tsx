@@ -162,12 +162,24 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                             )
                         })}
 
-                        {/* Fallback Run button */}
-                        {campaign.status === 'idle' && (
+                        {/* State-aware campaign control buttons */}
+                        {['idle', 'finished', 'error'].includes(campaign.status) && (
                             <button
                                 onClick={() => handleAction('campaign:trigger', { id: campaign.id })}
                                 className="px-4 py-2 text-sm rounded-lg font-medium transition text-white bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/20 flex items-center gap-1.5"
-                            >🚀 Run Now</button>
+                            >🚀 Run</button>
+                        )}
+                        {campaign.status === 'active' && (
+                            <button
+                                onClick={() => handleAction('campaign:pause', { id: campaign.id })}
+                                className="px-4 py-2 text-sm rounded-lg font-medium transition text-amber-300 border border-amber-700 hover:bg-amber-900/30 flex items-center gap-1.5"
+                            >⏸ Pause</button>
+                        )}
+                        {campaign.status === 'paused' && (
+                            <button
+                                onClick={() => handleAction('campaign:resume', { id: campaign.id })}
+                                className="px-4 py-2 text-sm rounded-lg font-medium transition text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20 flex items-center gap-1.5"
+                            >▶ Resume</button>
                         )}
                     </div>
                 </div>

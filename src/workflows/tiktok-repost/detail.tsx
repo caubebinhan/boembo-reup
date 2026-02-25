@@ -69,7 +69,7 @@ interface TikTokVideo {
 }
 
 interface TikTokRepostState {
-    phase: 'idle' | 'scanning' | 'scheduling' | 'downloading' | 'publishing' | 'finished' | 'error'
+    phase: 'idle' | 'scanning' | 'scheduling' | 'downloading' | 'publishing' | 'monitoring' | 'paused' | 'finished' | 'error'
     phaseMessage?: string
     videos: TikTokVideo[]
     scannedCount: number
@@ -77,6 +77,7 @@ interface TikTokRepostState {
     downloadedCount: number
     publishedCount: number
     failedCount: number
+    publishFailedCount: number
     captchaCount: number
     activeVideoId?: string
 }
@@ -89,6 +90,7 @@ const INITIAL: TikTokRepostState = {
     downloadedCount: 0,
     publishedCount: 0,
     failedCount: 0,
+    publishFailedCount: 0,
     captchaCount: 0,
 }
 
@@ -116,16 +118,25 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
             for (const log of sorted) {
                 const nodeId = log.node_id || ''
                 if (log.event === 'node:start' && nodeId.includes('scanner')) {
-                    phase = 'scanning'; phaseMessage = 'Scanning sources...'
+                    phase = 'scanning'; phaseMessage = 'Đang quét nguồn video...'
+                }
+                if (log.event === 'node:start' && nodeId.includes('scheduler')) {
+                    phase = 'scheduling'; phaseMessage = 'Đang lên lịch publish...'
                 }
                 if (log.event === 'node:start' && nodeId.includes('downloader')) {
-                    phase = 'downloading'; phaseMessage = 'Downloading videos...'
+                    phase = 'downloading'; phaseMessage = 'Đang tải video...'
                 }
                 if (log.event === 'node:start' && nodeId.includes('publisher')) {
-                    phase = 'publishing'; phaseMessage = 'Publishing...'
+                    phase = 'publishing'; phaseMessage = 'Đang publish...'
+                }
+                if (log.event === 'node:start' && nodeId.includes('monitor')) {
+                    phase = 'monitoring'; phaseMessage = 'Đang theo dõi video mới...'
                 }
                 if (log.event === 'campaign:finished') {
-                    phase = 'finished'; phaseMessage = log.message || ''
+                    phase = 'finished'; phaseMessage = log.message || 'Hoàn tất'
+                }
+                if (log.event === 'campaign:paused') {
+                    phase = 'paused'; phaseMessage = log.message || 'Đã tạm dừng'
                 }
                 if (log.event === 'campaign:error') {
                     phase = 'error'; phaseMessage = log.message || ''
@@ -171,6 +182,7 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                 downloadedCount: videos.filter(v => ['downloaded', 'captioned', 'publishing', 'published', 'verification_incomplete'].includes(v.status)).length,
                 publishedCount: videos.filter(v => ['published', 'verification_incomplete'].includes(v.status)).length,
                 failedCount: videos.filter(v => v.status === 'failed').length,
+                publishFailedCount: videos.filter(v => v.status === 'failed' && v.local_path).length,
                 captchaCount: videos.filter(v => v.status === 'captcha').length,
                 activeVideoId: prev.activeVideoId,
             }))
@@ -273,6 +285,7 @@ function mapDbStatus(dbStatus: string): TikTokVideo['status'] {
     const map: Record<string, TikTokVideo['status']> = {
         queued: 'queued',
         pending: 'queued',
+        scanned: 'scanned',
         processing: 'downloading',
         downloaded: 'downloaded',
         published: 'published',
@@ -528,12 +541,15 @@ function ExecutionLogs({ campaignId }: { campaignId: string }) {
 // ── Main Component ──────────────────────────────────
 
 const PHASE_UI: Record<string, { label: string; icon: string; color: string }> = {
-    idle: { label: 'Ready to Run', icon: '⏸', color: '#6b7280' },
-    scanning: { label: 'Scanning Sources...', icon: '🔍', color: '#8b5cf6' },
-    downloading: { label: 'Downloading Videos...', icon: '⬇️', color: '#3b82f6' },
-    publishing: { label: 'Publishing...', icon: '📤', color: '#10b981' },
-    finished: { label: 'Completed', icon: '✅', color: '#10b981' },
-    error: { label: 'Error', icon: '❌', color: '#ef4444' },
+    idle: { label: 'Sẵn sàng chạy', icon: '⏸', color: '#6b7280' },
+    scanning: { label: 'Đang quét nguồn...', icon: '🔍', color: '#8b5cf6' },
+    scheduling: { label: 'Đang lên lịch...', icon: '📋', color: '#eab308' },
+    downloading: { label: 'Đang tải video...', icon: '⬇️', color: '#3b82f6' },
+    publishing: { label: 'Đang publish...', icon: '📤', color: '#10b981' },
+    monitoring: { label: 'Đang theo dõi video mới...', icon: '👁', color: '#06b6d4' },
+    paused: { label: 'Đã tạm dừng', icon: '⏸', color: '#eab308' },
+    finished: { label: 'Hoàn tất', icon: '✅', color: '#10b981' },
+    error: { label: 'Lỗi', icon: '❌', color: '#ef4444' },
 }
 
 function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetailProps) {
@@ -563,11 +579,11 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
 
             {/* Stats */}
             <div className="flex gap-3 flex-wrap">
-                <StatCard icon="🔍" label="Scanned" value={state.scannedCount} color="#8b5cf6" />
-                <StatCard icon="📋" label="Queued" value={state.queuedCount} color="#eab308" />
-                <StatCard icon="⬇️" label="Downloaded" value={state.downloadedCount} color="#3b82f6" />
-                <StatCard icon="📤" label="Published" value={state.publishedCount} color="#10b981" />
-                {state.failedCount > 0 && <StatCard icon="❌" label="Failed" value={state.failedCount} color="#ef4444" />}
+                <StatCard icon="🔍" label="Đã quét" value={state.scannedCount} color="#8b5cf6" />
+                <StatCard icon="📋" label="Chờ xử lý" value={state.queuedCount} color="#eab308" />
+                <StatCard icon="⬇️" label="Đã tải" value={state.downloadedCount} color="#3b82f6" />
+                <StatCard icon="📤" label="Đã publish" value={state.publishedCount} color="#10b981" />
+                <StatCard icon="💥" label="Publish lỗi" value={state.publishFailedCount} color="#ef4444" />
                 {state.captchaCount > 0 && <StatCard icon="⚠️" label="CAPTCHA" value={state.captchaCount} color="#f97316" />}
             </div>
 

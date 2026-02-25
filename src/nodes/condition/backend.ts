@@ -21,10 +21,10 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
   let result = false
   try {
-    // Safe sandbox: only `data` is accessible, no global access
+    // Safe sandbox: `data` and `params` (campaign input) are accessible
     // eslint-disable-next-line no-new-func
-    const fn = new Function('data', `"use strict"; return Boolean(${expression})`)
-    result = fn(input)
+    const fn = new Function('data', 'params', `"use strict"; return Boolean(${expression})`)
+    result = fn(input, ctx.params)
   } catch (e: any) {
     ctx.logger.error(`[Condition] Expression error: ${e.message}`)
     result = false

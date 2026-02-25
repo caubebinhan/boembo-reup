@@ -12,6 +12,7 @@ interface FlowNodeInfo {
     node_id: string
     instance_id: string
     children?: string[]
+    editable_settings?: any
 }
 
 interface FlowEdge {
@@ -36,6 +37,8 @@ const NODE_META: Record<string, { icon: string; label: string; color: string; de
     'core.campaign_finish': { icon: '🏁', label: 'Finish', color: '#10b981', desc: 'Finish campaign' },
     'core.condition': { icon: '🔀', label: 'Condition', color: '#f97316', desc: 'Branch on expression' },
     'core.notify': { icon: '🔔', label: 'Notify', color: '#a78bfa', desc: 'Send desktop notification' },
+    'core.monitoring': { icon: '👁', label: 'Monitor', color: '#06b6d4', desc: 'Watch for new videos periodically' },
+    'tiktok.account_dedup': { icon: '🔍', label: 'Acc Dedup', color: '#6366f1', desc: 'Check for duplicates on account' },
 }
 
 type NodeStatus = 'idle' | 'running' | 'done' | 'error'
@@ -170,6 +173,9 @@ function NodeCard({
                             }}
                         />
                     )}
+                    {node.editable_settings && (
+                        <span className="ml-auto text-gray-500 text-[10px] opacity-60 hover:opacity-100 transition" title="Configurable">⚙️</span>
+                    )}
                 </div>
 
                 {isTimeout && waitMinutes && <p className="text-[9px] text-gray-400 mt-1 font-medium bg-black/20 rounded px-1.5 py-0.5 inline-block border border-white/5">Wait {waitMinutes} min</p>}
@@ -234,7 +240,7 @@ function LoopBlock({
                 {/* Loop Label on Bottom Border */}
                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-[#0f172a] px-5 py-1.5 rounded-full border border-sky-500/30 font-bold shadow-lg z-20 whitespace-nowrap">
                     <span className={`text-[11px] ${isRunning ? 'animate-spin drop-shadow-[0_0_5px_rgba(56,189,248,0.8)]' : ''}`}>🔁</span>
-                    <span className="text-sky-400 text-[10px] uppercase tracking-[0.2em]">Loop: Per Video</span>
+                    <span className="text-sky-400 text-[10px] uppercase tracking-[0.2em]">Loop{videoCount ? `: ${videoCount} videos` : ': Per Video'}</span>
 
                     {stat.total > 0 && (
                         <div className="flex items-center gap-2 text-[10px] ml-2 border-l border-white/10 pl-2">
