@@ -1,0 +1,87 @@
+# src/flows/presets/tiktok-repost.flow.yaml
+# ─────────────────────────────────────────
+# Workflow: Scan → Schedule → Loop(check → dedup → download → caption → publish) → Finish
+# Notifications are handled by events.ts (no notify nodes needed in YAML)
+
+# ── METADATA ─────────────────────────────
+id: tiktok-repost
+name: TikTok Repost
+description: Scan TikTok channels → Schedule → Download → Edit caption → Publish
+icon: 🔄
+color: "#00f2ea"
+version: "1.0"
+
+# ── NODES ────────────────────────────────
+nodes:
+  - node_id: tiktok.scanner
+    instance_id: scanner_1
+    timeout: 30000
+
+  - node_id: core.video_scheduler
+    instance_id: scheduler_1
+
+  - node_id: core.loop
+    instance_id: video_loop
+    children:
+      - check_time_1
+      - dedup_1
+      - downloader_1
+      - caption_1
+      - account_dedup_1
+      - publisher_1
+
+  - node_id: core.check_in_time
+    instance_id: check_time_1
+
+  - node_id: core.deduplicator
+    instance_id: dedup_1
+
+  - node_id: core.downloader
+    instance_id: downloader_1
+
+  - node_id: core.caption_gen
+    instance_id: caption_1
+
+  - node_id: tiktok.account_dedup
+    instance_id: account_dedup_1
+
+  - node_id: tiktok.publisher
+    instance_id: publisher_1
+    on_error: skip
+
+  # ── After loop finishes ────────────────────────────────────────
+  - node_id: core.condition
+    instance_id: cond_mode_check_1
+    params:
+      expression: "(params.sources || []).some(s => s.timeRange !== 'history_only') && !(params.sources || []).every(s => s.timeRange === 'custom_range' && s.endDate)"
+
+  - node_id: core.monitoring
+    instance_id: monitor_1
+
+  - node_id: core.campaign_finish
+    instance_id: finish_1
+
+# ── EDGES ────────────────────────────────
+edges:
+  - from: scanner_1
+    to: scheduler_1
+  - from: scheduler_1
+    to: video_loop
+
+  # After loop → check mode
+  - from: video_loop
+    to: cond_mode_check_1
+
+  # Mode check true → monitoring
+  - from: cond_mode_check_1
+    to: monitor_1
+    when: "branch === 'true'"
+
+  # Mode check false → finish
+  - from: cond_mode_check_1
+    to: finish_1
+    when: "branch === 'false'"
+
+  # If new videos found → scheduler
+  - from: monitor_1
+    to: scheduler_1

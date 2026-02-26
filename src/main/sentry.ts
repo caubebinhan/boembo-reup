@@ -1,10 +1,10 @@
 type ScopeLike = {
-  setTag?: (key: string, value: string) => void
-  setExtra?: (key: string, value: any) => void
-  setContext?: (key: string, context: any) => void
-  setLevel?: (level: string) => void
-  setFingerprint?: (fingerprint: string[]) => void
-  addAttachment?: (attachment: any) => void
+  setTag: (key: string, value: string) => void
+  setExtra: (key: string, value: any) => void
+  setContext: (key: string, context: any) => void
+  setLevel: (level: string) => void
+  setFingerprint: (fingerprint: string[]) => void
+  addAttachment: (attachment: any) => void
 }
 
 type SentryMainLike = {

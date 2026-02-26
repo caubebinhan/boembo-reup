@@ -1,5 +1,5 @@
-import { ipcMain, BrowserWindow } from 'electron'
-import { IPC_CHANNELS } from '../../shared/ipc-types'
+﻿import { ipcMain, BrowserWindow } from 'electron'
+import { IPC_CHANNELS } from '@shared/ipc-types'
 
 export function setupScannerIPC() {
   ipcMain.handle(IPC_CHANNELS.SCANNER_OPEN_WINDOW, async (event) => {

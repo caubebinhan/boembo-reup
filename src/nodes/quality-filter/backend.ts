@@ -1,4 +1,4 @@
-import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
+﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const videos = Array.isArray(input) ? input : (input.videos || [])

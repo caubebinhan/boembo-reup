@@ -1,13 +1,18 @@
-import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
-import { TikTokScanner } from '../../main/tiktok/TikTokScanner'
+import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { TikTokScanner } from '@main/tiktok/TikTokScanner'
+import { accountRepo } from '@main/db/repositories/AccountRepo'
 
 export async function execute(_input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const sources = ctx.params.sources || []
 
-  // Note: max_videos / sort_order are NOT in the wizard — per-source settings are used instead.
-  // Kept as global fallbacks only for backward compatibility.
-  const globalMaxVideos = ctx.params.max_videos ?? 50
-  const globalSortOrder = ctx.params.sort_order ?? 'newest'
+  // Resolve cookies for the campaign's publish account
+  const accountId = ctx.params.account_id || ''
+  const accounts = accountRepo.findAll() as any[]
+  const account = accountId ? accounts.find(a => a.id === accountId) : accounts[0]
+  const cookies = account?.cookies || []
+  if (cookies.length > 0) {
+    ctx.logger.info(`[Scanner] Using ${cookies.length} cookies from account @${account?.username}`)
+  }
 
   const scanner = new TikTokScanner()
   const allVideos: any[] = []
@@ -15,33 +20,23 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
   for (const source of sources) {
     if (!source) continue
 
-    // Use per-source settings from Step2_Sources wizard (historyLimit, sortOrder, timeRange)
-    const limit = source.historyLimit ?? globalMaxVideos
-    const sortOrder = source.sortOrder ?? globalSortOrder
+    // Use per-source settings from Step2_Sources wizard
+    const limit = source.historyLimit ?? 50
+    const sortOrder = source.sortOrder ?? 'newest'
     const timeRange = source.timeRange ?? 'history_and_future'
 
-    ctx.onProgress(`Scanning ${source.type}: ${source.name} (limit=${limit}, sort=${sortOrder}, range=${timeRange})`)
+    ctx.onProgress(`Scanning ${source.type}: ${source.name} (limit=${limit})`)
     ctx.logger.info(`[Scanner] source="${source.name}" type=${source.type} limit=${limit} sort=${sortOrder} timeRange=${timeRange}`)
 
     try {
       let result: any = { videos: [] }
 
+      const scanOpts = { limit, sortOrder, timeRange, startDate: source.startDate, endDate: source.endDate, cookies }
+
       if (source.type === 'channel') {
-        result = await scanner.scanProfile(source.name, {
-          limit,
-          sortOrder,
-          timeRange,
-          startDate: source.startDate,
-          endDate: source.endDate,
-        })
+        result = await scanner.scanProfile(source.name, scanOpts)
       } else {
-        result = await scanner.scanKeyword(source.name, {
-          limit,
-          sortOrder,
-          timeRange,
-          startDate: source.startDate,
-          endDate: source.endDate,
-        })
+        result = await scanner.scanKeyword(source.name, scanOpts)
       }
 
       const mapped = (result.videos || []).map((v: any) => ({
@@ -51,13 +46,13 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
         description: v.description || '',
         author: v.author || source.name,
         author_id: v.author_id || '',
-        thumbnail: v.thumbnail || '',
+        thumbnail: typeof v.thumbnail === 'string' ? v.thumbnail : '',
         duration_seconds: v.duration_seconds || 0,
         stats: v.stats || {},
         tags: v.tags || [],
         created_at: v.created_at || Date.now(),
         download_url: v.download_url || '',
-        source_meta: { source_type: source.type, source_name: source.name }
+        source_meta: { source_type: source.type, source_name: source.name },
       }))
 
       allVideos.push(...mapped)
@@ -66,18 +61,24 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     }
   }
 
-  // Sort all results by the first source's sortOrder (or global fallback)
-  const primarySort = sources[0]?.sortOrder ?? globalSortOrder
-  allVideos.sort((a, b) => {
-    if (primarySort === 'newest') return (b.created_at || 0) - (a.created_at || 0)
-    if (primarySort === 'oldest') return (a.created_at || 0) - (b.created_at || 0)
-    if (primarySort === 'most_liked') return (b.stats?.likes || 0) - (a.stats?.likes || 0)
-    if (primarySort === 'most_viewed') return (b.stats?.views || 0) - (a.stats?.views || 0)
-    return 0
-  })
+  // Download thumbnails locally (non-blocking, parallel batches of 5)
+  if (allVideos.length > 0) {
+    ctx.onProgress(`📥 Downloading ${allVideos.length} thumbnails...`)
+    const BATCH = 5
+    for (let i = 0; i < allVideos.length; i += BATCH) {
+      const batch = allVideos.slice(i, i + BATCH)
+      const results = await Promise.allSettled(
+        batch.map(v => scanner.downloadThumbnail(v.thumbnail, v.platform_id))
+      )
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled' && r.value) {
+          batch[idx].local_thumbnail = r.value
+        }
+      })
+    }
+  }
 
   ctx.logger.info(`Scanner found ${allVideos.length} videos from ${sources.length} sources`)
   ctx.onProgress(`🔍 Scanned ${allVideos.length} videos`)
   return { data: allVideos }
 }
-

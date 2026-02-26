@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, BrowserWindow, protocol, net } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -21,6 +21,11 @@ import '../nodes'
 // Importing the workflows barrel triggers auto-discovery of all workflow modules
 // (recovery, ipc, services, events) — no manual imports needed.
 import '../workflows'
+
+// Register local-thumb:// scheme before app is ready (required by Electron)
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'local-thumb', privileges: { secure: true, standard: true, stream: true } },
+])
 
 // Sentry
 if (!app.isPackaged || process.env.NODE_ENV === 'development') {
@@ -87,6 +92,14 @@ app.whenReady().then(() => {
   setupWizardIPC()
   setupSettingsIPC()
   setupTroubleshootingIPC()
+  // Register local-thumb:// protocol to serve local thumbnail files
+  // Bypassing file:// which is blocked by Electron's webSecurity
+  protocol.handle('local-thumb', async (request) => {
+    const filePath = decodeURIComponent(request.url.slice('local-thumb://'.length))
+    try { return await net.fetch(`file:///${filePath.replace(/\\/g, '/')}`) }
+    catch { return new Response('not found', { status: 404 }) }
+  })
+
   createWindow()
 
   app.on('activate', function () {

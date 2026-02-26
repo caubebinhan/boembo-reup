@@ -1,5 +1,6 @@
-import { db } from '../db/Database'
-import { PipelineEventBus } from '../../core/engine/PipelineEventBus'
+﻿import { jobRepo } from '../db/repositories/JobRepo'
+import { campaignRepo } from '../db/repositories/CampaignRepo'
+import { PipelineEventBus } from '@core/engine/PipelineEventBus'
 
 /**
  * Crash Recovery Service — orchestrator.
@@ -11,10 +12,6 @@ import { PipelineEventBus } from '../../core/engine/PipelineEventBus'
 export class CrashRecoveryService {
   private static recoveryModules = new Map<string, { recover: (campaignId: string) => void }>()
 
-  /**
-   * Register a recovery handler for a workflow ID.
-   * Called by the auto-discovery import in main/index.ts
-   */
   static registerRecovery(workflowId: string, handler: { recover: (campaignId: string) => void }) {
     this.recoveryModules.set(workflowId, handler)
     console.log(`[CrashRecovery] Registered recovery for workflow: ${workflowId}`)
@@ -23,24 +20,21 @@ export class CrashRecoveryService {
   static recoverPendingTasks() {
     console.log('Scanning for pending/interrupted tasks for crash recovery...')
     try {
-      // ── Step 1: Generic — reset stuck 'running' jobs ──────────
-      const runningJobs = db.prepare(`SELECT * FROM jobs WHERE status = 'running'`).all() as any[]
-      if (runningJobs.length > 0) {
-        console.log(`[CrashRecovery] Resetting ${runningJobs.length} stuck running jobs → pending`)
-        for (const job of runningJobs) {
-          db.prepare(`UPDATE jobs SET status = 'pending' WHERE id = ?`).run(job.id)
+      // Step 1: Reset stuck 'running' jobs
+      const resetJobs = jobRepo.resetRunningJobs()
+      if (resetJobs.length > 0) {
+        console.log(`[CrashRecovery] Reset ${resetJobs.length} stuck running jobs → pending`)
+        for (const job of resetJobs) {
           PipelineEventBus.emit('pipeline:info', {
-            message: `Recovered job ${job.id} to "pending" status after crash`
+            message: `Recovered job ${job.id} to "pending" status after crash`,
           })
         }
       } else {
         console.log('[CrashRecovery] No stuck running jobs found.')
       }
 
-      // ── Step 2: Per-workflow recovery ─────────────────────────
-      const activeCampaigns = db.prepare(
-        `SELECT id, workflow_id FROM campaigns WHERE status = 'active'`
-      ).all() as any[]
+      // Step 2: Per-workflow recovery for active campaigns
+      const activeCampaigns = campaignRepo.findByStatus('active')
 
       for (const campaign of activeCampaigns) {
         const handler = this.recoveryModules.get(campaign.workflow_id)
@@ -52,11 +46,8 @@ export class CrashRecoveryService {
             console.error(`[CrashRecovery] ${campaign.workflow_id} recovery failed for ${campaign.id}:`, err)
           }
         } else {
-          // Fallback: just re-trigger if no pending jobs
-          const pendingCount = (db.prepare(
-            `SELECT COUNT(*) as cnt FROM jobs WHERE campaign_id = ? AND status IN ('pending', 'running')`
-          ).get(campaign.id) as any)?.cnt ?? 0
-
+          // Fallback: re-trigger if no pending jobs
+          const pendingCount = jobRepo.countPendingForCampaign(campaign.id)
           if (pendingCount === 0) {
             console.log(`[CrashRecovery] No handler for ${campaign.workflow_id}, re-triggering campaign ${campaign.id}`)
             const { flowEngine } = require('../../core/engine/FlowEngine')

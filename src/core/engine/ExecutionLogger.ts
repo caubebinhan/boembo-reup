@@ -1,5 +1,6 @@
-import { db } from '../../main/db/Database'
+import { db } from '@main/db/Database'
 import { BrowserWindow } from 'electron'
+import { EventEmitter } from 'events'
 
 export interface LogEntry {
   campaign_id: string
@@ -16,8 +17,13 @@ export interface LogEntry {
  * Centralized execution logger: writes to console + SQLite + IPC  
  * Every node execution, event, and error goes through here.
  */
+/** Internal EventEmitter for main-process listeners (e.g. workflow events.ts) */
+const _bus = new EventEmitter()
+_bus.setMaxListeners(50)
+
 export class ExecutionLogger {
-  private static emitToUI(event: string, payload: any) {
+  /** Emit to all renderer windows via IPC */
+  static emitToRenderer(event: string, payload: any) {
     try {
       BrowserWindow.getAllWindows().forEach(w => {
         if (!w.isDestroyed()) {
@@ -26,6 +32,7 @@ export class ExecutionLogger {
       })
     } catch (_) { /* window may not exist */ }
   }
+  private static emitToUI(event: string, payload: any) { this.emitToRenderer(event, payload) }
 
   /** Log a structured entry */
   static log(entry: LogEntry) {
@@ -111,6 +118,13 @@ export class ExecutionLogger {
     this.emitToUI('node:status', {
       campaignId, instanceId, nodeId, status: 'failed', jobId, error
     })
+    // Push error toast to UI
+    this.sendToast('error', `❌ ${instanceId}`, error)
+  }
+
+  /** Push a toast notification to the renderer UI */
+  static sendToast(type: 'info' | 'success' | 'warning' | 'error', message: string, description?: string) {
+    this.emitToRenderer('app:toast', { type, message, description })
   }
 
   static nodeProgress(campaignId: string, jobId: string, instanceId: string, nodeId: string, message: string) {
@@ -130,17 +144,30 @@ export class ExecutionLogger {
       level: 'info', event,
       message, data
     })
-    this.emitToUI(event, { campaignId, ...data })
+    const payload = { campaignId, ...data }
+    this.emitToUI(event, payload)
+    _bus.emit(event, payload)
   }
 
   /** Emit a structured node event (captcha, violation, video:active, etc.) */
   static emitNodeEvent(campaignId: string, instanceId: string, event: string, data?: any) {
-    this.emitToUI('node:event', { campaignId, instanceId, event, data, timestamp: Date.now() })
+    const payload = { campaignId, instanceId, event, data, timestamp: Date.now() }
+    this.emitToUI('node:event', payload)
+    _bus.emit('node:event', payload)
     this.log({
       campaign_id: campaignId, instance_id: instanceId,
       level: 'info', event: `node:event:${event}`,
       message: event, data
     })
+  }
+
+  /** Subscribe to internal main-process events (for workflow events.ts modules) */
+  static on(event: string, handler: (...args: any[]) => void) {
+    _bus.on(event, handler)
+  }
+
+  static off(event: string, handler: (...args: any[]) => void) {
+    _bus.off(event, handler)
   }
 
   /** Get logs from DB for a campaign */

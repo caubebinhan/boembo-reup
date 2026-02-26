@@ -19,6 +19,18 @@
       ],
       "@workflows/*": [
         "src/workflows/*"
+      ],
+      "@main/*": [
+        "src/main/*"
+      ],
+      "@core/*": [
+        "src/core/*"
+      ],
+      "@nodes/*": [
+        "src/nodes/*"
+      ],
+      "@shared/*": [
+        "src/shared/*"
       ]
     }
   }

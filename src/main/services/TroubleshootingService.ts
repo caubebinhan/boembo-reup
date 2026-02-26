@@ -1,4 +1,4 @@
-import { db } from '../db/Database'
+import { settingsRepo } from '../db/repositories/SettingsRepo'
 import { runFullPublishE2ETest, runPublishTest, TroubleshootingRunResult } from '../tiktok/publisher/test-publish'
 
 export type TroubleshootingCaseId =
@@ -34,26 +34,14 @@ const MAX_RUNS = 50
 const MAX_LOG_LINES_PER_RUN = 1000
 const MAX_LINE_LENGTH = 1000
 
-function safeParse<T>(raw?: string | null, fallback?: T): T {
-  try { return raw ? JSON.parse(raw) : (fallback as T) } catch { return fallback as T }
-}
-
 function loadRuns(): TroubleshootingRunRecord[] {
-  try {
-    const row = db.prepare('SELECT value_json FROM app_settings WHERE key = ?').get(RUNS_KEY) as any
-    return Array.isArray(safeParse(row?.value_json, [])) ? safeParse(row?.value_json, []) : []
-  } catch {
-    return []
-  }
+  const data = settingsRepo.get<TroubleshootingRunRecord[]>(RUNS_KEY, [])
+  return Array.isArray(data) ? data : []
 }
 
 function saveRuns(runs: TroubleshootingRunRecord[]) {
   try {
-    db.prepare(`
-      INSERT INTO app_settings (key, value_json, updated_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-    `).run(RUNS_KEY, JSON.stringify(runs.slice(0, MAX_RUNS)), Date.now())
+    settingsRepo.set(RUNS_KEY, runs.slice(0, MAX_RUNS))
   } catch (err) {
     console.error('[TroubleshootingService] Failed to persist runs', err)
   }
@@ -124,12 +112,8 @@ export class TroubleshootingService {
 
     const runId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const record: TroubleshootingRunRecord = {
-      id: runId,
-      caseId,
-      title: def.title,
-      status: 'running',
-      startedAt: Date.now(),
-      logs: [],
+      id: runId, caseId, title: def.title,
+      status: 'running', startedAt: Date.now(), logs: [],
     }
     this.running.add(caseId)
     this.upsertRun(record)
@@ -183,4 +167,3 @@ export class TroubleshootingService {
     saveRuns(runs)
   }
 }
-

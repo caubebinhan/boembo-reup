@@ -1,4 +1,4 @@
-import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
+﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 
 export async function execute(_input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const localFiles = ctx.params.local_files || []

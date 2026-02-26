@@ -1,4 +1,4 @@
-import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
+﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 
 /**
  * Condition Node
@@ -21,10 +21,12 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
   let result = false
   try {
-    // Safe sandbox: `data` and `params` (campaign input) are accessible
-    // eslint-disable-next-line no-new-func
-    const fn = new Function('data', 'params', `"use strict"; return Boolean(${expression})`)
-    result = fn(input, ctx.params)
+    const safeData = typeof input === 'object' && input !== null ? input : {}
+    // Spread data keys as named args — same as safeEval() in FlowEngine.
+    // This lets flow.yaml write `status === 'violation'` instead of `data.status === 'violation'`.
+    const fn = new Function(...Object.keys(safeData), 'params',
+      `"use strict"; return Boolean(${expression})`)
+    result = fn(...Object.values(safeData), ctx.params)
   } catch (e: any) {
     ctx.logger.error(`[Condition] Expression error: ${e.message}`)
     result = false

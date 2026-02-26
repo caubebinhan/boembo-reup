@@ -4,6 +4,7 @@ import { store } from './store/store'
 import { upsertTask } from './store/pipelineSlice'
 import { setInteractionWaiting, clearInteraction } from './store/interactionSlice'
 import { updateNodeStatus, updateNodeProgress } from './store/nodeEventsSlice'
+import { Toaster, toast } from 'sonner'
 
 import { CampaignList } from './components/CampaignList'
 import { CampaignDetail } from './components/CampaignDetail'
@@ -138,10 +139,22 @@ function AppContent() {
       // Campaign status updates will be picked up by polling
     })
 
+    // Toast notifications from main process
+    // @ts-ignore
+    const offToast = window.api.on('app:toast', (payload: any) => {
+      const type = payload.type || 'info'
+      const msg = payload.message || ''
+      const desc = payload.description || undefined
+      if (type === 'error') toast.error(msg, { description: desc })
+      else if (type === 'success') toast.success(msg, { description: desc })
+      else if (type === 'warning') toast.warning(msg, { description: desc })
+      else toast.info(msg, { description: desc })
+    })
+
     return () => {
       offUpdate(); offWaiting(); offResolved()
       offCampaignCreated(); offNodeStatus(); offNodeProgress()
-      offCampaignFinished()
+      offCampaignFinished(); offToast()
     }
   }, [dispatch])
 
@@ -166,6 +179,20 @@ function AppContent() {
 
   return (
     <div className="flex w-full h-screen bg-gray-900 overflow-hidden">
+      <Toaster
+        theme="dark"
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: '#1e293b',
+            border: '1px solid #334155',
+            color: '#f1f5f9',
+            fontSize: '13px',
+          },
+        }}
+        richColors
+        closeButton
+      />
       {selectedCampaignId ? (
         <CampaignDetail
           campaignId={selectedCampaignId}
@@ -173,38 +200,28 @@ function AppContent() {
         />
       ) : (
         <div className="flex-1 flex flex-col min-w-0 bg-gray-900">
-          <div className="px-6 pt-4 pb-2 border-b border-gray-800 bg-gray-900/95">
-            <div className="inline-flex rounded-xl border border-gray-800 bg-gray-950 p-1">
-              <button
-                onClick={() => setHomeTab('campaigns')}
-                className={`px-3 py-1.5 rounded-lg text-sm transition ${
-                  homeTab === 'campaigns'
-                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Campaigns
-              </button>
-              <button
-                onClick={() => setHomeTab('settings')}
-                className={`px-3 py-1.5 rounded-lg text-sm transition ${
-                  homeTab === 'settings'
-                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                Settings
-              </button>
-              <button
-                onClick={() => setHomeTab('troubleshooting')}
-                className={`px-3 py-1.5 rounded-lg text-sm transition ${
-                  homeTab === 'troubleshooting'
-                    ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                TroubleShotting
-              </button>
+          <div className="px-6 pt-4 pb-2 border-b border-gray-800/60 bg-gradient-to-b from-gray-900 to-gray-900/95">
+            <div className="inline-flex rounded-xl border border-gray-800 bg-gray-950/80 p-1 backdrop-blur-sm">
+              {(['campaigns', 'settings', 'troubleshooting'] as const).map(tab => {
+                const labels = { campaigns: '📋 Campaigns', settings: '⚙️ Settings', troubleshooting: '🔧 Debug' }
+                const active = homeTab === tab
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setHomeTab(tab)}
+                    className={`relative px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      active
+                        ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shadow-sm shadow-cyan-500/10'
+                        : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
+                    }`}
+                  >
+                    {labels[tab]}
+                    {active && (
+                      <span className="absolute -bottom-[5px] left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-cyan-400" />
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
           <div className="flex-1 min-h-0">

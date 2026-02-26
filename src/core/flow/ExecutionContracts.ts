@@ -13,6 +13,8 @@ export interface FlowDefinition {
 export interface FlowNodeDefinition {
   node_id: string
   instance_id: string
+  /** Inline node-level params from flow.yaml — merged into NodeExecutionContext.params by the engine */
+  params?: Record<string, any>
   /** Only for loop nodes — which children to iterate */
   children?: string[]
   /** Per-node error handling: skip (default) | stop_campaign | retry */

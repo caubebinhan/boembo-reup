@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { WizardSessionData, IPC_CHANNELS } from '../../../shared/ipc-types'
+import { WizardSessionData, IPC_CHANNELS } from '@shared/ipc-types'
 
 export function useWizardStep<T>(stepKey: string) {
   const params = new URLSearchParams(window.location.hash.split('?')[1])

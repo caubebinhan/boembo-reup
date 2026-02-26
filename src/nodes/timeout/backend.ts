@@ -1,4 +1,4 @@
-import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
+﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 
 // Default matches wizard default (Step1_Details / Step4_Schedule both default to 60)
 const DEFAULT_GAP_MINUTES = 60

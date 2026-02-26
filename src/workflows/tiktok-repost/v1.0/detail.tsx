@@ -12,35 +12,14 @@ import { useState, useEffect, useCallback } from 'react'
 import { PipelineVisualizer } from '@renderer/detail/shared/PipelineVisualizer'
 import type { WorkflowDetailProps } from '@renderer/detail/WorkflowDetailRegistry'
 
-const tryParse = (str: string) => {
-    try { return JSON.parse(str) } catch { return {} }
-}
-
 const fmt = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
     if (num >= 1000) return (num / 1000).toFixed(1) + 'K'
     return num.toString()
 }
 
-const pickThumbnail = (meta: any): string => {
-    if (!meta || typeof meta !== 'object') return ''
-    return (
-        meta.thumbnail ||
-        meta.thumb ||
-        meta.cover ||
-        meta.origin_cover ||
-        meta.cover_url ||
-        meta.coverUrl ||
-        meta.image ||
-        meta.poster ||
-        meta.video?.cover ||
-        meta.video?.cover_url ||
-        meta.video?.origin_cover ||
-        meta.aweme_detail?.video?.cover?.url_list?.[0] ||
-        meta.aweme_detail?.video?.origin_cover?.url_list?.[0] ||
-        meta.imagePost?.cover?.urlList?.[0] ||
-        ''
-    )
+const parseVideoMeta = (raw: any) => {
+    return raw && typeof raw === 'object' ? raw : {}
 }
 
 // ── TikTok Repost State ──────────────────────────────
@@ -148,14 +127,22 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
 
             // Build video list from DB
             const videos: TikTokVideo[] = dbVideos.map((v: any) => {
-                const meta = v.data_json ? tryParse(v.data_json) : {}
+                const meta = parseVideoMeta(v.data)
                 return {
                     platform_id: v.platform_id,
                     description: meta?.description || '',
                     author: meta?.author || '',
-                    thumbnail: pickThumbnail(meta),
+                    thumbnail: (() => {
+                        const local = meta?.local_thumbnail
+                        if (local) {
+                            // Encode Windows backslashes → forward slashes for URL
+                            return `local-thumb://${encodeURIComponent(local.replace(/\\/g, '/'))}`
+                        }
+                        return typeof meta?.thumbnail === 'string' ? meta.thumbnail : ''
+                    })(),
                     stats: meta?.stats,
                     local_path: v.local_path,
+                    // Prefer generated_caption (post-template transform), fall back to original description
                     caption: meta?.generated_caption || meta?.description || '',
                     published_url: v.publish_url,
                     status: mapDbStatus(v.status),
@@ -164,6 +151,7 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                     queueIndex: v.queue_index ?? undefined,
                 }
             })
+
 
             setState(prev => ({
                 phase,
@@ -374,7 +362,8 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
 
                 <div className="flex items-start gap-4">
                     {video.thumbnail ? (
-                        <img src={video.thumbnail} alt="" className="w-16 h-16 rounded-lg object-cover flex-shrink-0 bg-gray-800" />
+                        <img src={video.thumbnail} alt="" className="w-16 h-16 rounded-lg object-cover flex-shrink-0 bg-gray-800"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                     ) : (
                         <div className="w-16 h-16 rounded-lg bg-gray-800 flex items-center justify-center text-2xl flex-shrink-0">🎬</div>
                     )}
@@ -477,7 +466,7 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     )
 }
 
@@ -554,10 +543,7 @@ const PHASE_UI: Record<string, { label: string; icon: string; color: string }> =
 
 function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetailProps) {
     const state = useTikTokRepostState(campaignId)
-    const config = (() => {
-        try { return typeof campaign?.params === 'string' ? JSON.parse(campaign.params) : (campaign?.params || {}) }
-        catch { return {} }
-    })()
+    const config = campaign?.params || {}
 
     const sources = config.sources || []
     const gapMinutes = config.intervalMinutes

@@ -1,19 +1,18 @@
-import { nodeRegistry } from '../nodes/NodeRegistry'
-import { JobQueue, JobRecord } from '../../main/db/JobQueue'
-import { db } from '../../main/db/Database'
+﻿import { nodeRegistry } from '../nodes/NodeRegistry'
+import { jobRepo } from '@main/db/repositories/JobRepo'
+import { campaignRepo, CampaignStore } from '@main/db/repositories/CampaignRepo'
+import { FlowResolver } from '../flow/FlowResolver'
 import { flowLoader } from '../flow/FlowLoader'
 import { ExecutionLogger } from './ExecutionLogger'
 import { FlowDefinition, FlowNodeDefinition } from '../flow/ExecutionContracts'
+import type { JobDocument } from '@main/db/models/Job'
 
-/**
- * Safely evaluate a conditional edge expression against data.
- * Only top-level keys of `data` are exposed as variables.
- * Returns false on any error.
- */
+// ── DRY Helpers ─────────────────────────────────────
+
+/** Safely evaluate a conditional edge expression against data. */
 function safeEval(expression: string, data: any): boolean {
   try {
     const safeData = typeof data === 'object' && data !== null ? data : {}
-    // eslint-disable-next-line no-new-func
     const fn = new Function(...Object.keys(safeData), `"use strict"; return Boolean(${expression})`)
     return fn(...Object.values(safeData))
   } catch {
@@ -21,6 +20,137 @@ function safeEval(expression: string, data: any): boolean {
   }
 }
 
+/** Find a node definition in a flow by instance_id. */
+function findNode(flow: FlowDefinition, instanceId: string): FlowNodeDefinition | undefined {
+  return flow.nodes.find(n => n.instance_id === instanceId)
+}
+
+/** Resolve outgoing edges from a node, filtering by optional `when` conditions. */
+function resolveNextEdges(flow: FlowDefinition, fromInstanceId: string, data: any): FlowNodeDefinition[] {
+  return flow.edges
+    .filter(e => e.from === fromInstanceId && (!e.when || safeEval(e.when, data)))
+    .map(e => findNode(flow, e.to))
+    .filter(Boolean) as FlowNodeDefinition[]
+}
+
+/** Check if campaign is still runnable (not paused/cancelled). */
+function isCampaignActive(campaignId: string): boolean {
+  const store = campaignRepo.tryOpen(campaignId)
+  if (!store) return false
+  return store.status !== 'paused' && store.status !== 'cancelled'
+}
+
+/**
+ * Match a node error against YAML-declared events.
+ * Event keys use colon format: 'captcha:detected', 'violation:detected', etc.
+ * Match by checking if the error message contains all parts of the event key.
+ * E.g. error "CAPTCHA detected" matches key "captcha:detected".
+ */
+function matchNodeEvent(nodeDef: FlowNodeDefinition, errorMsg: string): { eventKey: string; handler: { action: string; emit?: string } } | null {
+  if (!nodeDef.events || !errorMsg) return null
+  const lower = errorMsg.toLowerCase()
+  for (const [key, handler] of Object.entries(nodeDef.events)) {
+    // Split key "captcha:detected" → ["captcha", "detected"] and check each part
+    const parts = key.toLowerCase().split(':')
+    if (parts.every(p => lower.includes(p))) {
+      return { eventKey: key, handler }
+    }
+  }
+  return null
+}
+
+/** Find start nodes (no incoming edges, not loop children). */
+function findStartNodes(flow: FlowDefinition): FlowNodeDefinition[] {
+  const targets = new Set(flow.edges.map(e => e.to))
+  const loopChildren = new Set<string>()
+  for (const node of flow.nodes) {
+    if (node.children) {
+      for (const childId of node.children) loopChildren.add(childId)
+    }
+  }
+  return flow.nodes.filter(n => !targets.has(n.instance_id) && !loopChildren.has(n.instance_id))
+}
+
+/** Build a node execution context.
+ * `campaignParams` = wizard config (sources, intervalMinutes, etc.)
+ * `nodeParams`     = inline params from flow.yaml for this specific node (title, body, expression, etc.)
+ * Node params take precedence over campaign params.
+ */
+function buildNodeContext(
+  job: JobDocument,
+  nodeDef: FlowNodeDefinition,
+  campaignParams: Record<string, any>,
+  store: CampaignStore
+) {
+  // Merge: node-level params override campaign params so that
+  // core.notify gets its title/body/sound from flow.yaml
+  const params = { ...campaignParams, ...(nodeDef.params || {}) }
+  return {
+    campaign_id: job.campaign_id,
+    job_id: job.id,
+    params,
+    store,
+    logger: {
+      info: (msg: string) => ExecutionLogger.log({
+        campaign_id: job.campaign_id, job_id: job.id,
+        instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
+        level: 'info', event: 'node:log', message: msg,
+      }),
+      error: (msg: string, err?: any) => ExecutionLogger.log({
+        campaign_id: job.campaign_id, job_id: job.id,
+        instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
+        level: 'error', event: 'node:log', message: msg,
+        data: { error: err?.message || String(err) },
+      }),
+    },
+    onProgress: (msg: string) => {
+      ExecutionLogger.nodeProgress(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id, msg)
+    },
+    alert: (level: string, title: string, body?: string) => {
+      store.addAlert({ instance_id: nodeDef.instance_id, node_id: nodeDef.node_id, level: level as any, title, body })
+      store.save()
+      ExecutionLogger.emitToRenderer('campaign:alert', {
+        campaign_id: job.campaign_id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
+        level, title, body, created_at: Date.now(),
+      })
+    },
+  }
+}
+
+/** Execute a node with optional timeout. */
+async function executeWithTimeout(NodeImpl: any, inputData: any, ctx: any, nodeDef: FlowNodeDefinition, job: JobDocument) {
+  const resultPromise = NodeImpl.execute(inputData, ctx)
+  if (typeof nodeDef.timeout === 'number') {
+    ExecutionLogger.log({
+      campaign_id: job.campaign_id, job_id: job.id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
+      level: 'info', event: 'node:timeout_set', message: `Setting timeout of ${nodeDef.timeout}ms`,
+    })
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Node timeout exceeded (${nodeDef.timeout}ms)`)), nodeDef.timeout)
+    )
+    return Promise.race([resultPromise, timeoutPromise])
+  }
+  return resultPromise
+}
+
+// ── FlowEngine ──────────────────────────────────────
+
+/**
+ * Core FlowEngine — a dumb executor.
+ *
+ * Responsibilities:
+ *   - Poll pending jobs
+ *   - Resolve flow definition
+ *   - Execute node implementations
+ *   - Follow edges based on result
+ *   - Handle loop nodes (iterate children over input array)
+ *
+ * Does NOT know about:
+ *   - Video records, sorting, scheduling
+ *   - Download/publish counting
+ *   - CAPTCHA or any workflow-specific error handling
+ *   - Any domain concept — nodes handle their own logic via ctx.store
+ */
 export class FlowEngine {
   private isRunning = false
   private pollInterval: NodeJS.Timeout | null = null
@@ -40,240 +170,167 @@ export class FlowEngine {
 
   // ── Trigger Campaign ─────────────────────────────
   public triggerCampaign(campaignId: string) {
-    const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(campaignId) as any
-    if (!campaign) return console.error(`[FlowEngine] Campaign ${campaignId} not found`)
+    const store = campaignRepo.tryOpen(campaignId)
+    if (!store) return console.error(`[FlowEngine] Campaign ${campaignId} not found`)
 
-    const flow = flowLoader.get(campaign.workflow_id) as FlowDefinition | undefined
-    if (!flow) return console.error(`[FlowEngine] Flow ${campaign.workflow_id} not found`)
+    const flow = FlowResolver.resolve(campaignId) || flowLoader.get(store.doc.workflow_id)
+    if (!flow) return console.error(`[FlowEngine] Flow ${store.doc.workflow_id} not found`)
 
-    db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('active', campaignId)
+    store.status = 'active'
+    store.save()
     ExecutionLogger.campaignEvent(campaignId, 'campaign:triggered', 'Campaign triggered')
 
-    // Find start nodes (no incoming edges)
-    const targets = new Set(flow.edges.map(e => e.to))
-    // Exclude: nodes that are edge targets, AND nodes that are children of loop nodes
-    const loopChildren = new Set<string>()
-    for (const node of flow.nodes) {
-      if (node.children) {
-        for (const childId of node.children) loopChildren.add(childId)
-      }
-    }
-    const startNodes = flow.nodes.filter(n => !targets.has(n.instance_id) && !loopChildren.has(n.instance_id))
-
-    console.log(`[FlowEngine] Registered nodes: ${nodeRegistry.getAll().map(n => n.manifest.id).join(', ')}`)
+    const startNodes = findStartNodes(flow)
     console.log(`[FlowEngine] Start nodes: ${startNodes.map(n => n.instance_id).join(', ')}`)
 
     for (const node of startNodes) {
-      this.createJob(campaignId, campaign.workflow_id, node.instance_id, node.node_id, {})
+      this.createJob(campaignId, store.doc.workflow_id, node.instance_id, node.node_id, {})
     }
   }
 
   public pauseCampaign(campaignId: string) {
-    db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('paused', campaignId)
+    campaignRepo.updateStatus(campaignId, 'paused')
     ExecutionLogger.campaignEvent(campaignId, 'campaign:paused', 'Campaign paused')
   }
 
   public resumeCampaign(campaignId: string) {
-    db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('active', campaignId)
+    campaignRepo.updateStatus(campaignId, 'active')
     ExecutionLogger.campaignEvent(campaignId, 'campaign:resumed', 'Campaign resumed')
 
-    // Re-trigger: check if there are any pending/running jobs already.
-    // If none exist, the loop ended or was interrupted — re-trigger from start.
-    // Deduplicator will skip already-processed videos, so this is safe to re-run.
-    const existingJobs = db.prepare(
-      `SELECT COUNT(*) as cnt FROM jobs WHERE campaign_id = ? AND status IN ('pending', 'running')`
-    ).get(campaignId) as any
-
-    if (!existingJobs || existingJobs.cnt === 0) {
+    const pendingCount = jobRepo.countPendingForCampaign(campaignId)
+    if (pendingCount === 0) {
       ExecutionLogger.campaignEvent(campaignId, 'campaign:retriggered',
-        'No pending jobs found after resume — re-triggering campaign from start')
+        'No pending jobs — re-triggering')
       this.triggerCampaign(campaignId)
     }
   }
 
   // ── Tick ─────────────────────────────────────────
   private async tick() {
-    const jobs = JobQueue.getPendingJobs(5)
+    const jobs = jobRepo.findPending(5)
     for (const job of jobs) {
       await this.executeJob(job)
     }
   }
 
   // ── Execute Job ──────────────────────────────────
-  private async executeJob(job: JobRecord) {
+  private async executeJob(job: JobDocument) {
     try {
-      JobQueue.updateStatus(job.id, 'running')
+      jobRepo.updateStatus(job.id, 'running')
 
-      const flow = flowLoader.get(job.workflow_id) as FlowDefinition | undefined
-      if (!flow) throw new Error(`Flow ${job.workflow_id} not found`)
+      const flow = FlowResolver.resolve(job.campaign_id)
+      if (!flow) throw new Error(`Flow for campaign ${job.campaign_id} not found`)
 
-      const nodeDef = flow.nodes.find(n => n.instance_id === job.instance_id)
+      const nodeDef = findNode(flow, job.instance_id)
       if (!nodeDef) throw new Error(`Node ${job.instance_id} not found in flow`)
 
-      const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(job.campaign_id) as any
-      const params = JSON.parse(campaign?.params || '{}')
-      const inputData = JSON.parse(job.data_json || '{}')
+      const store = campaignRepo.open(job.campaign_id)
+      const params = store.params
 
-      // ── Is this a loop node? ──────────────────────
+      // ── Loop node? ────────────────────────────
       if (nodeDef.children && nodeDef.children.length > 0) {
-        await this.executeLoop(job, flow, nodeDef, inputData, params)
-        JobQueue.updateStatus(job.id, 'completed')
+        await this.executeLoop(job, flow, nodeDef, job.data, params, store)
+        jobRepo.updateStatus(job.id, 'completed')
         return
       }
 
-      // ── Regular node execution ────────────────────
+      // ── Regular node execution ────────────────
       const NodeImpl = nodeRegistry.get(nodeDef.node_id)
       if (!NodeImpl) throw new Error(`Node impl ${nodeDef.node_id} not registered`)
 
       const startTime = Date.now()
       ExecutionLogger.nodeStart(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id, {})
 
-      const ctx = {
-        campaign_id: job.campaign_id,
-        job_id: job.id,
-        params,
-        logger: {
-          info: (msg: string) => ExecutionLogger.log({
-            campaign_id: job.campaign_id, job_id: job.id,
-            instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
-            level: 'info', event: 'node:log', message: msg
-          }),
-          error: (msg: string, err?: any) => ExecutionLogger.log({
-            campaign_id: job.campaign_id, job_id: job.id,
-            instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
-            level: 'error', event: 'node:log', message: msg,
-            data: { error: err?.message || String(err) }
-          })
-        },
-        onProgress: (msg: string) => {
-          ExecutionLogger.nodeProgress(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id, msg)
-        }
-      }
-
-      const resultPromise = NodeImpl.execute(inputData, ctx)
-      
-      let result: any
-      if (typeof nodeDef.timeout === 'number') {
-        ExecutionLogger.log({
-          campaign_id: job.campaign_id, job_id: job.id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
-          level: 'info', event: 'node:timeout_set', message: `Setting timeout of ${nodeDef.timeout}ms`
-        })
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error(`Node timeout exceeded (${nodeDef.timeout}ms)`)), nodeDef.timeout)
-        )
-        result = await Promise.race([resultPromise, timeoutPromise])
-      } else {
-        result = await resultPromise
-      }
-
+      const ctx = buildNodeContext(job, nodeDef, params, store)
+      const result = await executeWithTimeout(NodeImpl, job.data, ctx, nodeDef, job)
       const durationMs = Date.now() - startTime
 
       ExecutionLogger.nodeEnd(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id,
         { action: result.action, message: result.message }, durationMs)
-
-      // Emit structured data for live detail views
       ExecutionLogger.nodeData(job.campaign_id, nodeDef.instance_id, nodeDef.node_id, result.data)
 
-      JobQueue.updateStatus(job.id, 'completed')
+      jobRepo.updateStatus(job.id, 'completed')
 
-      // ── Handle flow control ───────────────────────
+      // ── Flow control ──────────────────────────
       if (result.action === 'finish') {
-        db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('finished', job.campaign_id)
+        store.status = 'finished'
+        store.save()
         ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Campaign finished')
         return
       }
 
       if (result.action === 'recall' && result.recall_target) {
-        const targetNode = flow.nodes.find(n => n.instance_id === result.recall_target)
+        const targetNode = findNode(flow, result.recall_target)
         if (targetNode) {
           this.createJob(job.campaign_id, job.workflow_id, targetNode.instance_id, targetNode.node_id, result.data || {})
-          ExecutionLogger.log({
-            campaign_id: job.campaign_id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
-            level: 'info', event: 'node:recall',
-            message: `Recalling ${result.recall_target}`,
-          })
         }
         return
       }
 
-      // Default: continue to next node via edges (supports conditional `when` expressions)
-      const nextEdges = flow.edges.filter(e => {
-        if (e.from !== nodeDef.instance_id) return false
-        if (!e.when) return true // unconditional edge
-        return safeEval(e.when, result.data)
-      })
-      for (const edge of nextEdges) {
-        const nextNode = flow.nodes.find(n => n.instance_id === edge.to)
-        if (nextNode) {
-          this.createJob(job.campaign_id, job.workflow_id, nextNode.instance_id, nextNode.node_id, result.data || {})
-        }
+      // Default: continue to next nodes via edges
+      const nextNodes = resolveNextEdges(flow, nodeDef.instance_id, result.data)
+      for (const next of nextNodes) {
+        this.createJob(job.campaign_id, job.workflow_id, next.instance_id, next.node_id, result.data || {})
       }
 
     } catch (err: any) {
       const errorMsg = err.message || String(err)
-      JobQueue.updateStatus(job.id, 'failed', errorMsg)
+      jobRepo.updateStatus(job.id, 'failed', errorMsg)
       ExecutionLogger.nodeError(job.campaign_id, job.id, job.instance_id, job.node_id, errorMsg)
-
-      if (errorMsg.includes('CAPTCHA') || errorMsg.includes('captcha')) {
-        db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('needs_captcha', job.campaign_id)
-        ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:needs-captcha', 'CAPTCHA detected')
-      }
     }
   }
 
   // ── Loop Execution ───────────────────────────────
-  // Receives an array of items, runs children pipeline for each item
+  /**
+   * Core loop: iterate input array through child nodes sequentially.
+   *
+   * The input MUST be an array. If the loop node receives non-array data,
+   * it wraps it in a single-element array.
+   *
+   * No sorting, no counting, no video-specific logic.
+   * Nodes handle their own domain concerns via ctx.store.
+   */
   private async executeLoop(
-    job: JobRecord,
+    job: JobDocument,
     flow: FlowDefinition,
     loopDef: FlowNodeDefinition,
     inputData: any,
-    params: Record<string, any>
+    params: Record<string, any>,
+    store: CampaignStore
   ) {
-    let items = Array.isArray(inputData) ? inputData : (inputData.videos || inputData.items || [inputData])
-    // Always process in scheduled_for ASC order (videos may arrive in scanner/insertion order)
-    if (items.length > 1 && items[0]?.scheduled_for != null) {
-      items = [...items].sort((a, b) => (a.scheduled_for ?? 0) - (b.scheduled_for ?? 0))
-    } else if (items.length > 1 && items[0]?.queue_index != null) {
-      items = [...items].sort((a, b) => (a.queue_index ?? 0) - (b.queue_index ?? 0))
-    }
-
+    const items = Array.isArray(inputData) ? inputData : [inputData]
     const children = loopDef.children || []
-
-    // ── Resume from last processed index ──────────────
-    const campaignRow = db.prepare('SELECT last_processed_index FROM campaigns WHERE id = ?').get(job.campaign_id) as any
-    const startIndex = campaignRow?.last_processed_index ?? 0
+    const startIndex = store.lastProcessedIndex
 
     ExecutionLogger.log({
       campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
       level: 'info', event: 'loop:start',
-      message: `Loop "${loopDef.instance_id}" processing ${items.length} items through ${children.length} children${startIndex > 0 ? ` (resuming from index ${startIndex})` : ''}`
+      message: `Loop "${loopDef.instance_id}": ${items.length} items × ${children.length} children${startIndex > 0 ? ` (resume@${startIndex})` : ''}`,
     })
 
     for (let i = startIndex; i < items.length; i++) {
-      const item = items[i]
-      let currentData = item
-      let skipToNextItem = false  // set when a node skips the item but rest of pipeline should still run
-
-      // Check campaign status — stop if paused/cancelled
-      const campaignStatus = (db.prepare('SELECT status FROM campaigns WHERE id = ?').get(job.campaign_id) as any)?.status
-      if (campaignStatus === 'paused' || campaignStatus === 'cancelled') {
+      // Check campaign still active
+      if (!isCampaignActive(job.campaign_id)) {
         ExecutionLogger.log({
           campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
           level: 'info', event: 'loop:paused',
-          message: `Loop paused at item ${i + 1}/${items.length} (campaign ${campaignStatus})`
+          message: `Loop paused at item ${i + 1}/${items.length}`,
         })
         return
       }
 
+      let currentData = items[i]
+      let skipToNextItem = false
+
       ExecutionLogger.log({
         campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
         level: 'info', event: 'loop:iteration',
-        message: `Processing item ${i + 1}/${items.length}`
+        message: `Item ${i + 1}/${items.length}`,
       })
+      ExecutionLogger.nodeProgress(job.campaign_id, job.id, loopDef.instance_id, loopDef.node_id, `Loop ${i + 1}/${items.length}`)
 
       for (const childInstanceId of children) {
-        const childDef = flow.nodes.find(n => n.instance_id === childInstanceId)
+        const childDef = findNode(flow, childInstanceId)
         if (!childDef) continue
 
         const NodeImpl = nodeRegistry.get(childDef.node_id)
@@ -281,27 +338,25 @@ export class FlowEngine {
           ExecutionLogger.log({
             campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
             level: 'warn', event: 'node:not-found',
-            message: `Node impl ${childDef.node_id} not registered, skipping`
+            message: `Node impl ${childDef.node_id} not registered, skipping`,
           })
           continue
         }
 
-        // If item was skipped by a previous node, only run:
-        // - timeout (to respect gaps)
-        // - condition/notify (to fire side-effect notifications)
+        // If skipped, only run utility nodes
         if (skipToNextItem) {
-          const allowOnSkip = ['core.timeout', 'core.condition', 'core.notify']
+          const allowOnSkip = ['core.timeout', 'core.condition']
           if (!allowOnSkip.includes(childDef.node_id)) continue
         }
 
-        // Input contract validation (only for non-skip phases)
-        if (!skipToNextItem && (currentData === null || currentData === undefined)) {
-          const msg = `Node "${childDef.instance_id}" received null input — previous node may have failed or returned empty data`
+        // Null input guard
+        if (!skipToNextItem && currentData == null) {
           ExecutionLogger.log({
             campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
-            level: 'error', event: 'node:input-error', message: msg
+            level: 'error', event: 'node:input-error',
+            message: `Node "${childDef.instance_id}" received null input`,
           })
-          skipToNextItem = true // Mark as skipped, continue to next child (e.g. timeout)
+          skipToNextItem = true
           continue
         }
 
@@ -309,70 +364,30 @@ export class FlowEngine {
         ExecutionLogger.nodeStart(job.campaign_id, job.id, childDef.instance_id, childDef.node_id,
           { itemIndex: i, totalItems: items.length })
 
-        const ctx = {
-          campaign_id: job.campaign_id,
-          job_id: job.id,
-          params,
-          logger: {
-            info: (msg: string) => ExecutionLogger.log({
-              campaign_id: job.campaign_id, job_id: job.id,
-              instance_id: childDef.instance_id, node_id: childDef.node_id,
-              level: 'info', event: 'node:log', message: msg
-            }),
-            error: (msg: string, err?: any) => ExecutionLogger.log({
-              campaign_id: job.campaign_id, job_id: job.id,
-              instance_id: childDef.instance_id, node_id: childDef.node_id,
-              level: 'error', event: 'node:log', message: msg,
-              data: { error: err?.message || String(err) }
-            })
-          },
-          onProgress: (msg: string) => {
-            ExecutionLogger.nodeProgress(job.campaign_id, job.id, childDef.instance_id, childDef.node_id, msg)
-          }
-        }
+        const ctx = buildNodeContext(job, childDef, params, store)
 
         try {
-          const resultPromise = NodeImpl.execute(skipToNextItem ? {} : currentData, ctx)
-          
-          let result: any
-          if (typeof childDef.timeout === 'number') {
-            ExecutionLogger.log({
-              campaign_id: job.campaign_id, job_id: job.id, instance_id: childDef.instance_id, node_id: childDef.node_id,
-              level: 'info', event: 'node:timeout_set', message: `Setting timeout of ${childDef.timeout}ms`
-            })
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error(`Node timeout exceeded (${childDef.timeout}ms)`)), childDef.timeout)
-              )
-              result = await Promise.race([resultPromise, timeoutPromise])
-            } else {
-            result = await resultPromise
-          }
-
+          const result = await executeWithTimeout(NodeImpl, skipToNextItem ? {} : currentData, ctx, childDef, job)
           const durationMs = Date.now() - startTime
+
           ExecutionLogger.nodeEnd(job.campaign_id, job.id, childDef.instance_id, childDef.node_id,
             { action: result.action }, durationMs)
-
-          // Emit structured data for live detail views
           ExecutionLogger.nodeData(job.campaign_id, childDef.instance_id, childDef.node_id, result.data)
-
-          // Update campaign counters based on node type
-          this.updateCampaignCounters(job.campaign_id, childDef.node_id, result)
 
           // Flow control from child
           if (result.action === 'finish') {
-            db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('finished', job.campaign_id)
+            store.status = 'finished'
+            store.save()
             ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Finished by child node')
             return
           }
 
           if (result.action === 'continue' && !result.data) {
-            // Node skipped this item (e.g. dedup, CAPTCHA).
-            // Set flag so we still run timeout before next item — don't break immediately.
             if (!skipToNextItem) {
               ExecutionLogger.log({
                 campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
                 level: 'info', event: 'node:skip',
-                message: `Item skipped by ${childDef.instance_id} — will still run timeout before next item`
+                message: `Item skipped by ${childDef.instance_id}`,
               })
               skipToNextItem = true
             }
@@ -383,74 +398,77 @@ export class FlowEngine {
         } catch (err: any) {
           ExecutionLogger.nodeError(job.campaign_id, job.id, childDef.instance_id, childDef.node_id, err.message)
 
-          // Per-node error handling
+          // ── YAML events handling: match error → event key → action + emit ──
+          const matchedEvent = matchNodeEvent(childDef, err.message)
+          if (matchedEvent) {
+            const { eventKey, handler } = matchedEvent
+            ExecutionLogger.log({
+              campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
+              level: 'warn', event: eventKey,
+              message: `Event "${eventKey}" matched → action: ${handler.action}`,
+            })
+            if (handler.emit) {
+              ExecutionLogger.emitNodeEvent(job.campaign_id, childDef.instance_id, handler.emit, {
+                error: err.message, eventKey, action: handler.action,
+              })
+            }
+            if (handler.action === 'pause_campaign') {
+              store.status = 'paused'
+              store.save()
+              ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:paused', `Paused by event "${eventKey}"`)
+              return
+            }
+            if (handler.action === 'stop_campaign') {
+              store.status = 'error'
+              store.save()
+              ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:error', `Stopped by event "${eventKey}": ${err.message}`)
+              return
+            }
+            // skip_item (default): fall through to skipToNextItem
+          }
+
           const onError = childDef.on_error || 'skip'
           if (onError === 'stop_campaign') {
-            db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run('error', job.campaign_id)
+            store.status = 'error'
+            store.save()
             ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:error',
               `Campaign stopped: node "${childDef.instance_id}" failed: ${err.message}`)
             return
           }
-          // 'skip' (default) — set flag and still run timeout
           skipToNextItem = true
         }
       }
 
-      // ── Save progress: update last_processed_index ────
-      try {
-        db.prepare('UPDATE campaigns SET last_processed_index = ? WHERE id = ?').run(i + 1, job.campaign_id)
-
-        // Update video status in DB based on what happened
-        const videoId = item?.platform_id || item?.id
-        if (videoId && !skipToNextItem) {
-          db.prepare(`UPDATE videos SET status = 'processing' WHERE platform_id = ? AND campaign_id = ? AND status = 'queued'`)
-            .run(videoId, job.campaign_id)
-        }
-      } catch { /* non-critical */ }
+      // Save progress after each iteration
+      store.lastProcessedIndex = i + 1
+      store.save()
     }
 
     // Loop done — continue to edges after loop node
-    const nextEdges = flow.edges.filter(e => e.from === loopDef.instance_id)
-    for (const edge of nextEdges) {
-      const nextNode = flow.nodes.find(n => n.instance_id === edge.to)
-      if (nextNode) {
-        this.createJob(job.campaign_id, job.workflow_id, nextNode.instance_id, nextNode.node_id, { loopCompleted: true, itemCount: items.length })
-      }
+    const nextNodes = resolveNextEdges(flow, loopDef.instance_id, { loopCompleted: true, itemCount: items.length })
+    for (const next of nextNodes) {
+      this.createJob(job.campaign_id, job.workflow_id, next.instance_id, next.node_id,
+        { loopCompleted: true, itemCount: items.length })
     }
   }
 
-  // ── Update campaign counters ──────────────────────
-  private updateCampaignCounters(campaignId: string, nodeId: string, result: any) {
-    try {
-      if (nodeId.includes('scanner') && result.data) {
-        const count = Array.isArray(result.data) ? result.data.length : 1
-        db.prepare('UPDATE campaigns SET queued_count = queued_count + ? WHERE id = ?').run(count, campaignId)
-      } else if (nodeId.includes('downloader') && result.data?.local_path) {
-        db.prepare('UPDATE campaigns SET downloaded_count = downloaded_count + 1 WHERE id = ?').run(campaignId)
-      } else if (nodeId.includes('publisher') && result.data?.published) {
-        db.prepare('UPDATE campaigns SET published_count = published_count + 1 WHERE id = ?').run(campaignId)
-      }
-    } catch { /* non-critical */ }
-  }
-
-  // ── Helpers ──────────────────────────────────────
+  // ── Create Job ───────────────────────────────────
   private createJob(campaignId: string, workflowId: string, instanceId: string, nodeId: string, data: any, scheduledAt?: number) {
-    const jobId = JobQueue.create({
+    const jobId = jobRepo.createJob({
       campaign_id: campaignId,
       workflow_id: workflowId,
       node_id: nodeId,
       instance_id: instanceId,
       type: 'FLOW_STEP',
-      status: 'pending',
-      data_json: JSON.stringify(data),
-      scheduled_at: scheduledAt
+      data,
+      scheduled_at: scheduledAt || Date.now(),
     })
 
     ExecutionLogger.log({
       campaign_id: campaignId, instance_id: instanceId, node_id: nodeId,
       level: 'info', event: 'job:created',
       message: `Job created for ${instanceId}`,
-      data: { jobId }
+      data: { jobId },
     })
 
     return jobId

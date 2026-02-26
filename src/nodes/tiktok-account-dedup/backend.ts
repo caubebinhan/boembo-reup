@@ -1,12 +1,11 @@
-import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
-import { ExecutionLogger } from '../../core/engine/ExecutionLogger'
-import { db } from '../../main/db/Database'
-import { attachPublishAccountTarget, selectPublishAccount } from '../../main/tiktok/publisher/PublishAccountResolver'
+﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { ExecutionLogger } from '@core/engine/ExecutionLogger'
+import { attachPublishAccountTarget, selectPublishAccount } from '@main/tiktok/publisher/PublishAccountResolver'
 import {
   compareMediaSignatures,
   computeMediaSignature,
   type MediaSignatureComputeResult,
-} from '../../main/tiktok/publisher/dedup/MediaSimilarity'
+} from '@main/tiktok/publisher/dedup/MediaSimilarity'
 import {
   captionPreview,
   computeQuickFileFingerprint,
@@ -15,7 +14,7 @@ import {
   listPublishHistoryCandidates,
   parseMediaSignatureFromRow,
   updatePublishHistoryMediaSignature,
-} from '../../main/tiktok/publisher/dedup/PublishDedupStore'
+} from '@main/tiktok/publisher/dedup/PublishDedupStore'
 
 type DedupMeta = {
   fileFingerprint?: string
@@ -42,8 +41,8 @@ function markDuplicateAndSkip(
   const duplicateMessage = `Duplicate detected on @${account.username} (${matchedBy})${duplicate?.published_url ? `, existing: ${duplicate.published_url}` : ''}`
 
   try {
-    db.prepare(`UPDATE videos SET status = 'duplicate', publish_url = ? WHERE platform_id = ? AND campaign_id = ?`)
-      .run(duplicate?.published_url || null, video.platform_id, ctx.campaign_id)
+    ctx.store.updateVideo(video.platform_id, { status: 'duplicate', publish_url: duplicate?.published_url || undefined })
+    ctx.store.save()
   } catch (err) {
     ctx.logger.error('Failed to update duplicate status', err)
   }

@@ -1,17 +1,16 @@
 import React, { Suspense, useMemo } from 'react'
 import { useFlowUIDescriptor, evaluateExpression } from '../hooks/useFlowUIDescriptor'
 
-// Auto-discover per-workflow card components
-const cardModules = import.meta.glob<any>('../../../workflows/*/card.tsx')
+// Auto-discover per-workflow card components (versioned)
+const cardModules = import.meta.glob<any>('../../../workflows/*/v*/card.tsx')
 
-// Build registry: workflowId → lazy factory
+// Build registry: workflowId → lazy factory (latest version wins)
 const CARD_REGISTRY: Record<string, () => Promise<any>> = {}
 for (const [path, factory] of Object.entries(cardModules)) {
-    const parts = path.split('/')
-    const cardIdx = parts.findIndex(p => p === 'card.tsx')
-    const workflowId = cardIdx > 0 ? parts[cardIdx - 1] : null
-    if (workflowId) {
-        CARD_REGISTRY[workflowId] = factory
+    // path like ../../../workflows/tiktok-repost/v1.0/card.tsx
+    const match = path.match(/workflows\/([^/]+)\/v[^/]+\/card\.tsx$/)
+    if (match) {
+        CARD_REGISTRY[match[1]] = factory
     }
 }
 
@@ -56,11 +55,7 @@ function YamlDrivenCard({ campaign, onAction, workflowId }: CampaignCardProps & 
     const { descriptor, loading } = useFlowUIDescriptor(workflowId)
 
     const config = useMemo(() => {
-        try {
-            return typeof campaign.params === 'string'
-                ? JSON.parse(campaign.params)
-                : campaign.params || {}
-        } catch { return {} }
+        return campaign.params || {}
     }, [campaign.params])
 
     const evalCtx = { campaign, config, hasActiveJobs: campaign.status === 'running' || campaign.status === 'active' }

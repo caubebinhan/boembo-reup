@@ -58,8 +58,8 @@ export class PublishVerifier {
             if (this.page.isClosed()) throw new Error('Browser page closed during verification')
             try { await this.page.waitForTimeout(1000) } catch { break }
 
-            const uploading = await this.page.$('text="Your video is being uploaded"')
-                ?? await this.page.$('text="Video c盻ｧa b蘯｡n ﾄ疎ng ﾄ柁ｰ盻｣c t蘯｣i lﾃｪn"')
+            const uploading =
+                await this.page.$('text=/your video is being uploaded|uploading/i').catch(() => null)
             if (uploading && await uploading.isVisible().catch(() => false)) {
                 await this.captureWarningsFromPage()
                 continue
@@ -155,6 +155,7 @@ export class PublishVerifier {
         let sawContentListResponse = false
         let lastApiResponseShape: any = null
         let lastUiProbe: any = null
+        let dumpedAmbiguousUiProbe = false
         const expectedVideoId = this.normalizeVideoId(opts.expectedVideoId || opts.expectedVideoUrl)
 
         try {
@@ -183,9 +184,21 @@ export class PublishVerifier {
                 if (this.page.isClosed()) break
                 await this.page.waitForTimeout(5000).catch(() => {})
                 await this.captureWarningsFromPage()
-                const uiStatus = await this.probeDashboardUiStatus(expectedVideoId, opts.expectedCaption)
+                const uiStatus = await this.probeDashboardUiStatus(expectedVideoId, opts.expectedCaption, opts.uploadStartTime)
                 lastUiProbe = uiStatus
                 if (uiStatus?.text) this.captureWarningText(uiStatus.text)
+                if (uiStatus && !uiStatus.id && uiStatus.rowCount && !dumpedAmbiguousUiProbe) {
+                    dumpedAmbiguousUiProbe = true
+                    const dump = await DebugHelper.dumpPageState(this.page, 'verify_dashboard_ui_ambiguous').catch(() => null)
+                    const probeJson = await DebugHelper.dumpJson('verify_dashboard_ui_probe', uiStatus).catch(() => '')
+                    console.warn('[PublishVerifier] Dashboard UI probe found rows but no safe match', {
+                        rowCount: uiStatus.rowCount,
+                        recentCandidateCount: uiStatus.recentCandidateCount,
+                        timeWindow: uiStatus.timeWindow,
+                        probeJson,
+                        html: dump?.html,
+                    })
+                }
 
                 if (apiData?.length > 0) {
                     const apiMatch = this.pickDashboardApiMatch(apiData, opts, expectedVideoId, opts.expectedCaption)
@@ -243,14 +256,23 @@ export class PublishVerifier {
                         itemId: uiStatus.id,
                         matchedBy: uiStatus.selectedBy || (expectedVideoId ? 'ui:id' : 'ui:fallback'),
                         captionScore: uiStatus.captionScore,
+                        rowTimeSec: uiStatus.rowTimeSec,
+                        rowTimeSource: uiStatus.rowTimeSource,
+                        timeInWindow: uiStatus.timeInWindow,
                         reviewing: !!uiStatus.isReviewing,
                         rowCount: uiStatus.rowCount,
                         candidates: uiStatus.candidates,
                     })
+                    // Build proper public URL from username+videoId — do NOT use raw href from Studio DOM
+                    // (Studio hrefs may be relative paths, /tiktokstudio/... URLs, or localhost in dev)
+                    const uname = opts.username
+                    const builtUrl = uname && uiStatus.id
+                        ? `https://www.tiktok.com/@${uname}/video/${uiStatus.id}`
+                        : undefined
                     return {
                         success: true,
                         videoId: uiStatus.id,
-                        videoUrl: uiStatus.url || undefined,
+                        videoUrl: builtUrl,
                         isReviewing: !!uiStatus.isReviewing,
                         publishStatus: uiStatus.isReviewing ? 'under_review' : 'public',
                     }
@@ -334,28 +356,18 @@ export class PublishVerifier {
                 }
             }
 
-            const bestAnyByCaption = apiData
-                .map((item: any) => ({
-                    item,
-                    score: this.scoreCaptionMatch(expectedCaptionNorm, this.extractDashboardItemCaption(item)),
-                }))
-                .sort((a, b) => b.score - a.score)[0]
-            if (bestAnyByCaption && bestAnyByCaption.score >= 0.7) {
-                return {
-                    item: bestAnyByCaption.item,
-                    matchedBy: 'api:caption_any',
-                    matchScore: bestAnyByCaption.score,
-                }
-            }
         }
 
         if (recent[0]) return { item: recent[0], matchedBy: 'api:time_window_latest' }
-        if (apiData[0]) return { item: apiData[0], matchedBy: 'api:fallback_first_item' }
         return null
     }
 
-    private async probeDashboardUiStatus(expectedVideoId: string | null, expectedCaption?: string): Promise<any | null> {
-        return this.page.evaluate(({ expectedId, expectedCaptionRaw }) => {
+    private async probeDashboardUiStatus(
+        expectedVideoId: string | null,
+        expectedCaption?: string,
+        uploadStartTime?: number
+    ): Promise<any | null> {
+        return this.page.evaluate(({ expectedId, expectedCaptionRaw, uploadStartSec }) => {
             const rowSet = new Set<Element>()
             const linkNodes = Array.from(document.querySelectorAll('a[href*="/video/"]'))
 
@@ -381,6 +393,11 @@ export class PublishVerifier {
             const rows = Array.from(rowSet)
             if (rows.length === 0) return null
 
+            const nowSec = Math.floor(Date.now() / 1000)
+            const uploadSec = Number(uploadStartSec) || nowSec
+            const lowerBound = Math.max(0, uploadSec - 900)
+            const upperBound = nowSec + 300
+
             const normalizeId = (raw: string) => {
                 const m = (raw || '').match(/(\d{8,})/)
                 return m?.[1] || null
@@ -404,6 +421,82 @@ export class PublishVerifier {
                 return hits / aTokens.length
             }
 
+            const collectTimeStrings = (row: Element, text: string) => {
+                const out: string[] = []
+                const push = (v: any) => {
+                    const s = String(v || '').trim()
+                    if (!s) return
+                    if (!out.includes(s)) out.push(s)
+                }
+                push(text)
+                const attrs = ['datetime', 'title', 'aria-label', 'data-time', 'data-created-at']
+                for (const el of Array.from(row.querySelectorAll('*'))) {
+                    for (const a of attrs) push((el as HTMLElement).getAttribute?.(a))
+                    const dt = (el as any).dateTime
+                    if (dt) push(dt)
+                    if (out.length >= 40) break
+                }
+                return out
+            }
+
+            const parseTimeFromStrings = (values: string[]) => {
+                const uploadDate = new Date(uploadSec * 1000)
+                const tryDate = (d: Date, source: string) => {
+                    const ms = d.getTime()
+                    if (!Number.isFinite(ms)) return null
+                    return { sec: Math.floor(ms / 1000), source }
+                }
+
+                for (const raw of values) {
+                    const text = String(raw || '').replace(/\s+/g, ' ').trim()
+                    if (!text) continue
+
+                    // 1) ISO/parseable absolute timestamps
+                    const direct = Date.parse(text)
+                    if (Number.isFinite(direct)) return tryDate(new Date(direct), 'ui:time:date_parse')
+
+                    // 2) YYYY-MM-DD HH:mm(:ss) or YYYY/MM/DD
+                    let m = text.match(/(20\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})[^\d]{0,4}(\d{1,2}):(\d{2})(?::(\d{2}))?/)
+                    if (m) {
+                        const [, y, mo, d, h, mi, s] = m
+                        return tryDate(new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(s || 0)), 'ui:time:ymd_hm')
+                    }
+
+                    // 3) MM-DD HH:mm or MM/DD HH:mm (assume current year)
+                    m = text.match(/\b(\d{1,2})[\/\-.](\d{1,2})[^\d]{0,4}(\d{1,2}):(\d{2})(?::(\d{2}))?\b/)
+                    if (m) {
+                        const [, mo, d, h, mi, s] = m
+                        const dt = new Date(uploadDate)
+                        dt.setMonth(Number(mo) - 1, Number(d))
+                        dt.setHours(Number(h), Number(mi), Number(s || 0), 0)
+                        return tryDate(dt, 'ui:time:md_hm')
+                    }
+
+                    // 4) h:mm AM/PM
+                    m = text.match(/\b(\d{1,2}):(\d{2})\s*([ap]\.?m\.?)\b/i)
+                    if (m) {
+                        let h = Number(m[1]) % 12
+                        if (m[3].toLowerCase().startsWith('p')) h += 12
+                        const dt = new Date(uploadDate)
+                        dt.setHours(h, Number(m[2]), 0, 0)
+                        return tryDate(dt, 'ui:time:h_m_ampm')
+                    }
+
+                    // 5) HH:mm (24h), anchored to upload date
+                    m = text.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/)
+                    if (m) {
+                        const dt = new Date(uploadDate)
+                        dt.setHours(Number(m[1]), Number(m[2]), Number(m[3] || 0), 0)
+                        // If anchored time is unrealistically far in future, assume previous day.
+                        if (Math.floor(dt.getTime() / 1000) > upperBound + 6 * 3600) {
+                            dt.setDate(dt.getDate() - 1)
+                        }
+                        return tryDate(dt, 'ui:time:hm_only')
+                    }
+                }
+                return null
+            }
+
             const candidates = rows.slice(0, 20).map((row) => {
                 const h = row as HTMLElement
                 const linkEl = row.querySelector('a[href*="/video/"]')
@@ -416,30 +509,75 @@ export class PublishVerifier {
                     normalized.includes('under review') ||
                     normalized.includes('in review') ||
                     normalized.includes('processing')
-                return { id, url: href || null, isReviewing, text, captionScore }
+                const timeProbe = parseTimeFromStrings(collectTimeStrings(row, text))
+                const rowTimeSec = timeProbe?.sec ?? null
+                const timeInWindow = typeof rowTimeSec === 'number' && rowTimeSec >= lowerBound && rowTimeSec <= upperBound
+                return {
+                    id,
+                    url: href || null,
+                    isReviewing,
+                    text,
+                    captionScore,
+                    rowTimeSec,
+                    rowTimeSource: timeProbe?.source || null,
+                    timeInWindow,
+                }
             })
+
+            const recentByTime = candidates
+                .filter(c => c.timeInWindow)
+                .sort((a, b) => (b.rowTimeSec || 0) - (a.rowTimeSec || 0))
 
             const selected = expectedId
                 ? candidates.find(c => c.id === expectedId) || null
                 : (() => {
                     const best = expectedCaption
-                        ? [...candidates].sort((a, b) => (b.captionScore || 0) - (a.captionScore || 0))[0]
+                        ? [...recentByTime].sort((a, b) => (b.captionScore || 0) - (a.captionScore || 0))[0]
                         : null
                     if (best && (best.captionScore || 0) >= 0.55) return best
-                    return candidates[0] || null
+                    if (recentByTime.length === 1) return recentByTime[0]
+                    return null
                 })()
-            if (!selected) return null
+            if (!selected) {
+                return {
+                    id: null,
+                    text: '',
+                    selectedBy: null,
+                    rowCount: rows.length,
+                    candidates: candidates.slice(0, 5).map(c => ({
+                        id: c.id,
+                        url: c.url,
+                        isReviewing: c.isReviewing,
+                        captionScore: c.captionScore,
+                        rowTimeSec: c.rowTimeSec,
+                        rowTimeSource: c.rowTimeSource,
+                        timeInWindow: c.timeInWindow,
+                    })),
+                    recentCandidateCount: recentByTime.length,
+                    timeWindow: { lowerBound, upperBound, uploadSec, nowSec },
+                }
+            }
             const selectedBy = expectedId
                 ? 'ui:video_id_exact'
-                : ((selected.captionScore || 0) >= 0.55 && expectedCaption ? 'ui:caption' : 'ui:first_row')
+                : ((selected.captionScore || 0) >= 0.55 && expectedCaption ? 'ui:caption_recent_window' : 'ui:time_window_single')
 
             return {
                 ...selected,
                 selectedBy,
                 rowCount: rows.length,
-                candidates: candidates.slice(0, 5).map(c => ({ id: c.id, url: c.url, isReviewing: c.isReviewing, captionScore: c.captionScore })),
+                recentCandidateCount: recentByTime.length,
+                timeWindow: { lowerBound, upperBound, uploadSec, nowSec },
+                candidates: candidates.slice(0, 5).map(c => ({
+                    id: c.id,
+                    url: c.url,
+                    isReviewing: c.isReviewing,
+                    captionScore: c.captionScore,
+                    rowTimeSec: c.rowTimeSec,
+                    rowTimeSource: c.rowTimeSource,
+                    timeInWindow: c.timeInWindow,
+                })),
             }
-        }, { expectedId: expectedVideoId, expectedCaptionRaw: expectedCaption }).catch(() => null)
+        }, { expectedId: expectedVideoId, expectedCaptionRaw: expectedCaption, uploadStartSec: uploadStartTime }).catch(() => null)
     }
 
     private normalizeCaptionText(raw?: string): string {
@@ -570,6 +708,7 @@ export class PublishVerifier {
             if (signalsAttachment) attachments.push(signalsAttachment)
 
             Sentry.withScope(scope => {
+                if (!scope) return
                 scope.setLevel('warning')
                 scope.setTag('module', 'tiktok')
                 scope.setTag('operation', 'publish_verify')
@@ -599,6 +738,7 @@ export class PublishVerifier {
             console.warn('[PublishVerifier] Failed to report indicator drift to Sentry:', err)
         }
     }
+
 
     private async buildFileAttachment(
         filePath?: string,

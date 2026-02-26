@@ -1,4 +1,4 @@
-import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
+﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { normalizeTimeRanges, isWithinAnyWindow, nextValidSlot } from '../_shared/timeWindow'
 
 /**

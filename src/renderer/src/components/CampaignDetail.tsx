@@ -47,8 +47,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
 
     const config = useMemo(() => {
         if (!campaign?.params) return {}
-        try { return typeof campaign.params === 'string' ? JSON.parse(campaign.params) : campaign.params }
-        catch { return {} }
+        return campaign.params
     }, [campaign?.params])
 
     const hasActiveJobs = useSelector((state: RootState) => {
@@ -110,8 +109,8 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
         } catch (err) { console.error('[CampaignDetail] Action failed:', err) }
     }
 
-    // ── Per-workflow detail component (cached lazy) ──
-    const WorkflowDetail = getWorkflowDetailComponent(workflowId)
+    // ── Per-workflow detail component (cached lazy, version-aware) ──
+    const WorkflowDetail = getWorkflowDetailComponent(workflowId, campaign?.workflow_version)
 
     return (
         <div className="flex-1 flex flex-col h-screen bg-gray-900 text-white overflow-hidden">

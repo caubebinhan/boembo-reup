@@ -1,30 +1,10 @@
 import { createHash, randomUUID } from 'crypto'
 import { open as openFile } from 'fs/promises'
-import { db } from '../../../db/Database'
+import { publishHistoryRepo } from '../../../db/repositories/PublishHistoryRepo'
+import type { PublishHistoryDocument } from '../../../db/models/PublishHistory'
 import type { MediaSignature } from './MediaSimilarity'
 
-export type PublishHistoryRow = {
-  id: string
-  platform: string
-  account_id: string
-  account_username?: string
-  campaign_id?: string
-  source_platform_id?: string
-  source_local_path?: string
-  file_fingerprint?: string
-  caption_hash?: string
-  caption_preview?: string
-  published_video_id?: string
-  published_url?: string
-  status: string
-  duplicate_reason?: string
-  media_signature_json?: string
-  media_signature_version?: string
-  created_at?: number
-  updated_at?: number
-}
-
-export type PublishHistoryMatch = PublishHistoryRow
+// ── Pure functions (no DB) ──────────────────────
 
 export function normalizeCaptionForDedup(caption: string): string {
   return String(caption || '')
@@ -77,47 +57,27 @@ export async function computeQuickFileFingerprint(filePath: string): Promise<str
   }
 }
 
-export function findExactDuplicatePublishHistory(accountId: string, sourcePlatformId?: string, fileFingerprint?: string): PublishHistoryMatch | null {
-  const signatureClauses: string[] = []
-  const signatureParams: any[] = []
-  if (sourcePlatformId) {
-    signatureClauses.push('source_platform_id = ?')
-    signatureParams.push(sourcePlatformId)
-  }
-  if (fileFingerprint) {
-    signatureClauses.push('file_fingerprint = ?')
-    signatureParams.push(fileFingerprint)
-  }
-  if (signatureClauses.length === 0) return null
+// ── Repository-backed functions ─────────────────
 
-  const sql = `
-    SELECT * FROM publish_history
-    WHERE platform = 'tiktok'
-      AND account_id = ?
-      AND status IN ('under_review', 'published')
-      AND (${signatureClauses.join(' OR ')})
-    ORDER BY updated_at DESC
-    LIMIT 1
-  `
-  return (db.prepare(sql).get(accountId, ...signatureParams) as PublishHistoryMatch | undefined) || null
+export function findExactDuplicatePublishHistory(
+  accountId: string,
+  sourcePlatformId?: string,
+  fileFingerprint?: string
+): PublishHistoryDocument | null {
+  return publishHistoryRepo.findExactDuplicate(accountId, sourcePlatformId, fileFingerprint)
 }
 
-export function listPublishHistoryCandidates(accountId: string, limit = 25): PublishHistoryRow[] {
-  return db.prepare(`
-    SELECT * FROM publish_history
-    WHERE platform = 'tiktok'
-      AND account_id = ?
-      AND status IN ('under_review', 'published')
-    ORDER BY updated_at DESC
-    LIMIT ?
-  `).all(accountId, Math.max(1, Math.min(200, limit))) as PublishHistoryRow[]
+export function listPublishHistoryCandidates(accountId: string, limit = 25): PublishHistoryDocument[] {
+  return publishHistoryRepo.findCandidates(accountId, limit)
 }
 
-export function parseMediaSignatureFromRow(row: { media_signature_json?: string } | null | undefined): MediaSignature | null {
-  if (!row?.media_signature_json) return null
+export function parseMediaSignatureFromRow(row: { media_signature?: any } | null | undefined): MediaSignature | null {
+  if (!row?.media_signature) return null
   try {
-    const parsed = JSON.parse(String(row.media_signature_json))
-    if (parsed && parsed.version === 'avsig1') return parsed as MediaSignature
+    const sig = typeof row.media_signature === 'string'
+      ? JSON.parse(row.media_signature)
+      : row.media_signature
+    if (sig && sig.version === 'avsig1') return sig as MediaSignature
   } catch {}
   return null
 }
@@ -125,20 +85,15 @@ export function parseMediaSignatureFromRow(row: { media_signature_json?: string 
 export function updatePublishHistoryMediaSignature(recordId: string, signature: MediaSignature | null, reason?: string) {
   if (!recordId) return
   try {
-    db.prepare(`
-      UPDATE publish_history
-      SET media_signature_json = COALESCE(?, media_signature_json),
-          media_signature_version = COALESCE(?, media_signature_version),
-          duplicate_reason = COALESCE(?, duplicate_reason),
-          updated_at = ?
-      WHERE id = ?
-    `).run(
-      signature ? JSON.stringify(signature) : null,
-      signature?.version || null,
-      reason || null,
-      Date.now(),
-      recordId,
-    )
+    const patch: Partial<PublishHistoryDocument> = {
+      updated_at: Date.now(),
+    }
+    if (signature) {
+      patch.media_signature = signature
+      patch.media_signature_version = signature.version
+    }
+    if (reason) patch.duplicate_reason = reason
+    publishHistoryRepo.patch(recordId, patch)
   } catch {}
 }
 
@@ -158,36 +113,29 @@ export function insertPublishHistoryRecord(payload: {
   mediaSignature?: MediaSignature | null
 }): string | null {
   try {
-    const id = randomUUID()
     const now = Date.now()
-    db.prepare(`
-      INSERT INTO publish_history (
-        id, platform, account_id, account_username, campaign_id,
-        source_platform_id, source_local_path, file_fingerprint, caption_hash, caption_preview,
-        published_video_id, published_url, status, duplicate_reason,
-        media_signature_json, media_signature_version,
-        created_at, updated_at
-      ) VALUES (?, 'tiktok', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      payload.accountId,
-      payload.accountUsername || null,
-      payload.campaignId,
-      payload.sourcePlatformId || null,
-      payload.sourceLocalPath || null,
-      payload.fileFingerprint || null,
-      payload.captionHash || null,
-      payload.captionPreview || null,
-      payload.publishedVideoId || null,
-      payload.publishedUrl || null,
-      payload.status,
-      payload.duplicateReason || null,
-      payload.mediaSignature ? JSON.stringify(payload.mediaSignature) : null,
-      payload.mediaSignature?.version || null,
-      now,
-      now,
-    )
-    return id
+    const doc: PublishHistoryDocument = {
+      id: randomUUID(),
+      platform: 'tiktok',
+      account_id: payload.accountId,
+      account_username: payload.accountUsername,
+      campaign_id: payload.campaignId,
+      source_platform_id: payload.sourcePlatformId,
+      source_local_path: payload.sourceLocalPath,
+      file_fingerprint: payload.fileFingerprint,
+      caption_hash: payload.captionHash,
+      caption_preview: payload.captionPreview,
+      published_video_id: payload.publishedVideoId,
+      published_url: payload.publishedUrl,
+      status: payload.status,
+      duplicate_reason: payload.duplicateReason,
+      media_signature: payload.mediaSignature || null,
+      media_signature_version: payload.mediaSignature?.version,
+      created_at: now,
+      updated_at: now,
+    }
+    publishHistoryRepo.save(doc)
+    return doc.id
   } catch {
     return null
   }
@@ -202,26 +150,15 @@ export function updatePublishHistoryRecord(recordId: string | null, patch: {
 }) {
   if (!recordId) return
   try {
-    db.prepare(`
-      UPDATE publish_history
-      SET status = COALESCE(?, status),
-          published_video_id = COALESCE(?, published_video_id),
-          published_url = COALESCE(?, published_url),
-          duplicate_reason = COALESCE(?, duplicate_reason),
-          media_signature_json = COALESCE(?, media_signature_json),
-          media_signature_version = COALESCE(?, media_signature_version),
-          updated_at = ?
-      WHERE id = ?
-    `).run(
-      patch.status || null,
-      patch.publishedVideoId || null,
-      patch.publishedUrl || null,
-      patch.duplicateReason || null,
-      patch.mediaSignature ? JSON.stringify(patch.mediaSignature) : null,
-      patch.mediaSignature?.version || null,
-      Date.now(),
-      recordId,
-    )
+    const updates: Partial<PublishHistoryDocument> = { updated_at: Date.now() }
+    if (patch.status) updates.status = patch.status
+    if (patch.publishedVideoId) updates.published_video_id = patch.publishedVideoId
+    if (patch.publishedUrl) updates.published_url = patch.publishedUrl
+    if (patch.duplicateReason) updates.duplicate_reason = patch.duplicateReason
+    if (patch.mediaSignature) {
+      updates.media_signature = patch.mediaSignature
+      updates.media_signature_version = patch.mediaSignature.version
+    }
+    publishHistoryRepo.patch(recordId, updates)
   } catch {}
 }
-

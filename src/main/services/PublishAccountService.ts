@@ -1,22 +1,8 @@
-import { db } from '../db/Database'
 import { BrowserWindow } from 'electron'
 import { randomUUID } from 'crypto'
 import { AppSettingsService } from './AppSettingsService'
-
-interface PublishAccount {
-  id: string
-  platform: string
-  username: string
-  handle: string
-  avatar?: string
-  cookies_json?: string
-  proxy?: string
-  session_status: 'active' | 'expired'
-  auto_caption: boolean
-  auto_tags?: string
-  created_at: number
-  updated_at: number
-}
+import { accountRepo } from '../db/repositories/AccountRepo'
+import type { AccountDocument } from '../db/models/Account'
 
 type ExtractedProfileInfo = {
   username?: string
@@ -30,28 +16,25 @@ const GENERIC_TIKTOK_TITLES = new Set([
 ])
 
 export class PublishAccountService {
-  static listAccounts(): PublishAccount[] {
-    const rows = db.prepare('SELECT * FROM publish_accounts ORDER BY created_at DESC').all() as any[]
-    return rows.map(r => ({
-      ...r,
-      auto_caption: Boolean(r.auto_caption),
-    }))
+  static listAccounts(): AccountDocument[] {
+    return accountRepo.findAll()
   }
 
-  static getAccount(id: string): PublishAccount | null {
-    const row = db.prepare('SELECT * FROM publish_accounts WHERE id = ?').get(id) as any
-    if (!row) return null
-    return { ...row, auto_caption: Boolean(row.auto_caption) }
+  static getAccount(id: string): AccountDocument | null {
+    return accountRepo.findById(id)
   }
 
   static deleteAccount(id: string): void {
-    db.prepare('DELETE FROM publish_accounts WHERE id = ?').run(id)
+    accountRepo.delete(id)
     console.log(`[AccountService] Deleted account: ${id}`)
   }
 
   static updateSessionStatus(id: string, status: 'active' | 'expired'): void {
-    db.prepare('UPDATE publish_accounts SET session_status = ?, updated_at = ? WHERE id = ?')
-      .run(status, Date.now(), id)
+    const doc = accountRepo.findById(id)
+    if (!doc) return
+    doc.session_status = status
+    doc.updated_at = Date.now()
+    accountRepo.save(doc)
   }
 
   private static normalizeHandle(raw?: string): string {
@@ -216,11 +199,11 @@ export class PublishAccountService {
     return merged
   }
 
-  static async addAccountViaLogin(parentWindow?: BrowserWindow): Promise<PublishAccount | null> {
+  static async addAccountViaLogin(parentWindow?: BrowserWindow): Promise<AccountDocument | null> {
     return new Promise((resolve) => {
       let settled = false
       let profileResolveAttempts = 0
-      const done = (value: PublishAccount | null) => {
+      const done = (value: AccountDocument | null) => {
         if (settled) return
         settled = true
         resolve(value)
@@ -242,8 +225,7 @@ export class PublishAccountService {
       const locale = (automationSettings.locale || 'en-US').trim()
       try {
         const currentUA = loginWindow.webContents.userAgent || ''
-        // Electron supports setting acceptLanguages via session user agent overload.
-        // @ts-ignore older types may not expose the overload
+        // @ts-ignore
         loginWindow.webContents.session.setUserAgent(currentUA, locale)
       } catch {}
 
@@ -267,7 +249,6 @@ export class PublishAccountService {
           if (!handle) {
             profileResolveAttempts++
             console.warn(`[AccountService] Session cookie found but handle not extracted yet (attempt ${profileResolveAttempts})`)
-            // False positive cookie or page still loading. Keep polling instead of saving @unknown.
             return
           }
 
@@ -276,7 +257,7 @@ export class PublishAccountService {
           const avatar = (profile.avatar || '').trim() || undefined
 
           const allCookies = await loginWindow.webContents.session.cookies.get({ domain: '.tiktok.com' })
-          const cookiesJson = JSON.stringify(allCookies.map(c => ({
+          const cookiesData = allCookies.map(c => ({
             name: c.name,
             value: c.value,
             domain: c.domain,
@@ -285,40 +266,27 @@ export class PublishAccountService {
             secure: c.secure,
             sameSite: c.sameSite,
             expirationDate: c.expirationDate,
-          })))
+          }))
 
-          const account: PublishAccount = {
+          const now = Date.now()
+          const doc: AccountDocument = {
             id: randomUUID(),
             platform: 'tiktok',
             username,
             handle,
             avatar,
-            cookies_json: cookiesJson,
+            cookies: cookiesData,
             session_status: 'active',
             auto_caption: false,
-            created_at: Date.now(),
-            updated_at: Date.now(),
+            created_at: now,
+            updated_at: now,
           }
 
-          db.prepare(`
-            INSERT INTO publish_accounts (id, platform, username, handle, avatar, cookies_json, session_status, auto_caption, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).run(
-            account.id,
-            account.platform,
-            account.username,
-            account.handle,
-            account.avatar || null,
-            account.cookies_json,
-            account.session_status,
-            account.auto_caption ? 1 : 0,
-            account.created_at,
-            account.updated_at
-          )
+          accountRepo.save(doc)
 
-          console.log(`[AccountService] Saved account: ${account.username} (${account.handle})`)
+          console.log(`[AccountService] Saved account: ${doc.username} (${doc.handle})`)
           try { loginWindow.close() } catch {}
-          done(account)
+          done(doc)
         } catch {
           clearInterval(checkInterval)
           done(null)
@@ -333,12 +301,8 @@ export class PublishAccountService {
   }
 
   static getCookiesForAccount(id: string): any[] {
-    const account = this.getAccount(id)
-    if (!account?.cookies_json) return []
-    try {
-      return JSON.parse(account.cookies_json)
-    } catch {
-      return []
-    }
+    const doc = accountRepo.findById(id)
+    if (!doc?.cookies) return []
+    return Array.isArray(doc.cookies) ? doc.cookies : []
   }
 }

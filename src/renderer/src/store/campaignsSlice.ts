@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
-import { Campaign } from '../../../core/types/Context'
+import { Campaign } from '@core/types/Context'
 
 export interface CampaignsState {
   items: Campaign[]

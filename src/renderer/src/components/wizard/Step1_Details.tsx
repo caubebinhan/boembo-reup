@@ -13,9 +13,6 @@ export function Step1_Details({ data, updateData }: Step1Props) {
     useEffect(() => {
         const defaults: Record<string, any> = {}
         if (data.intervalMinutes == null) defaults.intervalMinutes = 60
-        if (data.activeHoursStart == null) defaults.activeHoursStart = '09:00'
-        if (data.activeHoursEnd == null) defaults.activeHoursEnd = '21:00'
-        if (data.activeDays == null) defaults.activeDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
         if (data.autoSchedule == null) defaults.autoSchedule = true
         if (data.missedJobHandling == null) defaults.missedJobHandling = 'auto'
         if (Object.keys(defaults).length > 0) updateData(defaults)
@@ -25,15 +22,6 @@ export function Step1_Details({ data, updateData }: Step1Props) {
     const insertTag = (tag: string) => {
         const current = data.captionTemplate || ''
         updateData({ captionTemplate: current + tag })
-    }
-
-    const toggleDay = (day: string) => {
-        const days = data.activeDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-        if (days.includes(day)) {
-            updateData({ activeDays: days.filter((d: string) => d !== day) })
-        } else {
-            updateData({ activeDays: [...days, day] })
-        }
     }
 
     return (
@@ -178,47 +166,6 @@ export function Step1_Details({ data, updateData }: Step1Props) {
                         />
                         <span className="font-medium text-gray-300">Enable Jitter (Random ±50%)</span>
                     </label>
-
-                    <div className="flex flex-col gap-2">
-                        <label className="text-sm text-gray-400 font-medium">Active Hours Start (Daily)</label>
-                        <input
-                            type="time"
-                            className="bg-gray-800 border border-gray-700 rounded-lg p-2 focus:border-purple-600 outline-none"
-                            value={data.activeHoursStart || '09:00'}
-                            onChange={(e) => updateData({ activeHoursStart: e.target.value })}
-                        />
-                    </div>
-
-                    <div className="flex flex-col gap-2">
-                        <label className="text-sm text-gray-400 font-medium">Active Hours End (Daily)</label>
-                        <input
-                            type="time"
-                            className="bg-gray-800 border border-gray-700 rounded-lg p-2 focus:border-purple-600 outline-none"
-                            value={data.activeHoursEnd || '21:00'}
-                            onChange={(e) => updateData({ activeHoursEnd: e.target.value })}
-                        />
-                    </div>
-
-                    <div className="col-span-2 flex flex-col gap-2">
-                        <label className="text-sm text-gray-400 font-medium">Active Days</label>
-                        <div className="flex flex-wrap gap-2">
-                            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
-                                const isActive = (data.activeDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']).includes(day)
-                                return (
-                                    <button
-                                        key={day}
-                                        onClick={() => toggleDay(day)}
-                                        className={`px-4 py-2 rounded-lg font-medium text-sm transition ${isActive
-                                            ? 'bg-purple-600 border border-purple-500 text-white'
-                                            : 'bg-gray-800 border border-gray-700 text-gray-400 hover:border-gray-500'
-                                            }`}
-                                    >
-                                        {day}
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </div>
                 </div>
             </div>
 

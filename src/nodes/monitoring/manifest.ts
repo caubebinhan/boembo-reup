@@ -1,8 +1,10 @@
-import { NodeManifest } from '../../core/nodes/NodeDefinition'
+﻿import { NodeManifest } from '@core/nodes/NodeDefinition'
 
 const manifest: NodeManifest = {
   id: 'core.monitoring',
   name: 'Monitor',
+  label: 'Monitor',
+  color: '#06b6d4',
   category: 'control',
   icon: '👁',
   description: 'Periodically re-scan sources for new videos and feed them to the scheduler',

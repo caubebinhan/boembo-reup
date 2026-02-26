@@ -11,6 +11,21 @@
   ],
   "compilerOptions": {
     "composite": true,
+    "baseUrl": ".",
+    "paths": {
+      "@main/*": [
+        "src/main/*"
+      ],
+      "@core/*": [
+        "src/core/*"
+      ],
+      "@nodes/*": [
+        "src/nodes/*"
+      ],
+      "@shared/*": [
+        "src/shared/*"
+      ]
+    },
     "types": [
       "electron-vite/node"
     ]

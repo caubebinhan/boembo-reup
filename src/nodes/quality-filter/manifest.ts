@@ -1,4 +1,4 @@
-import { NodeManifest } from '../../core/nodes/NodeDefinition'
+﻿import { NodeManifest } from '@core/nodes/NodeDefinition'
 
 const manifest: NodeManifest = {
   id: 'core.quality_filter',

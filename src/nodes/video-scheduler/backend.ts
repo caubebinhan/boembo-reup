@@ -1,14 +1,11 @@
-import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
-import { db } from '../../main/db/Database'
+﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { normalizeTimeRanges, nextValidSlot } from '../_shared/timeWindow'
-import { ExecutionLogger } from '../../core/engine/ExecutionLogger'
 
 /**
  * VideoScheduler Node
  *
- * Calculates a `scheduled_for` timestamp for each video using the
- * campaign's time ranges (multi-range or legacy single window).
- * Saves to DB and passes array to the loop node.
+ * Calculates scheduled_for timestamps for each video using campaign time ranges.
+ * Saves to campaign document via CampaignStore.
  */
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const videos = Array.isArray(input) ? input : (input.videos || input.items || [])
@@ -21,7 +18,6 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   const intervalMinutes = ctx.params.intervalMinutes ?? 60
   const intervalMs = intervalMinutes * 60 * 1000
 
-  // Resolve time ranges (multi-range or legacy single window)
   const ranges = normalizeTimeRanges(ctx.params)
   const rangeDesc = ranges.length === 1
     ? `${ranges[0].start}–${ranges[0].end}`
@@ -31,51 +27,50 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   ctx.onProgress(`📋 Scheduling ${videos.length} videos...`)
 
   // Reset last_processed_index for a fresh run
-  db.prepare('UPDATE campaigns SET last_processed_index = 0 WHERE id = ?').run(ctx.campaign_id)
-
-  // Use INSERT OR REPLACE — works regardless of PK structure
-  const upsert = db.prepare(`
-    INSERT OR REPLACE INTO videos (platform_id, campaign_id, status, scheduled_for, queue_index, data_json)
-    VALUES (?, ?, 'queued', ?, ?, ?)
-  `)
+  ctx.store.lastProcessedIndex = 0
 
   let cursor = Date.now()
 
-  const transaction = db.transaction(() => {
-    for (let i = 0; i < videos.length; i++) {
-      // Find next valid slot within any active time window
-      cursor = nextValidSlot(cursor, ranges)
-
-      const video = videos[i]
-      video.scheduled_for = cursor
-      video.queue_index = i
-
-      upsert.run(
-        video.platform_id || video.id,
-        ctx.campaign_id,
-        cursor,
-        i,
-        JSON.stringify(video)
-      )
-
-      // Advance cursor by interval for next video
-      cursor += intervalMs
+  const scheduledVideos = videos.map((video: any, i: number) => {
+    cursor = nextValidSlot(cursor, ranges)
+    const record = {
+      platform_id: video.platform_id || video.id,
+      status: 'queued',
+      data: video,
+      scheduled_for: cursor,
+      queue_index: i,
     }
+    video.scheduled_for = cursor
+    video.queue_index = i
+    cursor += intervalMs
+    return record
   })
 
-  transaction()
+  // Save to campaign document
+  ctx.store.setVideos(scheduledVideos)
+  ctx.store.setCounter('queued', videos.length)
+  ctx.store.save()
 
-  // Update campaign queued count
-  db.prepare('UPDATE campaigns SET queued_count = ? WHERE id = ?').run(videos.length, ctx.campaign_id)
+  // Detect missed jobs: videos whose scheduled_for is already in the past
+  const now = Date.now()
+  const missedVideos = scheduledVideos.filter(v => v.scheduled_for < now)
 
-  ExecutionLogger.log({
-    campaign_id: ctx.campaign_id,
-    instance_id: 'scheduler_1',
-    node_id: 'core.video_scheduler',
-    level: 'info',
-    event: 'videos:queued',
-    message: `📋 ${videos.length} videos queued on timeline`,
-  })
+  if (missedVideos.length > 0) {
+    // Reschedule missed videos starting from now
+    let rescheduleCursor = now
+    let rescheduledCount = 0
+    for (const v of missedVideos) {
+      rescheduleCursor = nextValidSlot(rescheduleCursor, ranges)
+      ctx.store.updateVideo(v.platform_id, { scheduled_for: rescheduleCursor })
+      rescheduleCursor += intervalMs
+      rescheduledCount++
+    }
+    ctx.store.save()
+
+    const alertMsg = `Phát hiện ${missedVideos.length} video bị missed. Đã reschedule ${rescheduledCount} video từ thời điểm hiện tại.`
+    ctx.logger.info(`[VideoScheduler] ⚠️ ${alertMsg}`)
+    ctx.alert('warn', `⚠️ Detected ${missedVideos.length} missed job${missedVideos.length > 1 ? 's' : ''}`, `Rescheduled ${rescheduledCount} video${rescheduledCount > 1 ? 's' : ''} starting from now`)
+  }
 
   const firstTime = new Date(videos[0].scheduled_for).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
   const lastTime = new Date(videos[videos.length - 1].scheduled_for).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })

@@ -4,69 +4,79 @@
 
 ```
 src/
-├── core/                    # Framework: engine, registries, contracts (NO workflow logic)
-│   ├── engine/
-│   │   ├── FlowEngine.ts    # Executes workflows: job polling, node execution, loop handling
-│   │   ├── ExecutionLogger.ts # Logs all events to DB + emits to renderer
-│   │   └── PipelineEventBus.ts # EventEmitter singleton for inter-module events
-│   ├── flow/
-│   │   ├── FlowLoader.ts    # Loads flow.yaml files, parses into FlowDefinition
-│   │   └── ExecutionContracts.ts # TypeScript interfaces for flows, nodes, edges
-│   └── nodes/
-│       ├── NodeDefinition.ts # Core types: NodeManifest, NodeConfigSchema, NodeExecutionContext
-│       └── NodeRegistry.ts  # Global node registry (auto-populated)
-├── nodes/                   # Node implementations (auto-discovered via import.meta.glob)
-│   ├── _shared/
-│   │   └── timeWindow.ts    # Shared time-window utilities (normalizeTimeRanges, nextValidSlot)
-│   ├── index.ts             # Auto-discovery barrel — scans ./**/index.ts, registers all nodes
-│   ├── tiktok-scanner/      # Each node = folder with manifest.ts + backend.ts + index.ts
-│   ├── video-scheduler/
-│   ├── caption-generator/   # Generates captions from template (captionTemplate, removeHashtags, appendTags)
-│   ├── tiktok-account-dedup/ # Per-account duplicate detection before publish (publish_history)
-│   ├── tiktok-publisher/
-│   └── ... (16 nodes total)
-├── workflows/               # Workflow definitions (auto-discovered by main/index.ts)
-│   └── tiktok-repost/
-│       ├── flow.yaml        # Pipeline definition
-│       ├── recovery.ts      # Workflow-specific crash recovery logic
-│       ├── wizard.ts        # Wizard step configuration (renderer-side)
-│       ├── card.tsx         # Campaign card component (renderer-side)
-│       └── detail.tsx       # Campaign detail view (renderer-side)
-├── shared/
-│   └── ipc-types.ts         # IPC channel constants + WizardSessionData type
-├── renderer/src/            # React frontend
-│   ├── store/               # Redux Toolkit store
-│   │   ├── campaignsSlice.ts
-│   │   ├── pipelineSlice.ts
-│   │   ├── nodeEventsSlice.ts
-│   │   └── interactionSlice.ts
-│   ├── components/wizard/   # Shared wizard step components
-│   └── detail/shared/
-│       └── PipelineVisualizer.tsx # Campaign pipeline visualization + InspectPanel
-├── preload/
-│   └── index.ts             # Exposes window.api { invoke, on, removeAllListeners }
-└── main/                    # Electron main process
-    ├── index.ts             # App entry: initDb, CrashRecovery, FlowLoader, FlowEngine, IPC setup
-    ├── services/
-    │   ├── CrashRecovery.ts      # On-startup: reset stuck jobs, delegate to per-workflow handlers
-    │   ├── PublishAccountService.ts # TikTok account management via BrowserWindow login
-    │   ├── BrowserService.ts      # Playwright browser pooling
-    │   ├── BrowserProfileScannerService.ts # Scan existing browser profiles
-    │   ├── AppSettingsService.ts   # Key-value settings in app_settings table
-    │   └── TroubleshootingService.ts
-    ├── ipc/                 # IPC handlers (campaigns, scanner, wizard, settings, troubleshooting)
-    ├── tiktok/              # TikTok-specific modules (publisher, scanner)
-    └── db/                  # SQLite database
-        ├── Database.ts      # Schema + migrations
-        ├── JobQueue.ts      # Job CRUD
-        └── VideoQueueRepo.ts
+ core/                    # Framework: engine, registries, contracts (NO workflow logic)
+   engine/
+     FlowEngine.ts    # Executes workflows: job polling, node execution, loop handling
+     ExecutionLogger.ts # Logs all events to DB + emits to renderer
+     PipelineEventBus.ts # EventEmitter singleton for inter-module events
+   flow/
+     FlowLoader.ts    # Loads flow.yaml files, parses into FlowDefinition
+     ExecutionContracts.ts # TypeScript interfaces for flows, nodes, edges
+   nodes/
+       NodeDefinition.ts # Core types: NodeManifest, NodeConfigSchema, NodeExecutionContext
+       NodeRegistry.ts  # Global node registry (auto-populated)
+ nodes/                   # Node implementations (auto-discovered via import.meta.glob)
+   _shared/
+     timeWindow.ts    # Shared time-window utilities (normalizeTimeRanges, nextValidSlot)
+   index.ts             # Auto-discovery barrel - scans ./**/index.ts, registers all nodes
+   tiktok-scanner/      # Each node = folder with manifest.ts + backend.ts + index.ts
+   video-scheduler/
+   caption-generator/   # Generates captions from template (captionTemplate, removeHashtags, appendTags)
+   tiktok-account-dedup/ # Per-account duplicate detection before publish (publish_history)
+   tiktok-publisher/
+   ... (16 nodes total)
+ workflows/               # Versioned workflow packages (auto-discovered)
+   tiktok-repost/
+     v1.0/
+       flow.yaml        # Pipeline definition (latest version cached by FlowLoader)
+       recovery.ts      # Workflow-specific crash recovery logic (main)
+       ipc.ts           # Workflow-specific IPC handlers (main)
+       events.ts        # Workflow-specific event listeners (main)
+       wizard.ts        # Wizard step configuration (renderer-side)
+       card.tsx         # Campaign card component (renderer-side)
+       detail.tsx       # Campaign detail view (renderer-side)
+ shared/
+   ipc-types.ts         # IPC channel constants + WizardSessionData type
+ renderer/src/            # React frontend
+   store/               # Redux Toolkit store
+     campaignsSlice.ts
+     pipelineSlice.ts
+     nodeEventsSlice.ts
+     interactionSlice.ts
+   components/wizard/   # Shared wizard step components
+   detail/shared/
+       PipelineVisualizer.tsx # Campaign pipeline visualization + InspectPanel
+ preload/
+   index.ts             # Exposes window.api { invoke, on, removeAllListeners }
+ main/                    # Electron main process
+     index.ts             # App entry: initDb, CrashRecovery, FlowLoader, FlowEngine, IPC setup
+     services/
+       CrashRecovery.ts      # On-startup: reset stuck jobs, delegate to per-workflow handlers
+       PublishAccountService.ts # TikTok account management via BrowserWindow login
+       BrowserService.ts      # Playwright browser pooling
+       BrowserProfileScannerService.ts # Scan existing browser profiles
+       AppSettingsService.ts   # Key-value settings in app_settings table
+       TroubleshootingService.ts
+     ipc/                 # IPC handlers (campaigns, scanner, wizard, settings, troubleshooting)
+     tiktok/              # TikTok-specific modules (publisher, scanner)
+     db/                  # SQLite database
+         Database.ts      # Schema initialization (document-store)
+         models/          # TypeScript interfaces: Campaign, Job, Account, PublishHistory
+         repositories/    # BaseRepo + CampaignRepo, JobRepo, PublishHistoryRepo, etc.
 ```
+
+> Workflow auto-discovery in `src/workflows/index.ts` is **main-process only** and scans versioned modules (`src/workflows/*/v*/recovery.ts`, `ipc.ts`, `services.ts`, `events.ts`) so multiple workflow versions can coexist.
+>
+> Renderer UI auto-discovery is separate:
+> `workflowWizardRegistry.ts` scans `src/workflows/*/v*/wizard.{ts,tsx}` (latest discovered version wins for new campaign creation),
+> `CampaignCard.tsx` scans `src/workflows/*/v*/card.tsx` (latest wins),
+> and `WorkflowDetailRegistry.ts` scans `src/workflows/*/v*/detail.tsx` (version-aware using `campaign.workflow_version`, fallback to latest).
 
 ---
 
 ## Core Interfaces
 
-### `NodeDefinition` — The Node Contract
+### `NodeDefinition` - The Node Contract
 
 ```typescript
 // src/core/nodes/NodeDefinition.ts
@@ -88,7 +98,7 @@ interface NodeConfigSchema {
 interface NodeExecutionContext {
   campaign_id: string
   job_id?: string
-  params: Record<string, any>          // Campaign params from wizard
+  params: Record<string, any>          // Effective runtime params (campaign params + inline node params)
   logger: { info(msg: string): void; error(msg: string, err?: any): void }
   onProgress(msg: string): void        // Shows status in PipelineVisualizer
 }
@@ -117,7 +127,7 @@ interface NodeDefinition {
 }
 ```
 
-### `FlowDefinition` — The Workflow Contract
+### `FlowDefinition` - The Workflow Contract
 
 ```typescript
 // src/core/flow/ExecutionContracts.ts
@@ -137,11 +147,11 @@ interface FlowDefinition {
 interface FlowNodeDefinition {
   node_id: string                      // References NodeManifest.id
   instance_id: string                  // Unique within this flow (e.g. 'scanner_1')
-  children?: string[]                  // Only for loop nodes — child instance_ids
+  params?: Record<string, any>         // Inline node-level params merged into ctx.params by FlowEngine
+  children?: string[]                  // Only for loop nodes - child instance_ids
   on_error?: 'skip' | 'stop_campaign' | 'retry'
   timeout?: number                     // Node-level timeout in ms
   events?: Record<string, { action: 'skip_item' | 'pause_campaign' | 'stop_campaign'; emit?: string }>
-  params?: Record<string, any>         // Node-level static params (e.g. condition expressions)
   execution?: any                      // Runtime state (populated by engine)
 }
 
@@ -156,43 +166,41 @@ interface FlowEdgeDefinition {
 
 ## Database Schema
 
+All domain data is stored as JSON documents (`data_json` column). Only fields needed for cross-document SQL queries are denormalized as indexed columns.
+
 ### `campaigns` table
 | Column | Type | Description |
 |---|---|---|
 | `id` | TEXT PK | Random 8-char hex ID |
-| `workflow_id` | TEXT | References flow.yaml `id` |
-| `name` | TEXT | Campaign display name |
-| `params` | TEXT (JSON) | All wizard settings — **single source of truth** |
-| `status` | TEXT | `idle` → `active` → `paused` / `finished` / `error` / `needs_captcha` |
-| `last_processed_index` | INTEGER | Loop resume checkpoint (which video index was last processed) |
-| `queued_count` / `downloaded_count` / `published_count` / `failed_count` | INTEGER | Live counters |
-| `created_at` / `updated_at` | INTEGER | Unix timestamps |
+| `data_json` | TEXT (JSON) | Full `CampaignDocument` includes `name`, `workflow_id`, `workflow_version`, `status`, `params`, `videos[]`, `alerts[]`, `counters`, `meta`, `last_processed_index`, `flow_snapshot` |
+| `created_at` / `updated_at` | INTEGER | Unix timestamps (denormalized for sorting) |
 
-### `videos` table
-| Column | Type | Description |
-|---|---|---|
-| `platform_id` | TEXT (PK) | TikTok video ID |
-| `campaign_id` | TEXT (PK) | Composite PK with platform_id |
-| `status` | TEXT | `queued` → `processing` → `published` / `under_review` / `failed` / `duplicate` / `skipped` |
-| `publish_url` | TEXT | TikTok publish URL after upload |
-| `local_path` | TEXT | Downloaded file path |
-| `data_json` | TEXT (JSON) | Video metadata (caption, author, stats, generated_caption, etc.) |
-| `scheduled_for` | INTEGER | Unix timestamp for when video should be published |
-| `queue_index` | INTEGER | Order in the queue |
+**`CampaignDocument` structure** (embedded in `data_json`):
+```typescript
+{
+  id, name, workflow_id, workflow_version, status,
+  params: Record<string, any>,      // All wizard settings single source of truth
+  flow_snapshot: FlowDefinition,    // Frozen flow at creation time
+  videos: VideoRecord[],            // All videos: { platform_id, status, local_path, publish_url, data, scheduled_for, queue_index }
+  alerts: AlertRecord[],            // Workflow alerts: { level, title, body, created_at }
+  counters: { queued, downloaded, published, failed },
+  last_processed_index: number,     // Loop resume checkpoint
+  meta: Record<string, any>,        // Schemaless workflow-specific runtime state
+}
+```
+
+> Videos are **NOT** a separate table they live inside `campaigns.data_json` as `VideoRecord[]`.
+> Access via `CampaignStore.videos`, `CampaignStore.findVideo(platformId)`, `CampaignStore.updateVideo(...)`, etc.
 
 ### `jobs` table
 | Column | Type | Description |
 |---|---|---|
 | `id` | TEXT PK | UUID |
-| `campaign_id` | TEXT | FK to campaigns |
-| `workflow_id` | TEXT | Which flow this job belongs to |
-| `node_id` | TEXT | NodeManifest.id |
-| `instance_id` | TEXT | FlowNodeDefinition.instance_id |
-| `type` | TEXT | Always `'FLOW_STEP'` |
-| `status` | TEXT | `pending` → `running` → `completed` / `failed` |
-| `data_json` | TEXT (JSON) | Input data for the node |
-| `error_message` | TEXT | Error details if failed |
-| `scheduled_at` / `started_at` / `completed_at` | INTEGER | Timing |
+| `data_json` | TEXT (JSON) | Full `JobDocument` (`workflow_id`, `node_id`, `instance_id`, `type`, `status`, `error_message`, timestamps, node input data, etc.) |
+| `status` | TEXT | Denormalized index for polling: `pending` / `running` / `completed` / `failed` |
+| `campaign_id` | TEXT | Denormalized index for campaign queries |
+| `scheduled_at` | INTEGER | Denormalized index for scheduler polling |
+| `created_at` / `updated_at` | INTEGER | Denormalized timestamps for sorting/updates |
 
 ### `execution_logs` table
 | Column | Type | Description |
@@ -209,40 +217,34 @@ interface FlowEdgeDefinition {
 | Column | Type |
 |---|---|
 | `id` | TEXT PK |
-| `platform` | TEXT (default 'tiktok') |
-| `username` / `handle` / `avatar` | TEXT |
-| `cookies_json` | TEXT (JSON array of cookies) |
-| `proxy` | TEXT |
-| `session_status` | TEXT (`active` / `expired`) |
-| `auto_caption` / `auto_tags` | INTEGER / TEXT |
+| `data_json` | TEXT (JSON) | Account data: `username`, `handle`, `avatar`, `cookies`, `proxy`, `session_status`, etc. |
+| `created_at` / `updated_at` | INTEGER |
 
 ### `publish_history` table
 | Column | Type |
 |---|---|
 | `id` | TEXT PK |
-| `account_id` / `account_username` | TEXT |
-| `campaign_id` / `source_platform_id` | TEXT |
-| `source_local_path` | TEXT |
-| `file_fingerprint` / `caption_hash` / `caption_preview` | TEXT |
-| `published_video_id` / `published_url` | TEXT |
-| `media_signature_json` / `media_signature_version` | TEXT |
-| `duplicate_reason` | TEXT |
-| `status` | TEXT (`under_review` / `published` / `duplicate`) |
+| `data_json` | TEXT (JSON) | Full history record |
+| `account_id` | TEXT | Indexed for dedup queries |
+| `source_platform_id` | TEXT | Indexed source video ID |
+| `file_fingerprint` | TEXT | Indexed file-level dedup |
+| `status` | TEXT | `published` / `under_review` / `duplicate` |
+| `created_at` / `updated_at` | INTEGER |
 
 ### `app_settings` table
 | Column | Type | Description |
 |---|---|---|
-| `key` | TEXT PK | Setting key |
-| `value_json` | TEXT | JSON-encoded value |
+| `id` | TEXT PK | Setting key |
+| `data_json` | TEXT | JSON-encoded value |
 | `updated_at` | INTEGER | Unix timestamp |
 
-> Used by `AppSettingsService` for storing global key-value app settings.
+> Used by `SettingsRepo` / `AppSettingsService` for global key-value app settings.
 
 ---
 
 ## Campaign Parameters (Source of Truth)
 
-All backend nodes receive these via `ctx.params`. **Use these exact names — never create aliases.**
+All backend nodes receive these via `ctx.params`. **Use these exact names never create aliases.**
 
 | Parameter | Type | Set By | Purpose |
 |---|---|---|---|
@@ -252,10 +254,9 @@ All backend nodes receive these via `ctx.params`. **Use these exact names — ne
 | `appendTags` | `string` | Step1 | Tags to append to caption |
 | `intervalMinutes` | `number` | Step4 | **Gap (minutes) between videos.** Default: `60` |
 | `timeRanges` | `TimeRange[]` | Step4 | Active time windows for scheduling |
-| `sources` | `Source[]` | Step2 | TikTok channels/keywords to scan |
+| `sources` | `Source[]` | Step2 | TikTok channels/keywords to scan (per-source config includes `historyLimit`, `sortOrder`, `timeRange`, `startDate`, `endDate`) |
 | `selectedAccounts` | `string[]` | Step5 | Publish account IDs (round-robin) |
 | `privacy` | `string` | Step5 | TikTok privacy setting. Default: `'public'` |
-| `maxVideos` | `number` | Step3 | Max videos to process per run. Default: `100` |
 
 ### TimeRange shape
 
@@ -267,7 +268,7 @@ interface TimeRange {
 }
 ```
 
-**Priority order:** `timeRanges` (if set) → `activeHoursStart/End/Days` (legacy) → 24/7 fallback.
+**Priority order:** `timeRanges` (if set) 24/7 fallback.
 Use `normalizeTimeRanges(ctx.params)` from `nodes/_shared/timeWindow.ts`.
 
 ---
@@ -277,44 +278,47 @@ Use `normalizeTimeRanges(ctx.params)` from `nodes/_shared/timeWindow.ts`.
 ### Preload Bridge
 
 ```typescript
-// Renderer uses: window.api.invoke(channel, data?)  — for request/response
-//                window.api.on(channel, callback)    — for push events from main
+// Renderer uses: window.api.invoke(channel, data?)  for request/response
+//                window.api.on(channel, callback)    for push events from main
 ```
 
-### IPC Channels (Request/Response — `ipcMain.handle`)
+### IPC Channels (Request/Response `ipcMain.handle`)
 
 | Channel | Direction | Handler File | Description |
 |---|---|---|---|
-| `wizard:start` | renderer → main | `ipc/wizard.ts` | Start wizard session |
-| `wizard:get-session` | renderer → main | `ipc/wizard.ts` | Get current wizard session |
-| `wizard:commit-step` | renderer → main | `ipc/wizard.ts` | Save wizard step data |
-| `wizard:go-back` | renderer → main | `ipc/wizard.ts` | Go to previous wizard step |
-| `campaign:list` | renderer → main | `ipc/campaigns.ts` | List all campaigns |
-| `campaign:get` | renderer → main | `ipc/campaigns.ts` | Get single campaign by ID |
-| `campaign:create` | renderer → main | `ipc/campaigns.ts` | Create campaign from wizard |
-| `campaign:delete` | renderer → main | `ipc/campaigns.ts` | Delete campaign + logs |
-| `campaign:trigger` | renderer → main | `ipc/campaigns.ts` | Start/run campaign |
-| `campaign:pause` | renderer → main | `ipc/campaigns.ts` | Pause campaign |
-| `campaign:resume` | renderer → main | `ipc/campaigns.ts` | Resume campaign |
-| `campaign:get-jobs` | renderer → main | `ipc/campaigns.ts` | Get jobs for campaign |
-| `campaign:get-flow-nodes` | renderer → main | `ipc/campaigns.ts` | Get flow definition + `editable_settings` |
-| `campaign:get-logs` | renderer → main | `ipc/campaigns.ts` | Get execution logs (limit optional) |
-| `campaign:get-videos` | renderer → main | `ipc/campaigns.ts` | Get videos for campaign (ordered by queue_index) |
-| `campaign:get-node-progress` | renderer → main | `ipc/campaigns.ts` | Get latest progress message per node instance |
-| `campaign:update-params` | renderer → main | `ipc/campaigns.ts` | Merge params into campaign |
-| `campaign:reschedule-all` | renderer → main | `ipc/campaigns.ts` | Recalculate all queued video times |
-| `toggle-campaign-status` | renderer → main | `ipc/campaigns.ts` | Toggle active/paused |
-| `flow:get-presets` | renderer → main | `ipc/campaigns.ts` | List available workflows (with node tags) |
-| `flow:list` | renderer → main | `ipc/campaigns.ts` | List workflows (minimal fields) |
-| `flow:get-ui-descriptor` | renderer → main | `ipc/campaigns.ts` | Get workflow UI config |
-| `open-scanner-window` | renderer → main | `ipc/scanner.ts` | Open TikTok scanner popup |
-| `video:reschedule` | renderer → main | `ipc/campaigns.ts` | Reschedule single video |
-| `video:show-in-explorer` | renderer → main | `ipc/campaigns.ts` | Open file in system explorer |
-| `account:list` | renderer → main | `ipc/settings.ts` | List publish accounts |
-| `account:add` | renderer → main | `ipc/settings.ts` | Add TikTok account via login |
-| `nodes:catalog` | renderer → main | `ipc/campaigns.ts`? | (defined in IPC_CHANNELS, not yet implemented) |
+| `wizard:start` | renderer -> main | `ipc/wizard.ts` | Start wizard session |
+| `wizard:get-session` | renderer -> main | `ipc/wizard.ts` | Get current wizard session |
+| `wizard:commit-step` | renderer -> main | `ipc/wizard.ts` | Save wizard step data |
+| `wizard:go-back` | renderer -> main | `ipc/wizard.ts` | Go to previous wizard step |
+| `campaign:list` | renderer -> main | `ipc/campaigns.ts` | List all campaigns |
+| `campaign:get` | renderer -> main | `ipc/campaigns.ts` | Get single campaign by ID |
+| `campaign:create` | renderer -> main | `ipc/campaigns.ts` | Create campaign from wizard |
+| `campaign:delete` | renderer -> main | `ipc/campaigns.ts` | Delete campaign + logs |
+| `campaign:trigger` | renderer -> main | `ipc/campaigns.ts` | Start/run campaign |
+| `campaign:pause` | renderer -> main | `ipc/campaigns.ts` | Pause campaign |
+| `campaign:resume` | renderer -> main | `ipc/campaigns.ts` | Resume campaign |
+| `campaign:get-jobs` | renderer -> main | `ipc/campaigns.ts` | Get jobs for campaign |
+| `campaign:get-flow-nodes` | renderer -> main | `ipc/campaigns.ts` | Get flow definition + `editable_settings` |
+| `campaign:get-logs` | renderer -> main | `ipc/campaigns.ts` | Get execution logs (limit optional) |
+| `campaign:get-videos` | renderer -> main | `workflows/tiktok-repost/v1.0/ipc.ts` | Get videos for campaign (ordered by queue_index) |
+| `campaign:get-alerts` | renderer -> main | `workflows/tiktok-repost/v1.0/ipc.ts` | Get workflow alerts for campaign |
+| `campaign:get-node-progress` | renderer -> main | `ipc/campaigns.ts` | Get latest progress message per node instance |
+| `campaign:update-params` | renderer -> main | `ipc/campaigns.ts` | Merge params into campaign |
+| `campaign:reschedule-all` | renderer -> main | `workflows/tiktok-repost/v1.0/ipc.ts` | Recalculate all queued video times |
+| `toggle-campaign-status` | renderer -> main | `ipc/campaigns.ts` | Toggle active/paused |
+| `flow:get-presets` | renderer -> main | `ipc/campaigns.ts` | List available workflows (with node tags) |
+| `flow:list` | renderer -> main | `ipc/campaigns.ts` | List workflows (minimal fields) |
+| `flow:get-ui-descriptor` | renderer -> main | `ipc/campaigns.ts` | Get workflow UI config |
+| `open-scanner-window` | renderer -> main | `ipc/scanner.ts` | Open TikTok scanner popup |
+| `video:reschedule` | renderer -> main | `workflows/tiktok-repost/v1.0/ipc.ts` | Reschedule single video |
+| `video:show-in-explorer` | renderer -> main | `workflows/tiktok-repost/v1.0/ipc.ts` | Open file in system explorer |
+| `account:list` | renderer -> main | `ipc/settings.ts` | List publish accounts |
+| `account:add` | renderer -> main | `ipc/settings.ts` | Add TikTok account via login |
+| `nodes:catalog` | renderer -> main | `ipc/campaigns.ts`? | (defined in IPC_CHANNELS, not yet implemented) |
 
-### Push Events (Main → Renderer via `webContents.send`)
+> Workflow-specific request/response channels can also be registered from `src/workflows/*/v*/ipc.ts` via the workflow auto-discovery barrel.
+
+### Push Events (Main -> Renderer via `webContents.send`)
 
 | Event | Emitted By | Payload | Listener |
 |---|---|---|---|
@@ -322,11 +326,11 @@ Use `normalizeTimeRanges(ctx.params)` from `nodes/_shared/timeWindow.ts`.
 | `node:status` | `ExecutionLogger.nodeStart/End/Error` | `{ campaignId, instanceId, status, error? }` | `nodeEventsSlice.updateNodeStatus` |
 | `node:progress` | `ExecutionLogger.nodeProgress` | `{ campaignId, instanceId, message }` | `nodeEventsSlice.updateNodeProgress` |
 | `execution:node-data` | `ExecutionLogger.nodeData` | `{ campaignId, instanceId, data }` | Detail views |
-| `node:event` | `ExecutionLogger.emitNodeEvent` | `{ campaignId, instanceId, event, data }` | Condition/notify handling |
+| `node:event` | `ExecutionLogger.emitNodeEvent` | `{ campaignId, instanceId, event, data }` | Workflow `events.ts` listeners + custom UI/reactive handling |
 | `pipeline:interaction_waiting` | `PipelineEventBus` | session payload | `interactionSlice` |
 | `pipeline:interaction_resolved` | `PipelineEventBus` | session payload | `interactionSlice` |
 | `campaign:created` | `campaigns.ts` | campaign object | Campaign list refresh |
-| `campaigns-updated` | Various | — | Global campaign list refresh |
+| `campaigns-updated` | Various | - | Global campaign list refresh |
 | `campaign:params-updated` | `campaigns.ts` | `{ id, params }` | Visualizer settings refresh |
 | `scanner:import` | `scanner.ts` | source data | Wizard step 2 |
 
@@ -336,17 +340,17 @@ Use `normalizeTimeRanges(ctx.params)` from `nodes/_shared/timeWindow.ts`.
 
 ```mermaid
 graph TD
-    A[User creates campaign via Wizard] --> B[campaign:create IPC → DB]
-    B --> C[User clicks Run → campaign:trigger]
+    A[User creates campaign via Wizard] --> B[campaign:create IPC DB]
+    B --> C[User clicks Run campaign:trigger]
     C --> D[FlowEngine.triggerCampaign]
-    D --> E[Load flow.yaml, find start nodes]
-    E --> F[Create Job for each start node → DB]
+    D --> E[Resolve flow (snapshot/latest), find start nodes]
+    E --> F[Create Job for each start node DB]
     F --> G[FlowEngine.tick polls every 5s]
     G --> H{Job type?}
-    H -- Regular --> I[Execute node → get result]
-    H -- Loop --> J[Execute loop → iterate items]
+    H -- Regular --> I[Execute node get result]
+    H -- Loop --> J[Execute loop iterate items]
     I --> K{result.action?}
-    K -- continue --> L[Follow edges → create next jobs]
+    K -- continue --> L[Follow edges create next jobs]
     K -- finish --> M[Set campaign = 'finished']
     K -- recall --> N[Jump back to recall_target]
     J --> O[For each item: run children pipeline]
@@ -357,17 +361,17 @@ graph TD
 
 ```
 for each item in items (starting from last_processed_index):
-  1. Check campaign status (paused? → return)
+  1. Check campaign status (paused? return)
   2. For each child node:
-     a. If item was skipped → only run timeout/condition/notify
+     a. If item was skipped only run timeout/condition
      b. Execute node with current data
      c. Handle result:
-        - action='finish' → stop campaign
-        - action='continue' + no data → mark skipped
-        - Otherwise → pass data to next child
+        - action='finish' stop campaign
+        - action='continue' + no data mark skipped
+        - Otherwise pass data to next child
      d. On error:
-        - on_error='stop_campaign' → set campaign to 'error'
-        - on_error='skip' → skip item, still run timeout
+        - match `events:` handler (loop child only) -> execute action (skip_item/pause_campaign/stop_campaign), optional `emit`
+        - then apply `on_error` fallback (`stop_campaign` or skip item)
   3. Save progress: UPDATE campaigns SET last_processed_index = i+1
 ```
 
@@ -376,28 +380,29 @@ for each item in items (starting from last_processed_index):
 The recovery system is **two-tier**:
 
 1. **Generic** (`CrashRecovery.ts`): Resets all `running` jobs to `pending`.
-2. **Per-workflow** (`workflows/*/recovery.ts`): Each workflow registers a `recover(campaignId)` handler via `CrashRecoveryService.registerRecovery(workflowId, { recover })`.
+2. **Per-workflow** (`workflows/*/v*/recovery.ts`): Each workflow version can register a `recover(campaignId)` handler via `CrashRecoveryService.registerRecovery(workflowId, { recover })`.
 
-#### `tiktok-repost` recovery (`src/workflows/tiktok-repost/recovery.ts`):
+#### `tiktok-repost` recovery (`src/workflows/tiktok-repost/v1.0/recovery.ts`):
 ```
-1. Find queued videos with scheduled_for < NOW → reschedule from now
-2. Find under_review videos → reset to 'queued' (publisher will resume verification)
-3. If no pending/running jobs → re-trigger campaign from start
+1. Find queued videos with scheduled_for < NOW reschedule from now
+2. Find under_review videos reset to 'queued' (publisher will resume verification)
+3. If no pending/running jobs re-trigger campaign from start
 ```
 
-> To add recovery for a new workflow: create `src/workflows/my-workflow/recovery.ts` exporting `recover(campaignId)`, and register it on startup.
+> To add recovery for a new workflow version: create `src/workflows/my-workflow/v1.0/recovery.ts` exporting `recover(campaignId)`, and register it on startup.
 
 ---
 
 ## How to Write a Node
 
-Each node is a self-contained folder under `src/nodes/`. Auto-discovered at runtime.
+Most nodes are self-contained folders under `src/nodes/` and are auto-discovered at runtime.
+(`core.loop` is a FlowEngine built-in special case, not a folder in `src/nodes`.)
 
 ```
 src/nodes/my-node/
-├── manifest.ts    # Node metadata
-├── backend.ts     # Execution logic
-└── index.ts       # Entry: imports both, exports { manifest, execute } as NodeDefinition
+ manifest.ts    # Node metadata
+ backend.ts     # Execution logic
+ index.ts       # Entry: imports both, exports { manifest, execute } as NodeDefinition
 ```
 
 ### manifest.ts
@@ -408,8 +413,8 @@ import { NodeManifest } from '../../core/nodes/NodeDefinition'
 const manifest: NodeManifest = {
   id: 'my-namespace.my_node',
   name: 'My Node',
-  category: 'processing',
-  icon: '🔧',
+  category: 'transform',
+  icon: '',
   description: 'What this node does',
   // Optional: editable in visualizer
   editable_settings: {
@@ -431,11 +436,11 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   ctx.onProgress('Processing...')
   ctx.logger.info('Started processing')
 
-  // Use ONLY canonical ctx.params names — NEVER create fallbacks
+  // Use ONLY canonical ctx.params names - NEVER create fallbacks
   const myParam = ctx.params.myParam ?? 10
 
   return {
-    data: result,        // Passed as input to next node
+    data: input,         // Passed as input to next node
     action: 'continue',  // 'continue' | 'finish' | 'recall'
     message: 'Done',
   }
@@ -444,9 +449,9 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
 ### Key Rules
 
-- **Use only canonical `ctx.params` names.** Never add `?? ctx.params.some_legacy_alias` — this causes drift.
+- **Use only canonical `ctx.params` names.** Never add `?? ctx.params.some_legacy_alias` this causes drift.
 - **Return `{ data: null }`** to signal skip (e.g. dedup detected duplicate).
-- **Throw errors** for hard failures — engine handles via `on_error` config.
+- **Throw errors** for hard failures. In the current FlowEngine, `on_error` handling is applied to loop child nodes; non-loop node failures mark the job as failed.
 - **Use `ctx.logger`**, not `console.log`. Logs go to DB + show in execution log UI.
 - **Use `ctx.onProgress(msg)`** for live status in PipelineVisualizer.
 
@@ -456,11 +461,15 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
 ```
 src/workflows/my-workflow/
-├── flow.yaml        # Required: pipeline definition
-├── recovery.ts      # Optional: crash recovery handler
-├── wizard.ts        # Optional: wizard step config (renderer)
-├── card.tsx         # Optional: campaign list card (renderer)
-└── detail.tsx       # Optional: campaign detail view (renderer)
+`-- v1.0/
+    |-- flow.yaml        # Required: pipeline definition
+    |-- recovery.ts      # Optional: crash recovery handler (main auto-load)
+    |-- ipc.ts           # Optional: workflow-specific IPC handlers (main auto-load)
+    |-- services.ts      # Optional: workflow-specific service setup (main auto-load)
+    |-- events.ts        # Optional: workflow-specific event listeners (main auto-load)
+    |-- wizard.tsx       # Optional: wizard step config (renderer auto-discovery)
+    |-- card.tsx         # Optional: campaign list card (renderer auto-discovery)
+    `-- detail.tsx       # Optional: campaign detail view (renderer auto-discovery)
 ```
 
 ### flow.yaml Structure
@@ -468,7 +477,7 @@ src/workflows/my-workflow/
 ```yaml
 id: my-workflow
 name: My Workflow
-icon: 🔧
+icon: 
 color: "#8b5cf6"
 version: "1.0"
 
@@ -480,7 +489,7 @@ nodes:
   - node_id: core.video_scheduler
     instance_id: scheduler_1
 
-  # Loop node — runs children for each item
+  # Loop node runs children for each item
   - node_id: core.loop
     instance_id: video_loop
     children: [check_time_1, dedup_1, downloader_1, caption_1, account_dedup_1, publisher_1]
@@ -496,13 +505,13 @@ nodes:
 
   - node_id: tiktok.publisher
     instance_id: publisher_1
-    on_error: skip            # 'skip' (default) | 'stop_campaign'
-    events:
-      captcha:detected:
-        action: skip_item
-        emit: campaign:needs_captcha
+    on_error: skip            # Applied for loop children in current FlowEngine
+    events:                   # Optional: loop-child error handlers (matched against thrown error message)
+      timeout:exceeded:
+        action: pause_campaign
+        emit: publisher:timeout
 
-  # Inline node-level params (condition/notify)
+  # Inline node params are parsed and merged into ctx.params (node params override campaign params)
   - node_id: core.condition
     instance_id: cond_violation_1
     params:
@@ -516,9 +525,11 @@ edges:
   - from: publisher_1
     to: cond_violation_1
   - from: cond_violation_1
-    to: notify_violation_1
+    to: scheduler_1
     when: "branch === 'true'"   # JS expression against result.data
 ```
+
+> Current runtime note: `FlowLoader` parses `params`, `on_error`, `timeout`, and `events`. `FlowEngine` merges node-level `params` into `ctx.params` (node params override campaign params) and executes `flow.yaml` `events` handlers for **loop-child thrown errors** using substring matching on the error message.
 
 ---
 
@@ -529,22 +540,24 @@ edges:
 | `tiktok.scanner` | source | Scan TikTok channels/keywords | `sources`, `campaignType` |
 | `core.video_scheduler` | control | Assign `scheduled_for` timestamps | `intervalMinutes`, `timeRanges` |
 | `core.check_in_time` | control | Wait for active hours + scheduled time | `timeRanges` (via `normalizeTimeRanges`) |
-| `core.deduplicator` | filter | Skip already-processed videos (by platform_id) | — |
-| `core.downloader` | transform | Download video to local disk | — |
+| `core.deduplicator` | filter | Skip already-processed videos (by platform_id) | |
+| `core.downloader` | transform | Download video to local disk | |
 | `core.caption_gen` | transform | Generate caption from template | `captionTemplate`, `removeHashtags`, `appendTags` |
-| `tiktok.account_dedup` | filter | Per-account duplicate check via publish_history (exact + AV similarity) | — |
+| `tiktok.account_dedup` | filter | Per-account duplicate check via publish_history (exact + AV similarity) | |
 | `tiktok.publisher` | publish | Publish video to TikTok | `selectedAccounts`, `privacy` |
 | `core.timeout` | control | Wait N minutes between videos | `intervalMinutes`, `enableJitter` |
 | `core.limit` | filter | Limit number of items | `maxVideos` |
-| `core.condition` | control | Branch on expression | `expression` (node-level `params`) |
-| `core.notify` | control | Desktop notification | `title`, `body`, `sound` (node-level `params`) |
-| `core.campaign_finish` | control | Mark campaign complete | — |
-| `core.quality_filter` | filter | Filter by quality criteria | — |
-| `core.loop` | control | Iterate over items array, run children per item | — |
-| `file.source` | source | Load videos from local files | — |
+| `core.condition` | control | Branch on expression | `expression` (supports inline node `params` via merged `ctx.params`) |
+| `core.js_runner` | transform | Execute custom JavaScript transform | `code` |
+| `core.campaign_finish` | control | Mark campaign complete | |
+| `core.quality_filter` | filter | Filter by quality criteria | |
+| `core.loop` | control | Iterate over items array, run children per item (FlowEngine special-case; no `src/nodes` manifest) | - |
+| `core.file_source` | source | Load videos from local files | - |
 
-> **Note:** `tiktok-repost` flow uses **`core.caption_gen`** and **`tiktok.account_dedup`** as child nodes in the loop, between the downloader and publisher. This is the current node order:
-> `check_time_1` → `dedup_1` → `downloader_1` → `caption_1` → `account_dedup_1` → `publisher_1` → `cond_violation_1` → `cond_captcha_1`
+> **Note:** `tiktok-repost` (`v1.0`) loop child order is:
+> `check_time_1` -> `dedup_1` -> `downloader_1` -> `caption_1` -> `account_dedup_1` -> `publisher_1`
+>
+> After loop completion, it branches via `cond_mode_check_1` to `monitor_1` or `finish_1`. Desktop notifications are handled by `src/workflows/tiktok-repost/v1.0/events.ts` (listening to `node:event`), not by `core.notify` nodes in YAML.
 
 ---
 
@@ -587,33 +600,44 @@ interface JobSummary {
 ## Error Handling
 
 ### Per-Node `on_error` (in flow.yaml)
-- `skip` *(default)*: Skip current item, continue loop
-- `stop_campaign`: Set campaign status to `'error'`, halt everything
+- `skip` *(default)*: Skip current item and continue loop (applies to loop child nodes in current `FlowEngine`)
+- `stop_campaign`: Set campaign status to `'error'`, halt loop execution
+- `retry`: Declared in the type contract, but not implemented by the current `FlowEngine`
+
+### Per-Node `events` (in `flow.yaml`)
+- Supported shape: `events: { "<event-key>": { action, emit? } }`
+- Current runtime scope: evaluated in the **loop child catch path** (when a child node throws)
+- Matching strategy: substring match of thrown error message against all parts of the event key (e.g. `timeout:exceeded` matches `"Node timeout exceeded (...)"`)
+- Actions:
+  - `skip_item`: skip current item (continue loop; `on_error` fallback still applies afterward)
+  - `pause_campaign`: set campaign status to `paused`, emit `campaign:paused`, stop loop
+  - `stop_campaign`: set campaign status to `error`, emit `campaign:error`, stop loop
+- `emit` behavior: emits a structured `node:event` via `ExecutionLogger.emitNodeEvent(...)` with `event = emit`
 
 ### Publisher-Specific Events
-The publisher does NOT throw for these — it returns structured data:
-- `captcha` → flow event `captcha:detected` → `action: skip_item` → item skipped, campaign may pause
-- `violation` → `{ data: { status: 'violation' } }` → triggers `cond_violation_1` branch
-- `under_review` → Enters retry loop (checking content dashboard for publish confirmation)
-- `duplicate` → `tiktok.account_dedup` returns `{ data: null }` → item skipped
+The publisher emits structured `node:event` logs/UI events (e.g. `captcha:detected`, `violation:detected`) and returns structured `data` statuses:
+- `captcha`: emits `captcha:detected`, updates video status to `captcha`, returns `{ data: { ...video, status: 'captcha' } }`
+- `violation`: emits `violation:detected`, updates video status to `violation`, returns `{ data: { ...video, status: 'violation' } }`
+- `under_review`: enters retry loop (checking content dashboard for publish confirmation)
+- `duplicate`: returns `{ data: null }` (loop item skipped)
 
 ### CAPTCHA Detection
-If any node throws with `CAPTCHA` in the error message, `FlowEngine` automatically sets `campaign.status = 'needs_captcha'`.
+`FlowEngine` does **not** currently auto-set `campaign.status = 'needs_captcha'` from publisher outcomes/errors. Current behavior relies on publisher `node:event` emissions (e.g. `captcha:detected`) and workflow-specific listeners (e.g. `src/workflows/tiktok-repost/v1.0/events.ts`) and/or `flow.yaml` `events` handlers if configured.
 
 ---
 
 ## Startup Sequence
 
 ```
-app.whenReady() →
-  1. initDb()                           # Create/migrate SQLite tables
+app.whenReady() -> 
+  1. initDb()                           # Create SQLite tables (IF NOT EXISTS)
   2. CrashRecoveryService.recoverPendingTasks()  # Fix stuck jobs, delegate to workflow handlers
-  3. flowLoader.loadAll(workflowsDir)    # Scan src/workflows/*/flow.yaml
+  3. flowLoader.loadAll(workflowsDir)    # Scan src/workflows/*/v*/flow.yaml (cache latest per workflow, keep versions discoverable)
   4. flowEngine.start()                  # Begin 5s polling loop
   5. setup*IPC()                         # Register all IPC handlers
   6. createWindow()                      # Launch Electron BrowserWindow
 ```
 
-The `import '../workflows'` barrel in `index.ts` auto-imports all workflow modules (recovery, wizard, etc.) which register themselves (e.g. `CrashRecoveryService.registerRecovery(workflowId, { recover })`).
+The `import '../workflows'` barrel in `index.ts` auto-imports workflow main-process modules from versioned folders (`*/v*/recovery.ts`, `ipc.ts`, `services.ts`, `events.ts`) which register themselves (e.g. `CrashRecoveryService.registerRecovery(workflowId, { recover })`).
 
 > **Note:** Node auto-discovery happens at import time (`import '../nodes'` in `index.ts`), which uses `import.meta.glob('./**/index.ts', { eager: true })` to find and register all 16 nodes.

@@ -1,4 +1,4 @@
-import { NodeDefinition } from '../../core/nodes/NodeDefinition'
+﻿import { NodeDefinition } from '@core/nodes/NodeDefinition'
 import manifest from './manifest'
 import { execute } from './backend'
 

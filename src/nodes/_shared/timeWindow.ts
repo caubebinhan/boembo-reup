@@ -4,9 +4,6 @@
  * TimeRange: { days: number[], start: "HH:mm", end: "HH:mm" }
  *   - days: 0=Sun, 1=Mon ... 6=Sat
  *   - start/end: "HH:mm" strings
- *
- * Legacy single-window support: if params use `activeHoursStart`/`activeHoursEnd`/`activeDays`,
- * they are normalised into the new multi-range format automatically.
  */
 
 export interface TimeRange {
@@ -32,15 +29,9 @@ function normalizeDays(days: any): number[] {
 
 /**
  * Normalize campaign params into a TimeRange[].
- *
- * Accepts two formats:
- *   A) New multi-range: params.timeRanges = TimeRange[]
- *   B) Legacy single:   params.activeHoursStart + params.activeHoursEnd + params.activeDays
- *
- * Falls back to 24/7 if nothing is set.
+ * Returns 24/7 default if params.timeRanges is not set.
  */
 export function normalizeTimeRanges(params: Record<string, any>): TimeRange[] {
-  // Format A — explicit multi-range
   if (params.timeRanges && Array.isArray(params.timeRanges) && params.timeRanges.length > 0) {
     return params.timeRanges.map((r: any) => ({
       days: normalizeDays(r.days),
@@ -48,12 +39,8 @@ export function normalizeTimeRanges(params: Record<string, any>): TimeRange[] {
       end: r.end || '23:59',
     }))
   }
-
-  // Format B — legacy single window
-  const start = params.activeHoursStart ?? '00:00'
-  const end = params.activeHoursEnd ?? '23:59'
-  const days = normalizeDays(params.activeDays ?? [0, 1, 2, 3, 4, 5, 6])
-  return [{ days, start, end }]
+  // Default: 24/7
+  return [{ days: [0, 1, 2, 3, 4, 5, 6], start: '00:00', end: '23:59' }]
 }
 
 /**
@@ -82,21 +69,8 @@ export function isWithinAnyWindow(date: Date, ranges: TimeRange[]): boolean {
  */
 export function nextValidSlot(
   timestamp: number,
-  rangesOrStart: TimeRange[] | string,
-  activeEnd?: string,
-  activeDays?: number[] | any
+  ranges: TimeRange[]
 ): number {
-  // Backwards-compatible overload: accept (ts, start, end, days)
-  let ranges: TimeRange[]
-  if (typeof rangesOrStart === 'string') {
-    ranges = [{
-      days: normalizeDays(activeDays ?? [0, 1, 2, 3, 4, 5, 6]),
-      start: rangesOrStart,
-      end: activeEnd ?? '23:59',
-    }]
-  } else {
-    ranges = rangesOrStart
-  }
 
   // Already valid?
   const from = new Date(timestamp)
@@ -139,13 +113,4 @@ export function nextValidSlot(
   return bestMs === Infinity ? timestamp + 24 * 60 * 60 * 1000 : bestMs
 }
 
-// ── Legacy single-window compat exports ───────────────────────────────────
-/** @deprecated Use isWithinAnyWindow with normalizeTimeRanges instead */
-export function isWithinWindow(
-  date: Date,
-  activeStart: string,
-  activeEnd: string,
-  activeDays: number[] | any
-): boolean {
-  return isWithinAnyWindow(date, [{ days: normalizeDays(activeDays), start: activeStart, end: activeEnd }])
-}
+

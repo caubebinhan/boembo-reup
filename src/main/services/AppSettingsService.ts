@@ -1,4 +1,6 @@
-import { db } from '../db/Database'
+import path from 'path'
+import os from 'os'
+import { settingsRepo } from '../db/repositories/SettingsRepo'
 
 export interface AutomationBrowserSettings {
   browserId?: string
@@ -11,26 +13,23 @@ export interface AutomationBrowserSettings {
 }
 
 const AUTOMATION_BROWSER_KEY = 'automation.browser'
+const MEDIA_STORAGE_KEY = 'media.storagePath'
+const DEFAULT_STORAGE_DIR = path.join(os.homedir(), 'boembo-downloads')
+const FIXED_THUMBS_DIR = path.join(os.homedir(), '.boembo', 'thumbs')
 
+/**
+ * AppSettingsService — typed delegate to SettingsRepository.
+ */
 export class AppSettingsService {
   static getJson<T>(key: string, fallback: T): T {
-    try {
-      const row = db.prepare('SELECT value_json FROM app_settings WHERE key = ?').get(key) as any
-      if (!row?.value_json) return fallback
-      return JSON.parse(row.value_json) as T
-    } catch {
-      return fallback
-    }
+    return settingsRepo.get<T>(key, fallback) ?? fallback
   }
 
   static setJson<T>(key: string, value: T): void {
-    const now = Date.now()
-    db.prepare(`
-      INSERT INTO app_settings (key, value_json, updated_at)
-      VALUES (?, ?, ?)
-      ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at
-    `).run(key, JSON.stringify(value ?? null), now)
+    settingsRepo.set(key, value)
   }
+
+  // ── Automation Browser ──────────────────────────────
 
   static getAutomationBrowserSettings(): AutomationBrowserSettings {
     return this.getJson<AutomationBrowserSettings>(AUTOMATION_BROWSER_KEY, {
@@ -48,5 +47,24 @@ export class AppSettingsService {
       profileDirectory: value.profileDirectory || '',
       profilePath: value.profilePath || '',
     })
+  }
+
+  // ── Media Storage ───────────────────────────────────
+
+  static getMediaStoragePath(): string {
+    return this.getJson<string>(MEDIA_STORAGE_KEY, DEFAULT_STORAGE_DIR)
+  }
+
+  static setMediaStoragePath(dirPath: string): void {
+    this.setJson(MEDIA_STORAGE_KEY, dirPath || DEFAULT_STORAGE_DIR)
+  }
+
+  /** Fixed path — thumbnails survive media folder changes */
+  static getThumbsDir(): string {
+    return FIXED_THUMBS_DIR
+  }
+
+  static getDefaultStoragePath(): string {
+    return DEFAULT_STORAGE_DIR
   }
 }

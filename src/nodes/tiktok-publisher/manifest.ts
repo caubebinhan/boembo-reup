@@ -1,8 +1,10 @@
-import { NodeManifest } from '../../core/nodes/NodeDefinition'
+﻿import { NodeManifest } from '@core/nodes/NodeDefinition'
 
 const manifest: NodeManifest = {
   id: 'tiktok.publisher',
   name: 'TikTok Publisher',
+  label: 'Publish',
+  color: '#ec4899',
   category: 'publish',
   icon: '📤',
   description: 'Publish videos to TikTok accounts',

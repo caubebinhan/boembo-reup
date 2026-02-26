@@ -50,26 +50,26 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
             <div className="flex items-center gap-4 text-sm">
                 <div className="flex items-center gap-1.5" title="Scanned">
                     <span>🔍</span>
-                    <span className="text-gray-400">{campaign.queued_count || 0}</span>
+                    <span className="text-gray-400">{campaign.counters?.queued || 0}</span>
                 </div>
                 <span className="text-gray-700">|</span>
                 <div className="flex items-center gap-1.5" title="Downloaded">
                     <span>⬇️</span>
-                    <span className="text-gray-400">{campaign.downloaded_count || 0}</span>
+                    <span className="text-gray-400">{campaign.counters?.downloaded || 0}</span>
                 </div>
                 <span className="text-gray-700">|</span>
                 <div className="flex items-center gap-1.5" title="Published">
                     <span>📤</span>
-                    <span className={campaign.published_count > 0 ? 'text-green-400 font-medium' : 'text-gray-400'}>
-                        {campaign.published_count || 0}
+                    <span className={campaign.counters?.published > 0 ? 'text-green-400 font-medium' : 'text-gray-400'}>
+                        {campaign.counters?.published || 0}
                     </span>
                 </div>
-                {campaign.failed_count > 0 && (
+                {(campaign.counters?.failed || 0) > 0 && (
                     <>
                         <span className="text-gray-700">|</span>
                         <div className="flex items-center gap-1.5" title="Failed">
                             <span>❌</span>
-                            <span className="text-red-400">{campaign.failed_count}</span>
+                            <span className="text-red-400">{campaign.counters.failed}</span>
                         </div>
                     </>
                 )}
@@ -86,7 +86,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
 
                 <div className="flex-1" />
 
-                {(campaign.status === 'idle' || campaign.status === 'paused' || campaign.status === 'error') && (
+                {(campaign.status === 'idle' || campaign.status === 'error') && (
                     <button
                         onClick={() => onAction('campaign:trigger', { id: campaign.id })}
                         className="px-4 py-1.5 text-sm rounded font-medium text-white bg-green-600 hover:bg-green-700 transition"

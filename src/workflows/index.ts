@@ -1,26 +1,32 @@
 /**
- * Workflow Auto-Discovery
- * ───────────────────────
- * Scans src/workflows/* and auto-loads all optional modules:
+ * Workflow Auto-Discovery (Versioned)
+ * ────────────────────────────────────
+ * Scans src/workflows/[id]/v[x.y]/* and auto-loads all optional modules:
  *
  *   recovery.ts  → CrashRecoveryService.registerRecovery(workflowId, module)
  *   ipc.ts       → calls module.setup() for per-workflow IPC handlers
- *   services.ts  → calls module.setup() for per-workflow services (e.g. PublishAccountService)
+ *   services.ts  → calls module.setup() for per-workflow services
  *   events.ts    → calls module.setup() for per-workflow EventBus listeners
  *
  * Workflow ID = folder name (e.g. tiktok-repost, upload-local).
- * To add a new workflow: create a folder, drop any of the above files. No manual imports needed.
+ * Version = subfolder (e.g. v1.0, v2.0).
+ * All versions are loaded so campaigns on different versions coexist.
  */
 import { CrashRecoveryService } from '../main/services/CrashRecovery'
 
 type SetupModule = { setup?: () => void }
 type RecoveryModule = { recover?: (campaignId: string) => void }
 
+// Extract workflowId from path like ./tiktok-repost/v1.0/events.ts
+function extractWorkflowId(p: string): string | null {
+  return p.match(/^\.\/([^/]+)\//)?.[1] || null
+}
+
 // ── Recovery modules ────────────────────────────────────
-const recoveryModules = import.meta.glob('./*/recovery.ts', { eager: true })
+const recoveryModules = import.meta.glob('./*/v*/recovery.ts', { eager: true })
 let recoveryCount = 0
 for (const [path, mod] of Object.entries(recoveryModules)) {
-  const wfId = path.match(/^\.\/([^/]+)\//)?.[1]
+  const wfId = extractWorkflowId(path)
   if (!wfId) continue
   const m = mod as RecoveryModule
   if (typeof m.recover === 'function') {
@@ -31,10 +37,10 @@ for (const [path, mod] of Object.entries(recoveryModules)) {
 console.log(`[Workflows] Auto-discovered ${recoveryCount} recovery modules`)
 
 // ── IPC modules ─────────────────────────────────────────
-const ipcModules = import.meta.glob('./*/ipc.ts', { eager: true })
+const ipcModules = import.meta.glob('./*/v*/ipc.ts', { eager: true })
 let ipcCount = 0
 for (const [path, mod] of Object.entries(ipcModules)) {
-  const wfId = path.match(/^\.\/([^/]+)\//)?.[1]
+  const wfId = extractWorkflowId(path)
   if (!wfId) continue
   const m = mod as SetupModule
   if (typeof m.setup === 'function') { m.setup(); ipcCount++ }
@@ -42,10 +48,10 @@ for (const [path, mod] of Object.entries(ipcModules)) {
 console.log(`[Workflows] Auto-discovered ${ipcCount} workflow IPC modules`)
 
 // ── Service modules ─────────────────────────────────────
-const serviceModules = import.meta.glob('./*/services.ts', { eager: true })
+const serviceModules = import.meta.glob('./*/v*/services.ts', { eager: true })
 let svcCount = 0
 for (const [path, mod] of Object.entries(serviceModules)) {
-  const wfId = path.match(/^\.\/([^/]+)\//)?.[1]
+  const wfId = extractWorkflowId(path)
   if (!wfId) continue
   const m = mod as SetupModule
   if (typeof m.setup === 'function') { m.setup(); svcCount++ }
@@ -53,10 +59,10 @@ for (const [path, mod] of Object.entries(serviceModules)) {
 console.log(`[Workflows] Auto-discovered ${svcCount} workflow service modules`)
 
 // ── Event modules ───────────────────────────────────────
-const eventModules = import.meta.glob('./*/events.ts', { eager: true })
+const eventModules = import.meta.glob('./*/v*/events.ts', { eager: true })
 let evtCount = 0
 for (const [path, mod] of Object.entries(eventModules)) {
-  const wfId = path.match(/^\.\/([^/]+)\//)?.[1]
+  const wfId = extractWorkflowId(path)
   if (!wfId) continue
   const m = mod as SetupModule
   if (typeof m.setup === 'function') { m.setup(); evtCount++ }

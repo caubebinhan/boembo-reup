@@ -1,5 +1,4 @@
-import { NodeExecutionContext, NodeExecutionResult } from '../../core/nodes/NodeDefinition'
-import { db } from '../../main/db/Database'
+﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const video = input
@@ -8,17 +7,11 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     return { data: video }
   }
 
-  try {
-    const existing = db.prepare(
-      `SELECT platform_id FROM videos WHERE platform_id = ? AND campaign_id = ? AND status IN ('published','verified','downloaded')`
-    ).get(video.platform_id, ctx.campaign_id) as any
-
-    if (existing) {
-      ctx.logger.info(`Dedup: skipping ${video.platform_id} (already processed)`)
-      return { data: null, action: 'continue', message: 'Duplicate -> skipped' }
-    }
-  } catch (err) {
-    ctx.logger.error('Dedup DB check failed', err)
+  // Check if already processed in this campaign's videos
+  const existing = ctx.store.findVideo(video.platform_id)
+  if (existing && ['published', 'verified', 'downloaded'].includes(existing.status)) {
+    ctx.logger.info(`Dedup: skipping ${video.platform_id} (already ${existing.status})`)
+    return { data: null, action: 'continue', message: 'Duplicate -> skipped' }
   }
 
   ctx.logger.info(`Dedup: ${video.platform_id} is new`)

@@ -13,6 +13,11 @@ interface FlowNodeInfo {
     instance_id: string
     children?: string[]
     editable_settings?: any
+    // From manifest.ts of each node
+    icon?: string
+    label?: string
+    color?: string
+    description?: string
 }
 
 interface FlowEdge {
@@ -21,24 +26,16 @@ interface FlowEdge {
     when?: string
 }
 
-const NODE_META: Record<string, { icon: string; label: string; color: string; desc: string }> = {
-    'tiktok.scanner': { icon: '🔍', label: 'Scanner', color: '#8b5cf6', desc: 'Scan TikTok sources' },
-    'core.file_source': { icon: '📁', label: 'Files', color: '#8b5cf6', desc: 'Load local video files' },
-    'core.video_scheduler': { icon: '📋', label: 'Scheduler', color: '#eab308', desc: 'Schedule videos with times' },
-    'core.check_in_time': { icon: '⏰', label: 'Time Check', color: '#f59e0b', desc: 'Check active hours window' },
-    'core.deduplicator': { icon: '🔄', label: 'Dedup', color: '#6366f1', desc: 'Skip processed videos' },
-    'core.quality_filter': { icon: '🎯', label: 'Quality', color: '#6366f1', desc: 'Filter content' },
-    'core.limit': { icon: '🔢', label: 'Limit', color: '#6366f1', desc: 'Limit numbers' },
-    'core.downloader': { icon: '⬇️', label: 'Download', color: '#3b82f6', desc: 'Download to local' },
-    'core.caption_gen': { icon: '📋', label: 'Caption', color: '#0ea5e9', desc: 'Generate caption' },
-    'tiktok.publisher': { icon: '📤', label: 'Publish', color: '#ec4899', desc: 'Upload to TikTok' },
-    'core.timeout': { icon: '⏳', label: 'Wait', color: '#6b7280', desc: 'Delay between items' },
-    'core.loop': { icon: '🔁', label: 'Loop', color: '#3b82f6', desc: 'Process each item' },
-    'core.campaign_finish': { icon: '🏁', label: 'Finish', color: '#10b981', desc: 'Finish campaign' },
-    'core.condition': { icon: '🔀', label: 'Condition', color: '#f97316', desc: 'Branch on expression' },
-    'core.notify': { icon: '🔔', label: 'Notify', color: '#a78bfa', desc: 'Send desktop notification' },
-    'core.monitoring': { icon: '👁', label: 'Monitor', color: '#06b6d4', desc: 'Watch for new videos periodically' },
-    'tiktok.account_dedup': { icon: '🔍', label: 'Acc Dedup', color: '#6366f1', desc: 'Check for duplicates on account' },
+/** Fallback meta for nodes that don't have a manifest (shouldn't happen) */
+const FALLBACK_META = { icon: '📦', label: '', color: '#6b7280', desc: '' }
+
+function nodeMeta(node: FlowNodeInfo) {
+    return {
+        icon: node.icon || FALLBACK_META.icon,
+        label: node.label || node.node_id,
+        color: node.color || FALLBACK_META.color,
+        desc: node.description || '',
+    }
 }
 
 type NodeStatus = 'idle' | 'running' | 'done' | 'error'
@@ -69,7 +66,7 @@ function useNodeStatus(campaignId: string, instanceId: string) {
 
 function NodeTooltip({ node, campaignId }: { node: FlowNodeInfo; campaignId: string }) {
     const { status, stat, progressMsg, error } = useNodeStatus(campaignId, node.instance_id)
-    const meta = NODE_META[node.node_id] || { icon: '📦', label: node.instance_id, color: '#6b7280', desc: '' }
+    const meta = nodeMeta(node)
 
     return (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 z-50 pointer-events-none w-max">
@@ -112,7 +109,7 @@ function NodeCard({
 }) {
     const { status, stat, progressMsg } = useNodeStatus(campaignId, node.instance_id)
     const [hovered, setHovered] = useState(false)
-    const meta = NODE_META[node.node_id] || { icon: '📦', label: node.instance_id, color: '#6b7280', desc: '' }
+    const meta = nodeMeta(node)
 
     let borderColor = 'rgba(255,255,255,0.05)'
     let bgLayer = 'bg-white/5'
@@ -174,7 +171,7 @@ function NodeCard({
                         />
                     )}
                     {node.editable_settings && (
-                        <span className="ml-auto text-gray-500 text-[10px] opacity-60 hover:opacity-100 transition" title="Configurable">⚙️</span>
+                        <span className="absolute top-1 right-1 text-gray-500 text-[10px] opacity-50 group-hover:opacity-100 transition cursor-pointer hover:text-white" title="Configurable">⚙️</span>
                     )}
                 </div>
 
@@ -240,7 +237,7 @@ function LoopBlock({
                 {/* Loop Label on Bottom Border */}
                 <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-[#0f172a] px-5 py-1.5 rounded-full border border-sky-500/30 font-bold shadow-lg z-20 whitespace-nowrap">
                     <span className={`text-[11px] ${isRunning ? 'animate-spin drop-shadow-[0_0_5px_rgba(56,189,248,0.8)]' : ''}`}>🔁</span>
-                    <span className="text-sky-400 text-[10px] uppercase tracking-[0.2em]">Loop{videoCount ? `: ${videoCount} videos` : ': Per Video'}</span>
+                    <span className="text-sky-400 text-[10px] uppercase tracking-[0.2em]">Loop{stat.total ? `: ${stat.total} videos` : ': Per Video'}</span>
 
                     {stat.total > 0 && (
                         <div className="flex items-center gap-2 text-[10px] ml-2 border-l border-white/10 pl-2">
@@ -464,7 +461,7 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
 
 function InspectPanel({ node, campaignId, onClose }: { node: FlowNodeInfo; campaignId: string; onClose: () => void }) {
     const { status, stat, progressMsg, error } = useNodeStatus(campaignId, node.instance_id)
-    const meta = NODE_META[node.node_id] || { icon: '📦', label: node.instance_id, color: '#6b7280', desc: '' }
+    const meta = nodeMeta(node)
 
     return (
         <div className="w-[280px] border-l border-white/10 bg-[#0f172a]/90 backdrop-blur-2xl p-5 flex flex-col gap-4 shrink-0 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] z-20">
@@ -540,7 +537,7 @@ export function PipelineVisualizer({ campaignId, workflowId }: PipelineVisualize
 
         // @ts-ignore
         window.api.invoke('campaign:get', { id: campaignId })
-            .then((data: any) => setCampaignParams(typeof data?.params === 'string' ? JSON.parse(data.params) : data?.params || {}))
+            .then((data: any) => setCampaignParams(data?.params || {}))
             .catch(() => { /* ok */ })
 
         // Restore latest progress messages from execution_logs
@@ -579,10 +576,21 @@ export function PipelineVisualizer({ campaignId, workflowId }: PipelineVisualize
         const depths = new Map<string, number>()
         const q: { id: string, d: number }[] = starts.map(n => ({ id: n.instance_id, d: 0 }))
 
+        // Use shortest-path depth assignment so cyclic graphs (e.g. monitoring loop back to scheduler)
+        // don't cause an infinite queue expansion.
         while (q.length > 0) {
             const { id, d } = q.shift()!
-            depths.set(id, Math.max(depths.get(id) || 0, d))
-                ; (adj.get(id) || []).forEach(nxt => q.push({ id: nxt, d: d + 1 }))
+            const prevDepth = depths.get(id)
+            if (prevDepth !== undefined && prevDepth <= d) continue
+
+            depths.set(id, d)
+                ; (adj.get(id) || []).forEach(nxt => {
+                    const nextDepth = d + 1
+                    const knownDepth = depths.get(nxt)
+                    if (knownDepth === undefined || nextDepth < knownDepth) {
+                        q.push({ id: nxt, d: nextDepth })
+                    }
+                })
         }
 
         const maxD = Math.max(...Array.from(depths.values()), 0)

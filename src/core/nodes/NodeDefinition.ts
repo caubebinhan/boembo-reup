@@ -1,3 +1,5 @@
+﻿import type { CampaignStore } from '@main/db/repositories/CampaignRepo'
+
 // ── Config Schema ────────────────────────────────
 export interface NodeConfigSchemaField {
   key: string
@@ -17,13 +19,17 @@ export interface NodeConfigSchema {
 export interface NodeExecutionContext {
   campaign_id: string
   job_id?: string
-  /** Campaign params from wizard (all settings saved to DB) */
+  /** Campaign params from wizard */
   params: Record<string, any>
+  /** Mutable campaign document store (videos, alerts, counters) */
+  store: CampaignStore
   logger: {
     info(msg: string): void
     error(msg: string, err?: any): void
   }
   onProgress(msg: string): void
+  /** Emit a structured alert to the campaign's alert panel */
+  alert(level: 'info' | 'warn' | 'error' | 'success', title: string, body?: string): void
 }
 
 /** What a node returns to control the flow */
@@ -43,14 +49,18 @@ export interface NodeExecutionResult {
 export interface NodeManifest {
   id: string
   name: string
+  /** Short display label for visualizer (defaults to name if omitted) */
+  label?: string
+  /** Hex color used in visualizer cards and edges */
+  color?: string
   category: 'source' | 'filter' | 'transform' | 'publish' | 'control'
   icon?: string
   description?: string
-  /** Schema for config UI (optional — used by wizard auto-generation) */
+  /** Schema for config UI (optional) */
   config_schema?: NodeConfigSchema
-  /** Settings editable in the visualizer InspectPanel (auto-rendered form) */
+  /** Settings editable in the visualizer InspectPanel */
   editable_settings?: NodeConfigSchema
-  /** Event name to emit when user saves editable_settings (e.g. 'reschedule') */
+  /** Event name to emit when user saves editable_settings */
   on_save_event?: string
 }
 

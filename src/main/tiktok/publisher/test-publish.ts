@@ -9,7 +9,8 @@
  * for cookie access and the BrowserService.
  */
 
-import { db } from '../../db/Database'
+import { accountRepo } from '../../db/repositories/AccountRepo'
+import { campaignRepo } from '../../db/repositories/CampaignRepo'
 import { browserService } from '../../services/BrowserService'
 import { sanitizeCookies } from './helpers/CookieHelper'
 import { DebugHelper } from './helpers/DebugHelper'
@@ -52,14 +53,15 @@ export async function runPublishTest(opts?: TroubleshootingRunOptions): Promise<
     const log = createLogger(opts?.logger)
     log.info('=== TikTok Studio Test ===')
 
-    const account = db.prepare('SELECT * FROM publish_accounts LIMIT 1').get() as any
+    const accounts = accountRepo.findByPlatform('tiktok')
+    const account = accounts[0]
     if (!account) {
         const summary = 'No publish accounts found. Please add one first.'
         log.error(summary)
         return { success: false, summary }
     }
 
-    const cookies = account.cookies_json ? JSON.parse(account.cookies_json) : null
+    const cookies = Array.isArray(account.cookies) ? account.cookies : null
     if (!cookies?.length) {
         const summary = `Account @${account.username} has no cookies.`
         log.error(summary)
@@ -175,32 +177,36 @@ export async function runFullPublishE2ETest(opts?: TroubleshootingRunOptions): P
     const log = createLogger(opts?.logger)
     log.info('=== TikTok Full Publish E2E Test ===')
 
-    const account = db.prepare(
-        `SELECT * FROM publish_accounts
-         WHERE cookies_json IS NOT NULL AND cookies_json != ''
-         ORDER BY rowid DESC
-         LIMIT 1`
-    ).get() as any
+    // Find account with cookies from doc-store
+    const accounts = accountRepo.findByPlatform('tiktok')
+    const account = accounts.find(a => Array.isArray(a.cookies) && a.cookies.length > 0)
     if (!account) {
         const summary = 'No publish account with cookies found.'
         log.error(summary)
         return { success: false, summary }
     }
 
-    const video = db.prepare(
-        `SELECT * FROM videos
-         WHERE local_path IS NOT NULL AND local_path != ''
-           AND status IN ('downloaded', 'captioned', 'queued', 'processing')
-         ORDER BY rowid DESC
-         LIMIT 1`
-    ).get() as any
+    // Find a downloaded video from any campaign
+    const allCampaigns = campaignRepo.findAll()
+    let video: any = null
+    for (const doc of allCampaigns) {
+        const store = campaignRepo.tryOpen(doc.id)
+        if (!store) continue
+        const found = store.videos.find(v =>
+            v.local_path && ['downloaded', 'captioned', 'queued', 'processing'].includes(v.status)
+        )
+        if (found) {
+            video = { ...found, ...(found.data || {}) }
+            break
+        }
+    }
     if (!video?.local_path) {
-        const summary = 'No downloaded video found in DB.'
+        const summary = 'No downloaded video found in any campaign.'
         log.error(summary)
         return { success: false, summary, accountUsername: account.username }
     }
 
-    const cookies = account.cookies_json ? JSON.parse(account.cookies_json) : null
+    const cookies = account.cookies
     if (!Array.isArray(cookies) || cookies.length === 0) {
         const summary = `Account @${account.username} has no cookies.`
         log.error(summary)

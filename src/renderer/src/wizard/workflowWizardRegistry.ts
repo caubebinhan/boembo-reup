@@ -1,19 +1,17 @@
 import { WizardStepConfig } from './WizardStepTypes'
 
-// Wizard Step Auto-Discovery
-// Scans src/workflows/[id]/wizard.ts or wizard.tsx
-// To add a new wizard: create src/workflows/[workflow-id]/wizard.ts
-const wizardModules = import.meta.glob<any>('../../../workflows/*/wizard.{ts,tsx}')
+// Wizard Step Auto-Discovery (Versioned)
+// Scans src/workflows/[id]/v[x.y]/wizard.ts or wizard.tsx
+const wizardModules = import.meta.glob<any>('../../../workflows/*/v*/wizard.{ts,tsx}')
 
-// Build registry from discovered modules
+// Build registry: workflowId → lazy factory (latest version wins)
 const WIZARD_REGISTRY: Record<string, () => Promise<any>> = {}
 for (const [path, factory] of Object.entries(wizardModules)) {
-  const parts = path.split('/')
-  const wizardIdx = parts.findIndex(p => p.match(/^wizard\./))
-  const workflowId = wizardIdx > 0 ? parts[wizardIdx - 1] : null
-  if (workflowId) {
-    WIZARD_REGISTRY[workflowId] = factory
-    console.log(`[WizardRegistry] Auto-discovered: ${workflowId}`)
+  // path like ../../../workflows/tiktok-repost/v1.0/wizard.ts
+  const match = path.match(/workflows\/([^/]+)\/v[^/]+\/wizard\./)
+  if (match) {
+    WIZARD_REGISTRY[match[1]] = factory
+    console.log(`[WizardRegistry] Auto-discovered: ${match[1]}`)
   }
 }
 
