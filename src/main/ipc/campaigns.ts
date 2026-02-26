@@ -179,14 +179,14 @@ export function setupCampaignIPC() {
       const videos = store.videos
       if (videos.length === 0) return { success: true, message: 'No videos to reschedule' }
 
+      const TERMINAL = ['published', 'failed', 'violation']
       let cursor = Date.now()
+      let queueIdx = 0
       for (let i = 0; i < videos.length; i++) {
+        if (TERMINAL.includes(videos[i].status)) continue
         videos[i].scheduled_for = cursor
-        videos[i].queue_index = i
-        // Only reschedule non-published/non-failed videos
-        if (!['published', 'failed', 'violation'].includes(videos[i].status)) {
-          videos[i].status = 'queued'
-        }
+        videos[i].queue_index = queueIdx++
+        videos[i].status = 'queued'
         cursor += intervalMs
       }
       store.lastProcessedIndex = 0
