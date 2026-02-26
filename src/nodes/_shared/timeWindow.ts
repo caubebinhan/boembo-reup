@@ -113,4 +113,34 @@ export function nextValidSlot(
   return bestMs === Infinity ? timestamp + 24 * 60 * 60 * 1000 : bestMs
 }
 
+/**
+ * Shared reschedule helper — slides an array of videos forward from a cursor,
+ * respecting time ranges (daily slots), interval, and optional jitter.
+ *
+ * Returns the rescheduled timestamps (does NOT mutate input).
+ * Consumers should apply the returned timestamps to their store.
+ */
+export function rescheduleFromNow(
+  videos: { platform_id: string; [key: string]: any }[],
+  opts: {
+    cursor?: number
+    intervalMinutes: number
+    enableJitter?: boolean
+    ranges: TimeRange[]
+  }
+): { platform_id: string; scheduled_for: number }[] {
+  const intervalMs = opts.intervalMinutes * 60_000
+  let cursor = opts.cursor ?? Date.now()
+
+  return videos.map(v => {
+    cursor = nextValidSlot(cursor, opts.ranges)
+    const scheduled_for = cursor
+    const jitteredInterval = opts.enableJitter
+      ? intervalMs * (0.5 + Math.random())
+      : intervalMs
+    cursor += jitteredInterval
+    return { platform_id: v.platform_id, scheduled_for }
+  })
+}
+
 

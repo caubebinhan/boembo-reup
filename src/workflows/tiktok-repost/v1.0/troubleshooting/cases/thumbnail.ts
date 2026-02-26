@@ -1,0 +1,131 @@
+import type { TroubleshootingCaseDefinition } from '@main/services/troubleshooting/types'
+import { meta, ttCase } from './_shared'
+
+export const thumbnailCases: TroubleshootingCaseDefinition[] = [
+  ttCase({
+    id: 'tiktok-repost-v1.thumbnail.normalize-string',
+    title: 'Thumbnail Normalize (String)',
+    description: 'Verify thumbnail normalization when source thumbnail is already a string URL.',
+    risk: 'safe',
+    category: 'thumbnail',
+    group: 'thumbnail',
+    tags: ['thumbnail', 'normalize', 'db'],
+    level: 'basic',
+    implemented: true,
+    meta: meta({
+      parameters: [{ key: 'fixtureThumbnailShape', value: 'string-url' }],
+      checks: {
+        db: ['campaign videos[].data.thumbnail remains same URL string after normalization'],
+        ui: ['Thumbnail renders without fallback placeholder'],
+        logs: ['Normalization path can be inspected from troubleshooting output if instrumented'],
+      },
+    }),
+  }),
+  ttCase({
+    id: 'tiktok-repost-v1.thumbnail.normalize-nested-object',
+    title: 'Thumbnail Normalize (Nested Object)',
+    description: 'Verify nested cover/origin_cover/url_list formats normalize into a renderable thumbnail URL.',
+    risk: 'safe',
+    category: 'thumbnail',
+    group: 'thumbnail',
+    tags: ['thumbnail', 'normalize', 'nested', 'edge'],
+    level: 'intermediate',
+    implemented: true,
+    meta: meta({
+      parameters: [
+        { key: 'fixtureThumbnailShape', value: 'nested-object' },
+        { key: 'fixtureVariants', value: 'cover/origin_cover/url_list' },
+      ],
+      checks: {
+        db: ['Normalizer selects best available nested URL and stores string fallback'],
+        ui: ['UI handles normalized nested-source thumbnails'],
+        logs: ['Fallback order can be debugged when no URL found'],
+      },
+      errorMessages: ['Malformed nested object path should not crash campaign load'],
+    }),
+  }),
+  ttCase({
+    id: 'tiktok-repost-v1.thumbnail.ui-render-preview',
+    title: 'Thumbnail UI Render Preview',
+    description: 'Ensure normalized thumbnails display in campaign UI list/detail without broken image placeholders.',
+    risk: 'safe',
+    category: 'thumbnail',
+    group: 'thumbnail',
+    tags: ['thumbnail', 'ui', 'preview', 'artifact:screenshot'],
+    level: 'intermediate',
+    implemented: false,
+    meta: meta({
+      parameters: [{ key: 'fixtureCampaign', description: 'Campaign with mixed thumbnail shapes' }],
+      checks: {
+        db: ['Thumbnail strings persisted before UI render validation'],
+        ui: ['List and detail thumbnail previews render for multiple records'],
+        files: ['Capture screenshot of list/detail preview states (desktop + optional mobile width)'],
+      },
+      passMessages: ['No broken-image UI regressions in preview surfaces'],
+    }),
+  }),
+  ttCase({
+    id: 'tiktok-repost-v1.thumbnail.malformed-payload-fallback',
+    title: 'Thumbnail Malformed Payload Fallback',
+    description: 'Malformed thumbnail payload should normalize to empty string/fallback without crashing campaign load or UI.',
+    risk: 'safe',
+    category: 'thumbnail',
+    group: 'thumbnail',
+    tags: ['thumbnail', 'malformed', 'fallback', 'edge'],
+    level: 'intermediate',
+    implemented: true,
+    meta: meta({
+      parameters: [{ key: 'fixtureThumbnailShape', value: 'malformed object / unexpected types' }],
+      checks: {
+        db: ['Campaign row remains loadable; normalized thumbnail string is empty or fallback-safe'],
+        ui: ['UI shows placeholder instead of broken image error/crash'],
+        logs: ['Normalization fallback path includes payload shape hints (sanitized)'],
+      },
+      errorMessages: ['No runtime exception from thumbnail normalizer when object shape is unexpected'],
+    }),
+  }),
+  ttCase({
+    id: 'tiktok-repost-v1.thumbnail.detail-ui-codepath-contract',
+    title: 'Thumbnail Detail UI Codepath Contract',
+    description: 'Static analysis verifies campaign detail view renders thumbnail <img>, local-thumb fallback, and string thumbnail fallback path.',
+    risk: 'safe',
+    category: 'thumbnail',
+    group: 'thumbnail',
+    tags: ['thumbnail', 'ui', 'detail', 'static-analysis'],
+    level: 'basic',
+    implemented: true,
+    meta: meta({
+      parameters: [{ key: 'file', value: 'src/workflows/tiktok-repost/v1.0/detail.tsx' }],
+      checks: {
+        ui: ['Detail view contains thumbnail image render path', 'local_thumbnail is converted to local-thumb:// protocol path'],
+        logs: ['Runner reports exact codepath clauses found/missing'],
+        files: ['Source file path returned in result for audit'],
+      },
+      passMessages: ['Detail UI thumbnail codepath exists (normalize -> local-thumb fallback -> img render)'],
+      errorMessages: ['Missing thumbnail render/fallback clause is reported as fail'],
+    }),
+  }),
+  ttCase({
+    id: 'tiktok-repost-v1.thumbnail.bulk-mixed-shapes-grid-snapshot',
+    title: 'Thumbnail Mixed Shapes Grid Snapshot',
+    description: 'Large mixed thumbnail dataset renders grid/list previews and captures screenshot for visual regression checks.',
+    risk: 'safe',
+    category: 'thumbnail',
+    group: 'thumbnail',
+    tags: ['thumbnail', 'ui', 'visual-regression', 'artifact:screenshot'],
+    level: 'advanced',
+    implemented: false,
+    meta: meta({
+      parameters: [
+        { key: 'fixtureVideoCount', value: 20 },
+        { key: 'shapeMix', value: 'string|nested|missing|malformed' },
+      ],
+      checks: {
+        db: ['All fixture videos persist with normalized thumbnail strings/fallbacks'],
+        ui: ['Scrolling preview grid/list renders without broken layout'],
+        files: ['Capture screenshot(s) for visual regression comparison'],
+      },
+      passMessages: ['Thumbnail rendering remains stable with mixed real-world data shapes'],
+    }),
+  }),
+]

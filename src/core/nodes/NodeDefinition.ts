@@ -1,4 +1,5 @@
 ﻿import type { CampaignStore } from '@main/db/repositories/CampaignRepo'
+import type { AsyncTaskScheduleOptions, AsyncTaskScheduleResult } from '../async-tasks/types'
 
 // ── Config Schema ────────────────────────────────
 export interface NodeConfigSchemaField {
@@ -30,7 +31,16 @@ export interface NodeExecutionContext {
   onProgress(msg: string): void
   /** Emit a structured alert to the campaign's alert panel */
   alert(level: 'info' | 'warn' | 'error' | 'success', title: string, body?: string): void
+  /** Schedule background async tasks (fire-and-forget, DB-persisted) */
+  asyncTasks: {
+    schedule(
+      taskType: string,
+      payload: Record<string, any>,
+      options: AsyncTaskScheduleOptions,
+    ): AsyncTaskScheduleResult
+  }
 }
+
 
 /** What a node returns to control the flow */
 export interface NodeExecutionResult {

@@ -73,6 +73,32 @@ export function initDb() {
       data_json TEXT NOT NULL,
       updated_at INTEGER
     );
+
+    -- Async background tasks (generic polling system)
+    CREATE TABLE IF NOT EXISTS async_tasks (
+      id TEXT PRIMARY KEY,
+      data_json TEXT NOT NULL,
+      task_type TEXT,
+      status TEXT,
+      dedupe_key TEXT,
+      concurrency_key TEXT,
+      campaign_id TEXT,
+      owner_key TEXT,
+      worker_id TEXT,
+      next_run_at INTEGER,
+      lease_until INTEGER,
+      attempt INTEGER DEFAULT 0,
+      created_at INTEGER,
+      updated_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_at_due ON async_tasks(status, next_run_at);
+    CREATE INDEX IF NOT EXISTS idx_at_type ON async_tasks(task_type, status);
+    CREATE INDEX IF NOT EXISTS idx_at_campaign ON async_tasks(campaign_id, status);
+    CREATE INDEX IF NOT EXISTS idx_at_concurrency ON async_tasks(concurrency_key, status);
+    CREATE INDEX IF NOT EXISTS idx_at_owner ON async_tasks(owner_key, status);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_at_dedupe_active
+      ON async_tasks(dedupe_key)
+      WHERE status IN ('pending', 'claimed', 'running');
   `)
 
   console.log('[DB] Schema initialized (document-store)')

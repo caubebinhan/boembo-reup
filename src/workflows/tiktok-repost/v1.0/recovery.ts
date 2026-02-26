@@ -2,6 +2,8 @@
 import { jobRepo } from '@main/db/repositories/JobRepo'
 import { PipelineEventBus } from '@core/engine/PipelineEventBus'
 import { flowEngine } from '@core/engine/FlowEngine'
+import { normalizeTimeRanges } from '@nodes/_shared/timeWindow'
+import { scheduleVideos } from '@shared/scheduling'
 
 /**
  * Crash Recovery for tiktok-repost workflow.
@@ -16,21 +18,49 @@ export function recover(campaignId: string): void {
     const params = store.params
     const now = Date.now()
 
-    // 1. Reschedule missed queued videos (scheduled_for in the past)
+    // 1. Handle missed queued videos (scheduled_for in the past)
     const missedVideos = store.videosByStatus('queued')
       .filter(v => v.scheduled_for != null && v.scheduled_for < now)
       .sort((a, b) => (a.queue_index ?? 0) - (b.queue_index ?? 0))
 
     if (missedVideos.length > 0) {
-      const intervalMs = (params.intervalMinutes ?? 1) * 60_000
-      let cursor = now
-      for (const v of missedVideos) {
-        v.scheduled_for = cursor
-        cursor += intervalMs
+      const handling = params.missedJobHandling || 'auto'
+
+      if (handling === 'manual') {
+        // Manual mode: pause campaign and alert the user
+        console.log(`${tag} Manual mode — pausing campaign (${missedVideos.length} missed videos)`)
+        campaignRepo.updateStatus(campaignId, 'paused')
+
+        store.addAlert({
+          instance_id: 'scheduler_1',
+          node_id: 'core.video_scheduler',
+          level: 'warn',
+          title: `⏸ ${missedVideos.length} video bị missed — campaign đã tạm dừng`,
+          body: 'Kiểm tra lại và resume campaign khi sẵn sàng.',
+        })
+
+        PipelineEventBus.emit('pipeline:info', {
+          message: `[Manual] Paused campaign ${campaignId}: ${missedVideos.length} missed videos`,
+        })
+
+        store.save()
+        return // Don't reschedule or re-trigger
       }
-      console.log(`${tag} Rescheduled ${missedVideos.length} missed videos`)
+
+      // Auto mode (default): reschedule using shared helper (respects time slots + jitter)
+      const ranges = normalizeTimeRanges(params)
+      const rescheduled = scheduleVideos(missedVideos, {
+        intervalMinutes: params.intervalMinutes ?? 1,
+        enableJitter: params.enableJitter === true,
+        ranges,
+      })
+      for (const r of rescheduled) {
+        store.updateVideo(r.platform_id, { scheduled_for: r.scheduled_for })
+      }
+
+      console.log(`${tag} Rescheduled ${rescheduled.length} missed videos`)
       PipelineEventBus.emit('pipeline:info', {
-        message: `Rescheduled ${missedVideos.length} missed videos for campaign ${campaignId}`,
+        message: `Rescheduled ${rescheduled.length} missed videos for campaign ${campaignId}`,
       })
 
       // Emit alert for the Alert Panel
@@ -39,7 +69,7 @@ export function recover(campaignId: string): void {
         node_id: 'core.video_scheduler',
         level: 'warn',
         title: `⏰ Detected ${missedVideos.length} missed video(s)`,
-        body: `Rescheduled from now (interval=${(params.intervalMinutes ?? 1)}min)`,
+        body: `Rescheduled from now (interval=${params.intervalMinutes ?? 1}min, jitter=${params.enableJitter ? 'on' : 'off'})`,
       })
     }
 

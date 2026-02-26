@@ -583,14 +583,38 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
             {sources.length > 0 && (
                 <div className="rounded-xl border border-gray-800 bg-gray-900/30 px-4 py-3">
                     <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-2">📡 Sources</p>
-                    <div className="flex flex-wrap gap-2">
-                        {sources.map((s: any, i: number) => (
-                            <span key={i} className="text-xs px-3 py-1.5 rounded-full bg-gray-800 text-gray-300 border border-gray-700">
-                                {s.type === 'channel' ? '📺' : '🔑'} {s.name}
-                            </span>
-                        ))}
-                        <span className="text-xs px-3 py-1.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                            {state.scannedCount} videos found
+                    <div className="flex flex-col gap-2">
+                        {sources.map((s: any, i: number) => {
+                            const count = state.videos.filter(v => {
+                                const meta = (v as any).source_meta || {}
+                                return meta.source_name === s.name
+                            }).length
+                            const filters: string[] = []
+                            if (s.minLikes) filters.push(`≥${s.minLikes} likes`)
+                            if (s.minViews) filters.push(`≥${s.minViews} views`)
+                            if (s.maxViews) filters.push(`≤${s.maxViews} views`)
+                            if (s.withinDays) filters.push(`${s.withinDays}d`)
+                            return (
+                                <div key={i} className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-xs px-3 py-1.5 rounded-full bg-gray-800 text-gray-300 border border-gray-700">
+                                        {s.type === 'channel' ? '📺' : '🔑'} {s.name}
+                                        {count > 0 && <span className="ml-1.5 text-purple-400 font-bold">({count})</span>}
+                                    </span>
+                                    {filters.length > 0 && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+                                            🔍 {filters.join(' · ')}
+                                        </span>
+                                    )}
+                                    {s.autoSchedule === false && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                                            ✋ Manual
+                                        </span>
+                                    )}
+                                </div>
+                            )
+                        })}
+                        <span className="text-xs px-3 py-1.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 self-start">
+                            Tổng: {state.scannedCount} videos
                         </span>
                     </div>
                 </div>
@@ -608,9 +632,64 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                     </div>
                 ) : (
                     <div className="max-h-[600px] overflow-y-auto pr-2">
-                        {[...state.videos].sort((a, b) => (a.scheduledAt || 0) - (b.scheduledAt || 0)).map((video, i) => (
-                            <VideoCard key={video.platform_id || i} video={video} index={i} gapMinutes={gapMinutes} campaignId={campaignId} />
-                        ))}
+                        {(() => {
+                            const sorted = [...state.videos].sort((a, b) => (a.scheduledAt || 0) - (b.scheduledAt || 0))
+                            const now = new Date()
+                            const todayKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`
+                            const tomorrow = new Date(now)
+                            tomorrow.setDate(tomorrow.getDate() + 1)
+                            const tomorrowKey = `${tomorrow.getFullYear()}-${tomorrow.getMonth()}-${tomorrow.getDate()}`
+
+                            let lastDateKey = ''
+                            const elements: React.ReactNode[] = []
+
+                            for (let i = 0; i < sorted.length; i++) {
+                                const video = sorted[i]
+                                const d = video.scheduledAt ? new Date(video.scheduledAt) : null
+                                const dateKey = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : 'unknown'
+
+                                if (dateKey !== lastDateKey && d) {
+                                    let label: string
+                                    if (dateKey === todayKey) {
+                                        label = 'Today'
+                                    } else if (dateKey === tomorrowKey) {
+                                        label = `Tomorrow (${d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })})`
+                                    } else {
+                                        label = d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })
+                                    }
+
+                                    const isToday = dateKey === todayKey
+                                    const isTomorrow = dateKey === tomorrowKey
+
+                                    elements.push(
+                                        <div
+                                            key={`date-${dateKey}`}
+                                            className="sticky top-0 z-10 flex items-center gap-2 py-2 mb-1"
+                                            style={{ backdropFilter: 'blur(12px)' }}
+                                        >
+                                            <div className="h-px flex-1 bg-gray-700/50" />
+                                            <span
+                                                className="text-[11px] font-semibold px-3 py-1 rounded-full shrink-0"
+                                                style={{
+                                                    background: isToday ? '#3b82f620' : isTomorrow ? '#8b5cf620' : '#374151',
+                                                    color: isToday ? '#60a5fa' : isTomorrow ? '#a78bfa' : '#9ca3af',
+                                                    border: `1px solid ${isToday ? '#3b82f630' : isTomorrow ? '#8b5cf630' : '#4b5563'}`,
+                                                }}
+                                            >
+                                                {isToday && '📅 '}{isTomorrow && '📆 '}{label}
+                                            </span>
+                                            <div className="h-px flex-1 bg-gray-700/50" />
+                                        </div>
+                                    )
+                                    lastDateKey = dateKey
+                                }
+
+                                elements.push(
+                                    <VideoCard key={video.platform_id || i} video={video} index={i} gapMinutes={gapMinutes} campaignId={campaignId} />
+                                )
+                            }
+                            return elements
+                        })()}
                     </div>
                 )}
             </div>

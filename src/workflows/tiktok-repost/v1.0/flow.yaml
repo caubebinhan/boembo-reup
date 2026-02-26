@@ -13,6 +13,9 @@ version: "1.0"
 
 # ── NODES ────────────────────────────────
 nodes:
+  - node_id: core.check_in_time
+    instance_id: start_gate
+
   - node_id: tiktok.scanner
     instance_id: scanner_1
     timeout: 30000
@@ -63,6 +66,8 @@ nodes:
 
 # ── EDGES ────────────────────────────────
 edges:
+  - from: start_gate
+    to: scanner_1
   - from: scanner_1
     to: scheduler_1
   - from: scheduler_1

@@ -13,13 +13,16 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   const downloadUrl = video.download_url || video.url
   const result = await scanner.downloadVideo(downloadUrl, video.platform_id)
 
+  // Use real caption from the download API (scanner alt text includes music info)
+  const realDescription = result.description || video.description
+
   // Update video in campaign document — preserve local_thumbnail if already set
   ctx.store.updateVideo(video.platform_id, {
     local_path: result.filePath,
     status: 'downloaded',
     data: {
       ...video,
-      description: video.description,
+      description: realDescription,
       author: video.author,
       stats: video.stats,
       thumbnail: typeof video.thumbnail === 'string' ? video.thumbnail : '',
@@ -29,6 +32,6 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   ctx.store.increment('downloaded')
   ctx.store.save()
 
-  ctx.logger.info(`Downloaded: ${result.filePath}`)
-  return { data: { ...video, local_path: result.filePath } }
+  ctx.logger.info(`Downloaded: ${result.filePath}${result.description ? ' (caption updated)' : ''}`)
+  return { data: { ...video, local_path: result.filePath, description: realDescription } }
 }

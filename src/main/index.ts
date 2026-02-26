@@ -10,11 +10,11 @@ import { setupWizardIPC } from './ipc/wizard'
 import { initSentry } from './sentry'
 import { flowEngine } from '../core/engine/FlowEngine'
 import { setupCampaignIPC } from './ipc/campaigns'
-import { setupScannerIPC } from './ipc/scanner'
 import { setupSettingsIPC } from './ipc/settings'
 import { setupTroubleshootingIPC } from './ipc/troubleshooting'
 import { CrashRecoveryService } from './services/CrashRecovery'
 import { flowLoader } from '../core/flow/FlowLoader'
+import { asyncTaskScheduler } from './services/AsyncTaskScheduler'
 // Importing the nodes barrel triggers self-registration of all nodes.
 // To add a new node: create the file, export + call nodeRegistry.register(), then add to src/nodes/index.ts
 import '../nodes'
@@ -87,8 +87,10 @@ app.whenReady().then(() => {
   // Initialize Engine
   flowEngine.start()
 
+  // Initialize Async Task Scheduler (handlers self-register from their modules)
+  asyncTaskScheduler.start()
+
   setupCampaignIPC()
-  setupScannerIPC()
   setupWizardIPC()
   setupSettingsIPC()
   setupTroubleshootingIPC()
@@ -109,6 +111,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    asyncTaskScheduler.stop()
     app.quit()
   }
 })

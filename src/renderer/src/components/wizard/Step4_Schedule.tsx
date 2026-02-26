@@ -1,12 +1,7 @@
 import { useMemo, useEffect } from 'react'
+import { computeScheduleSlots, type TimeRange } from '@shared/scheduling'
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-interface TimeRange {
-    days: number[]
-    start: string
-    end: string
-}
 
 interface Step4Props {
     data: Record<string, any>
@@ -20,7 +15,6 @@ const DEFAULT_RANGES: TimeRange[] = [
 export function Step4_Schedule({ data, updateData }: Step4Props) {
     const ranges: TimeRange[] = data.timeRanges || DEFAULT_RANGES
 
-    // Initialize defaults on mount
     useEffect(() => {
         const defaults: Record<string, any> = {}
         if (data.intervalMinutes == null) defaults.intervalMinutes = 60
@@ -51,70 +45,57 @@ export function Step4_Schedule({ data, updateData }: Step4Props) {
         updateRange(rangeIdx, { days })
     }
 
-    // Live preview: show first 5 scheduled slots
+    const intervalMinutes = data.intervalMinutes || 60
+    const enableJitter = !!data.enableJitter
+
+    // Live preview using shared computeScheduleSlots (fixed interval, no jitter simulation)
     const preview = useMemo(() => {
-        const intervalMs = (data.intervalMinutes || 60) * 60_000
-        const slots: string[] = []
-        let cursor = Date.now()
-
-        for (let i = 0; i < 5; i++) {
-            // Find next valid slot
-            let found: number | null = null
-            for (let off = 0; off <= 7; off++) {
-                for (const r of ranges) {
-                    const d = new Date(cursor)
-                    d.setDate(d.getDate() + off)
-                    if (!r.days.includes(d.getDay())) continue
-                    const [sh, sm] = r.start.split(':').map(Number)
-                    const [eh, em] = r.end.split(':').map(Number)
-                    const startMin = sh * 60 + sm
-                    const endMin = eh * 60 + em
-                    const nowMin = (off === 0 ? d : new Date(d.setHours(sh, sm, 0, 0))).getHours() * 60 + (off === 0 ? d.getMinutes() : sm)
-                    const candidate = new Date(cursor)
-                    candidate.setDate(candidate.getDate() + off)
-
-                    if (off === 0 && nowMin >= startMin && nowMin <= endMin) {
-                        found = cursor; break
-                    } else if (off > 0 || nowMin < startMin) {
-                        candidate.setHours(sh, sm, 0, 0)
-                        if (candidate.getTime() >= cursor) { found = candidate.getTime(); break }
-                    }
-                }
-                if (found !== null) break
-            }
-            if (found === null) break
-            slots.push(new Date(found).toLocaleString('vi-VN', { weekday: 'short', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }))
-            cursor = found + intervalMs
-        }
-        return slots
-    }, [data.intervalMinutes, ranges])
+        const slots = computeScheduleSlots({
+            cursor: Date.now(),
+            intervalMinutes,
+            enableJitter: false, // preview always shows fixed interval
+            ranges,
+            count: 5,
+        })
+        return slots.map(s => ({
+            time: new Date(s.timestamp).toLocaleString('vi-VN', { weekday: 'short', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }),
+            gapLabel: s.gapMs != null ? `+${Math.round(s.gapMs / 60_000)}min${enableJitter ? ' (±50%)' : ''}` : undefined,
+        }))
+    }, [intervalMinutes, enableJitter, ranges])
 
     return (
         <div className="flex flex-col gap-6 text-white max-w-4xl mx-auto pb-10">
 
-            {/* Interval */}
-            <div className="grid grid-cols-2 gap-4 bg-[#111827] border border-gray-700 p-4 rounded-xl">
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-400">Gap between videos</label>
+            {/* Gap + Jitter — inline */}
+            <div className="bg-[#111827] border border-gray-700 p-4 rounded-xl">
+                <label className="text-xs font-bold text-gray-400 block mb-2">Gap between videos</label>
+                <div className="flex items-center gap-3 flex-wrap">
                     <div className="flex items-center gap-2">
                         <input
                             type="number" min={1}
-                            value={data.intervalMinutes || 60}
+                            value={intervalMinutes}
                             onChange={(e) => updateData({ intervalMinutes: Number(e.target.value) })}
-                            className="bg-gray-800 border border-gray-700 rounded p-2 w-24 outline-none text-sm"
+                            className="bg-gray-800 border border-gray-700 rounded p-2 w-20 outline-none text-sm"
                         />
-                        <span className="text-sm text-gray-500">minutes</span>
+                        <span className="text-sm text-gray-500">min</span>
                     </div>
-                </div>
 
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-bold text-gray-400">Campaign Start Time</label>
-                    <input
-                        type="datetime-local"
-                        value={data.firstRunAt || ''}
-                        onChange={(e) => updateData({ firstRunAt: e.target.value })}
-                        className="bg-gray-800 border border-gray-700 rounded p-2 outline-none text-sm"
-                    />
+                    <div className="w-px h-6 bg-gray-700" />
+
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            className="w-4 h-4 accent-purple-600"
+                            checked={enableJitter}
+                            onChange={(e) => updateData({ enableJitter: e.target.checked })}
+                        />
+                        <span className="text-sm text-gray-300">Jitter ±50%</span>
+                        {enableJitter && (
+                            <span className="text-xs text-gray-500 ml-1">
+                                ({Math.round(intervalMinutes * 0.5)}–{Math.round(intervalMinutes * 1.5)}min)
+                            </span>
+                        )}
+                    </label>
                 </div>
             </div>
 
@@ -134,15 +115,14 @@ export function Step4_Schedule({ data, updateData }: Step4Props) {
                 {ranges.map((r, i) => (
                     <div key={i} className="bg-[#111827] border border-gray-700 rounded-xl p-4 flex flex-col gap-3">
                         <div className="flex items-center justify-between gap-4">
-                            {/* Day selector */}
                             <div className="flex items-center gap-1 flex-wrap">
                                 {DAY_NAMES.map((name, day) => (
                                     <button
                                         key={day}
                                         onClick={() => toggleDay(i, day)}
                                         className={`w-9 h-9 rounded-lg text-xs font-bold transition border ${r.days.includes(day)
-                                                ? 'bg-purple-600 border-purple-500 text-white'
-                                                : 'bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-500'
+                                            ? 'bg-purple-600 border-purple-500 text-white'
+                                            : 'bg-gray-800 border-gray-700 text-gray-500 hover:border-gray-500'
                                             }`}
                                     >
                                         {name}
@@ -150,7 +130,6 @@ export function Step4_Schedule({ data, updateData }: Step4Props) {
                                 ))}
                             </div>
 
-                            {/* Time range */}
                             <div className="flex items-center gap-2 shrink-0">
                                 <input
                                     type="time"
@@ -176,7 +155,6 @@ export function Step4_Schedule({ data, updateData }: Step4Props) {
                             )}
                         </div>
 
-                        {/* Active days summary */}
                         <div className="text-xs text-gray-500">
                             {r.days.length === 7 ? 'Every day' :
                                 r.days.length === 0 ? '⚠️ No days selected' :
@@ -189,14 +167,22 @@ export function Step4_Schedule({ data, updateData }: Step4Props) {
 
             {/* Preview */}
             <div className="flex flex-col gap-2">
-                <h3 className="text-sm font-bold text-gray-400 tracking-wider">SCHEDULE PREVIEW (next 5 slots)</h3>
+                <h3 className="text-sm font-bold text-gray-400 tracking-wider">
+                    SCHEDULE PREVIEW (next 5 slots)
+                    {enableJitter && <span className="ml-2 text-yellow-400 font-normal text-xs">🎲 jitter active</span>}
+                </h3>
                 <div className="bg-[#111827] border border-gray-700 rounded-xl overflow-hidden">
                     {preview.length === 0 ? (
                         <div className="text-gray-500 italic p-4 text-center text-sm">Set time ranges to see preview</div>
                     ) : preview.map((slot, idx) => (
                         <div key={idx} className="flex items-center gap-3 px-4 py-2 border-b border-gray-800 last:border-0">
                             <span className="text-xs bg-purple-500/20 text-purple-400 font-mono px-2 py-1 rounded">#{idx + 1}</span>
-                            <span className="text-sm font-mono">{slot}</span>
+                            <span className="text-sm font-mono flex-1">{slot.time}</span>
+                            {slot.gapLabel && (
+                                <span className={`text-xs font-mono ${enableJitter ? 'text-yellow-400' : 'text-gray-500'}`}>
+                                    {slot.gapLabel}
+                                </span>
+                            )}
                         </div>
                     ))}
                 </div>

@@ -1,19 +1,27 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 
 interface Step1Props {
     data: Record<string, any>
     updateData: (updates: Record<string, any>) => void
 }
 
+const EXAMPLE_ORIGINAL = 'Đây là video hot nhất hôm nay 🔥 #tiktok #viral'
+
+function applyCaptionTemplate(template: string, original: string): string {
+    if (!template.trim()) return original
+    let result = template
+    result = result.replace(/\[Original Desc\]/gi, original)
+    result = result.replace(/\[No Hashtags\]/gi, original.replace(/#\S+/g, '').trim())
+    result = result.replace(/\[Time \(HH:mm\)\]/gi, new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }))
+    result = result.replace(/\[Date \(YYYY-MM-DD\)\]/gi, new Date().toISOString().slice(0, 10))
+    result = result.replace(/\[Author\]/gi, '@example_author')
+    result = result.replace(/\[Tags\]/gi, '#fyp #viral')
+    return result
+}
+
 export function Step1_Details({ data, updateData }: Step1Props) {
-    // ── Initialize defaults on mount ───────────────────────────────
-    // Without this, inputs that show `data.x || default` never write the
-    // default into stepData unless the user physically changes the field.
-    // The missing value is then omitted by JSON.stringify → undefined in DB.
     useEffect(() => {
         const defaults: Record<string, any> = {}
-        if (data.intervalMinutes == null) defaults.intervalMinutes = 60
-        if (data.autoSchedule == null) defaults.autoSchedule = true
         if (data.missedJobHandling == null) defaults.missedJobHandling = 'auto'
         if (Object.keys(defaults).length > 0) updateData(defaults)
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -24,73 +32,18 @@ export function Step1_Details({ data, updateData }: Step1Props) {
         updateData({ captionTemplate: current + tag })
     }
 
+    const captionPreview = useMemo(() => {
+        return applyCaptionTemplate(data.captionTemplate || '', EXAMPLE_ORIGINAL)
+    }, [data.captionTemplate])
+
     return (
         <div className="flex flex-col gap-8 text-white max-w-3xl mx-auto pb-10">
-            {/* SECTION 1: Campaign Name */}
-            <div className="flex flex-col gap-2">
-                <label className="font-semibold text-lg">Campaign Name</label>
-                <input
-                    type="text"
-                    placeholder="My awesome campaign..."
-                    className="bg-gray-800 border-2 border-gray-700 focus:border-purple-600 rounded-lg p-3 outline-none transition"
-                    value={data.name || ''}
-                    onChange={(e) => updateData({ name: e.target.value })}
-                />
-            </div>
 
-            {/* SECTION 2: Campaign Type */}
-            <div className="flex flex-col gap-2">
-                <label className="font-semibold text-lg">Campaign Type</label>
-                <div className="grid grid-cols-2 gap-4">
-                    <div
-                        onClick={() => updateData({ campaignType: 'scan_video' })}
-                        className={`p-4 rounded-lg cursor-pointer border-2 transition ${data.campaignType === 'scan_video'
-                            ? 'border-purple-600 bg-purple-600/10'
-                            : 'border-gray-700 bg-gray-800 hover:border-gray-600'
-                            }`}
-                    >
-                        <div className="flex items-center gap-3 font-semibold mb-2">
-                            <span className="text-xl">{data.campaignType === 'scan_video' ? '○' : '○'}</span>
-                            Scan Video Mode
-                        </div>
-                        <p className="text-sm text-gray-400 pl-8">Select specific videos to process and repost manually.</p>
-                    </div>
-
-                    <div
-                        onClick={() => updateData({ campaignType: 'scan_channel' })}
-                        className={`p-4 rounded-lg cursor-pointer border-2 transition ${data.campaignType === 'scan_channel'
-                            ? 'border-purple-600 bg-purple-600/10'
-                            : 'border-gray-700 bg-gray-800 hover:border-gray-600'
-                            }`}
-                    >
-                        <div className="flex items-center gap-3 font-semibold mb-2">
-                            <span className="text-xl">{data.campaignType === 'scan_channel' ? '●' : '○'}</span>
-                            Scan Channel / Keyword Mode
-                        </div>
-                        <p className="text-sm text-gray-400 pl-8">Automatically monitor streams and fetch new content.</p>
-                    </div>
-                </div>
-            </div>
-
-            {/* SECTION 3: Advanced Verification */}
-            {data.campaignType === 'scan_channel' && (
-                <div
-                    onClick={() => updateData({ advancedVerification: !data.advancedVerification })}
-                    className="p-4 rounded-lg cursor-pointer border-2 border-gray-700 bg-gray-800 flex flex-col gap-1 hover:border-gray-600 transition"
-                >
-                    <div className="flex items-center gap-3 font-semibold">
-                        <input type="checkbox" checked={!!data.advancedVerification} readOnly className="w-4 h-4 accent-purple-600" />
-                        Advanced Verification (Unique Tag)
-                    </div>
-                    <p className="text-sm text-gray-400 pl-7">Appends a unique 6-char tag to caption to bypass strict checks.</p>
-                </div>
-            )}
-
-            {/* SECTION 4: Caption Template */}
+            {/* SECTION 1: Caption Template */}
             <div className="flex flex-col gap-2">
                 <div>
                     <h3 className="font-semibold text-lg">📋 Caption Template</h3>
-                    <p className="text-sm text-gray-400">Customize the caption styling and keywords appended.</p>
+                    <p className="text-sm text-gray-400">Tuỳ chỉnh caption cho video khi publish. Để trống = giữ nguyên caption gốc.</p>
                 </div>
 
                 <div className="flex flex-wrap gap-2 mb-1 mt-2">
@@ -106,74 +59,36 @@ export function Step1_Details({ data, updateData }: Step1Props) {
                 </div>
 
                 <textarea
-                    className="bg-gray-800 border-2 border-gray-700 focus:border-purple-600 rounded-lg p-3 outline-none min-h-[100px] resize-y font-mono text-sm"
-                    placeholder="{original}"
+                    className="bg-gray-800 border-2 border-gray-700 focus:border-purple-600 rounded-lg p-3 outline-none min-h-[80px] resize-y font-mono text-sm"
+                    placeholder="[Original Desc] #fyp #viral"
                     value={data.captionTemplate || ''}
                     onChange={(e) => updateData({ captionTemplate: e.target.value })}
                 />
+
+                {/* Live preview */}
+                <div className="bg-[#0f172a] border border-gray-700 rounded-lg p-3 mt-1">
+                    <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-2">Caption Preview</p>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <p className="text-[10px] text-gray-500 mb-1">📄 Original</p>
+                            <p className="text-xs text-gray-400 leading-relaxed">{EXAMPLE_ORIGINAL}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-purple-400 mb-1">✨ Sẽ đăng</p>
+                            <p className="text-xs text-white leading-relaxed">{captionPreview}</p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <hr className="border-gray-800 my-2" />
 
-            {/* SECTION 5: First Run Time */}
-            <div className="flex flex-col gap-2">
-                <label className="font-semibold">First Run Time</label>
-                <input
-                    type="datetime-local"
-                    className="bg-gray-800 border-2 border-gray-700 focus:border-purple-600 rounded-lg p-3 outline-none w-full max-w-sm"
-                    value={data.firstRunAt || ''}
-                    onChange={(e) => updateData({ firstRunAt: e.target.value })}
-                />
-            </div>
-
-            {/* SECTION 6: Auto-schedule */}
-            <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                    type="checkbox"
-                    className="w-5 h-5 accent-purple-600"
-                    checked={data.autoSchedule !== false}
-                    onChange={(e) => updateData({ autoSchedule: e.target.checked })}
-                />
-                <div>
-                    <div className="font-semibold">Auto-schedule tasks</div>
-                    <div className="text-sm text-gray-400">(Uncheck if you prefer manual approval)</div>
-                </div>
-            </label>
-
-            {/* SECTION 7: Recurring Interval */}
-            <div className="bg-[#1e293b] border border-gray-700 rounded-xl p-6 flex flex-col gap-6">
-                <h3 className="font-bold text-lg flex items-center gap-2">
-                    <span>🔄</span> Recurring Interval
-                </h3>
-
-                <div className="grid grid-cols-2 gap-6">
-                    <div className="flex items-center justify-between col-span-2">
-                        <span className="font-medium text-gray-300">Repeat Every (Minutes)</span>
-                        <input
-                            type="number"
-                            className="bg-gray-800 border border-gray-700 rounded-lg p-2 w-24 text-center focus:border-purple-600 outline-none"
-                            value={data.intervalMinutes || 60}
-                            onChange={(e) => updateData({ intervalMinutes: Number(e.target.value) })}
-                        />
-                    </div>
-
-                    <label className="flex items-center gap-3 col-span-2 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            className="w-4 h-4 accent-purple-600"
-                            checked={!!data.enableJitter}
-                            onChange={(e) => updateData({ enableJitter: e.target.checked })}
-                        />
-                        <span className="font-medium text-gray-300">Enable Jitter (Random ±50%)</span>
-                    </label>
-                </div>
-            </div>
-
-            {/* SECTION 8: Missed Job Handling */}
+            {/* SECTION 2: Missed Job Handling */}
             <div className="bg-[#1e293b] border border-gray-700 rounded-xl p-6 flex flex-col gap-4">
                 <h3 className="font-bold text-lg flex items-center gap-2">
-                    <span>🔄</span> Missed Job Handling
+                    <span>🔄</span> Xử lý video bị missed
                 </h3>
+                <p className="text-sm text-gray-500 -mt-2">Khi app bị tắt/crash, video đã lên lịch nhưng chưa publish sẽ được xử lý theo cách này.</p>
 
                 <div className="grid grid-cols-2 gap-4">
                     <div
@@ -184,9 +99,9 @@ export function Step1_Details({ data, updateData }: Step1Props) {
                             }`}
                     >
                         <div className="flex items-center gap-2 font-semibold mb-1">
-                            <span className="text-purple-400">●</span> Auto Reschedule
+                            <span className="text-purple-400">●</span> Tự động lên lịch lại
                         </div>
-                        <p className="text-xs text-gray-400 leading-snug">Automatically reschedule missed jobs for the next available slot.</p>
+                        <p className="text-xs text-gray-400 leading-snug">Tự reschedule video bị missed khi app restart. Không cần can thiệp.</p>
                     </div>
 
                     <div
@@ -197,9 +112,9 @@ export function Step1_Details({ data, updateData }: Step1Props) {
                             }`}
                     >
                         <div className="flex items-center gap-2 font-semibold mb-1">
-                            <span className="text-gray-500">○</span> Manual Reschedule
+                            <span className="text-gray-500">○</span> Tạm dừng chờ duyệt
                         </div>
-                        <p className="text-xs text-gray-400 leading-snug">Pause campaign and wait for manual action if jobs are missed.</p>
+                        <p className="text-xs text-gray-400 leading-snug">Tạm dừng campaign khi phát hiện video bị missed. Bạn tự kiểm tra và resume.</p>
                     </div>
                 </div>
             </div>

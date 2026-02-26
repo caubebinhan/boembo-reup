@@ -4,16 +4,34 @@ import { normalizeTimeRanges, isWithinAnyWindow, nextValidSlot } from '../_share
 /**
  * CheckInTime Node
  *
- * First child of the loop. Each iteration does TWO checks:
+ * Performs up to THREE checks:
+ *
+ * 0. **Campaign Start Gate** — is `params.firstRunAt` set and in the future?
+ *    If yes → sleep until that time. Used as start_gate before scanner.
  *
  * 1. **Active Hours** — is NOW within any of the configured time ranges?
  *    If not → sleep until the next valid slot across any range.
  *
  * 2. **Scheduled Time** — does this video have a `scheduled_for`?
  *    If yes and it's in the future → sleep until that exact time.
- *    This replaces the old Timeout node: wait BEFORE each video.
  */
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
+  // ── Step 0: Campaign Start Gate (firstRunAt) ───────
+  if (ctx.params.firstRunAt) {
+    const firstRunMs = new Date(ctx.params.firstRunAt).getTime()
+    if (!isNaN(firstRunMs) && firstRunMs > Date.now()) {
+      const waitMs = firstRunMs - Date.now()
+      const waitMins = (waitMs / 60_000).toFixed(0)
+      const startStr = new Date(firstRunMs).toLocaleString('vi-VN', {
+        weekday: 'short', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit',
+      })
+      ctx.logger.info(`[CheckInTime] ⏰ Campaign starts at ${startStr}. Sleeping ${waitMins}min...`)
+      ctx.onProgress(`⏰ Campaign bắt đầu lúc ${startStr}. Đang chờ...`)
+      await new Promise(resolve => setTimeout(resolve, waitMs))
+      ctx.logger.info(`[CheckInTime] ✅ Campaign start time reached`)
+    }
+  }
+
   const ranges = normalizeTimeRanges(ctx.params)
 
   // ── Step 1: Active Hours Check ─────────────────────
@@ -53,3 +71,4 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   ctx.onProgress(`✅ Ready — continuing`)
   return { data: input, action: 'continue' }
 }
+

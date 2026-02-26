@@ -24,10 +24,6 @@ function loadReviewStats(): Record<string, ReviewRetryStats> {
   return settingsRepo.get<Record<string, ReviewRetryStats>>(REVIEW_STATS_KEY) || {}
 }
 
-function saveReviewStats(stats: Record<string, ReviewRetryStats>) {
-  settingsRepo.set(REVIEW_STATS_KEY, stats)
-}
-
 function estimateRetryDelayMs(stat?: ReviewRetryStats, attempt = 1): number {
   const minMs = 2 * 60 * 1000
   const maxMs = 3 * 60 * 1000
@@ -161,161 +157,79 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     status: result.isReviewing ? 'under_review' : 'published', mediaSignature,
   })
 
-  if (isVerificationIncomplete) {
-    setVideoStatus(ctx, video.platform_id, 'verification_incomplete', result.videoUrl)
+  if (isVerificationIncomplete || result.isReviewing) {
+    const status = isVerificationIncomplete ? 'verification_incomplete' : 'under_review'
+    setVideoStatus(ctx, video.platform_id, status, result.videoUrl)
+
     updatePublishHistoryRecord(publishHistoryId, {
-      status: 'published', publishedVideoId: result.videoId,
+      status: result.isReviewing ? 'under_review' : 'published',
+      publishedVideoId: result.videoId,
       publishedUrl: result.videoUrl, mediaSignature,
     })
-    emitPublishStatus({
-      status: 'verification_incomplete', videoUrl: result.videoUrl,
-      message: 'Upload submitted, but dashboard verification was incomplete.',
-      attempts: 0, maxRetries: 0,
-    })
-    ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:published', {
-      videoId: video.platform_id, videoUrl: result.videoUrl,
-      warning: [result.warning, 'dashboard_verification_incomplete'].filter(Boolean).join(' | '),
-      isReviewing: false, verificationIncomplete: true, debugArtifacts: result.debugArtifacts,
-    })
-    if (result.warning) ctx.logger.info(`Publish warning: ${result.warning}`)
-    ctx.logger.info(`Published (verification incomplete): ${result.videoUrl || 'unknown url'}`)
-    return {
-      data: { ...video, published_url: result.videoUrl, published: true, status: 'verification_incomplete', verification_incomplete: true }
-    }
-  }
-
-  if (result.isReviewing) {
-    setVideoStatus(ctx, video.platform_id, 'under_review', result.videoUrl)
 
     const allStats = loadReviewStats()
     const statsKey = `tiktok:${account.id}:${account.username}`
-    const predictedReviewMs = allStats[statsKey]?.avgReviewMs
     const maxRetries = Math.max(5, Math.min(10, Number(ctx.params.publishVerifyMaxRetries) || 5))
+    const retryIntervalMs = estimateRetryDelayMs(allStats[statsKey])
 
+    // Schedule background async verification instead of blocking the loop
+    const { taskId, created } = ctx.asyncTasks.schedule('tiktok.publish.verify', {
+      accountId: account.id,
+      videoId: video.platform_id,
+      campaignId: ctx.campaign_id,
+      publishHistoryId,
+      expectedVideoId: result.videoId,
+      expectedVideoUrl: result.videoUrl,
+      caption,
+      publishStartedAtSec: Math.floor(publishStartedAt / 1000),
+      initialStatus: status,
+      mediaSignature,
+    }, {
+      dedupeKey: `publish-verify:${video.platform_id}:${account.id}`,
+      payloadVersion: 1,
+      maxAttempts: maxRetries,
+      retryIntervalMs,
+      concurrencyKey: `tiktok-account:${account.id}`,
+      maxConcurrent: 1,
+      campaignId: ctx.campaign_id,
+      ownerKey: `campaign:${ctx.campaign_id}:publisher`,
+    })
+
+    const predictedReviewMs = allStats[statsKey]?.avgReviewMs
     emitPublishStatus({
-      status: 'under_review', videoUrl: result.videoUrl,
-      message: predictedReviewMs
-        ? `Under content review. Estimated public in ~${Math.round(predictedReviewMs / 60000)} min.`
-        : 'Under content review. Will retry every 2-3 minutes.',
-      attempts: 0, maxRetries, predictedReviewMs,
+      status,
+      videoUrl: result.videoUrl,
+      message: created
+        ? `${status === 'verification_incomplete' ? 'Upload submitted (verification incomplete)' : 'Under content review'}. Background verification scheduled (${maxRetries} retries, ~${Math.round(retryIntervalMs / 60000)} min intervals).`
+        : `Verification already scheduled (task ${taskId}).`,
+      attempts: 0,
+      maxRetries,
+      predictedReviewMs,
+      asyncVerifyTaskId: taskId,
     })
 
-    let finalResult = result
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      const delayMs = estimateRetryDelayMs(allStats[statsKey], attempt)
-      const nextRetryAt = Date.now() + delayMs
-      emitPublishStatus({
-        status: 'under_review', videoUrl: finalResult.videoUrl || result.videoUrl,
-        message: `Under review, retry in ${Math.round(delayMs / 60000)}-${Math.ceil(delayMs / 60000)} min.`,
-        attempts: attempt - 1, maxRetries, nextRetryAt, predictedReviewMs,
-      })
-
-      ctx.onProgress(`Under content review. Retry ${attempt}/${maxRetries} in ${Math.round(delayMs / 1000)}s...`)
-      await new Promise(res => setTimeout(res, delayMs))
-
-      setVideoStatus(ctx, video.platform_id, 'verifying_publish')
-      emitPublishStatus({
-        status: 'verifying_publish', videoUrl: finalResult.videoUrl || result.videoUrl,
-        message: `Retry ${attempt}/${maxRetries}: reloading dashboard...`,
-        attempts: attempt, maxRetries,
-      })
-
-      const recheck = await publisher.recheckPublishedStatus(cookies, (msg) => {
-        ctx.onProgress(`[Playwright][Retry ${attempt}/${maxRetries}] ${msg}`)
-      }, {
-        privacy: ctx.params.privacy || 'public', username: account.username,
-        uploadStartTime: Math.floor(publishStartedAt / 1000),
-        expectedVideoId: finalResult.videoId || result.videoId,
-        expectedVideoUrl: finalResult.videoUrl || result.videoUrl,
-        expectedCaption: caption,
-      })
-
-      if (!recheck.success) {
-        emitPublishStatus({
-          status: 'under_review', videoUrl: finalResult.videoUrl || result.videoUrl,
-          message: `Retry ${attempt}/${maxRetries} verify failed (${recheck.error || 'unknown'}).`,
-          attempts: attempt, maxRetries,
-        })
-        continue
-      }
-
-      if (recheck.verificationIncomplete || recheck.publishStatus === 'verification_incomplete') {
-        finalResult = { ...finalResult, ...recheck, videoUrl: recheck.videoUrl || finalResult.videoUrl }
-        updatePublishHistoryRecord(publishHistoryId, {
-          status: 'published', publishedVideoId: finalResult.videoId || recheck.videoId,
-          publishedUrl: finalResult.videoUrl || recheck.videoUrl, mediaSignature,
-        })
-        setVideoStatus(ctx, video.platform_id, 'verification_incomplete', finalResult.videoUrl || result.videoUrl)
-        emitPublishStatus({
-          status: 'verification_incomplete', videoUrl: finalResult.videoUrl || result.videoUrl,
-          message: `Retry ${attempt}/${maxRetries}: verification still incomplete.`,
-          attempts: attempt, maxRetries,
-        })
-        ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:published', {
-          videoId: video.platform_id, videoUrl: finalResult.videoUrl || result.videoUrl,
-          warning: [finalResult.warning, 'dashboard_verification_incomplete_after_retry'].filter(Boolean).join(' | '),
-          isReviewing: false, verificationIncomplete: true, debugArtifacts: finalResult.debugArtifacts,
-        })
-        ctx.logger.info(`Published (verification incomplete after retry): ${finalResult.videoUrl || result.videoUrl}`)
-        return {
-          data: { ...video, published_url: finalResult.videoUrl || result.videoUrl, published: true, status: 'verification_incomplete', verification_incomplete: true }
-        }
-      }
-
-      finalResult = { ...finalResult, ...recheck, videoUrl: recheck.videoUrl || finalResult.videoUrl }
-      updatePublishHistoryRecord(publishHistoryId, {
-        status: recheck.isReviewing ? 'under_review' : 'published',
-        publishedVideoId: finalResult.videoId || recheck.videoId,
-        publishedUrl: finalResult.videoUrl || recheck.videoUrl, mediaSignature,
-      })
-
-      if (!recheck.isReviewing) {
-        const reviewMs = Date.now() - publishStartedAt
-        const prev = allStats[statsKey] || {}
-        const samples = (prev.samples || 0) + 1
-        const avgReviewMs = prev.avgReviewMs == null ? reviewMs : Math.round(prev.avgReviewMs * 0.7 + reviewMs * 0.3)
-        allStats[statsKey] = { avgReviewMs, samples, lastReviewMs: reviewMs }
-        saveReviewStats(allStats)
-
-        setVideoStatus(ctx, video.platform_id, 'published', finalResult.videoUrl || result.videoUrl)
-
-        emitPublishStatus({
-          status: 'published', videoUrl: finalResult.videoUrl || result.videoUrl,
-          message: `Video is public. Verified after ${Math.round(reviewMs / 60000)} minute(s).`,
-          attempts: attempt, maxRetries, actualReviewMs: reviewMs, learnedAvgReviewMs: avgReviewMs,
-        })
-        ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:published', {
-          videoId: video.platform_id, videoUrl: finalResult.videoUrl || result.videoUrl,
-          warning: finalResult.warning, isReviewing: false,
-          reviewVerifiedAfterMs: reviewMs, debugArtifacts: finalResult.debugArtifacts,
-        })
-        if (finalResult.warning) ctx.logger.info(`Publish warning: ${finalResult.warning}`)
-        ctx.logger.info(`Published (verified public): ${finalResult.videoUrl || result.videoUrl}`)
-        return { data: { ...video, published_url: finalResult.videoUrl || result.videoUrl, published: true, status: 'published' } }
-      }
-
-      setVideoStatus(ctx, video.platform_id, 'under_review', finalResult.videoUrl || result.videoUrl)
-      emitPublishStatus({
-        status: 'under_review', videoUrl: finalResult.videoUrl || result.videoUrl,
-        message: `Still under review after retry ${attempt}/${maxRetries}.`,
-        attempts: attempt, maxRetries,
-      })
-    }
-
-    updatePublishHistoryRecord(publishHistoryId, {
-      status: 'under_review', publishedVideoId: finalResult.videoId,
-      publishedUrl: finalResult.videoUrl || result.videoUrl, mediaSignature,
-    })
     ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:published', {
-      videoId: video.platform_id, videoUrl: finalResult.videoUrl || result.videoUrl,
-      warning: [finalResult.warning, 'Still under content review after max retries'].filter(Boolean).join(' | '),
-      isReviewing: true, debugArtifacts: finalResult.debugArtifacts,
-      description: video.description, author: video.author,
+      videoId: video.platform_id, videoUrl: result.videoUrl,
+      warning: [result.warning, status === 'verification_incomplete' ? 'dashboard_verification_incomplete' : 'under_content_review'].filter(Boolean).join(' | '),
+      isReviewing: result.isReviewing, verificationIncomplete: isVerificationIncomplete,
+      asyncVerifyTaskId: taskId, debugArtifacts: result.debugArtifacts,
     })
+
+    if (result.warning) ctx.logger.info(`Publish warning: ${result.warning}`)
+    ctx.logger.info(`Published (${status}): ${result.videoUrl || 'unknown url'} — async verify task ${taskId} (${created ? 'created' : 'existing'})`)
+
     return {
-      data: { ...video, published_url: finalResult.videoUrl || result.videoUrl, published: true, status: 'under_review', under_review: true },
+      data: {
+        ...video,
+        published_url: result.videoUrl,
+        published: true,
+        status,
+        asyncVerifyTaskId: taskId,
+        ...(isVerificationIncomplete ? { verification_incomplete: true } : { under_review: true }),
+      }
     }
   }
+
 
   // Direct success (no review needed)
   setVideoStatus(ctx, video.platform_id, 'published', result.videoUrl)

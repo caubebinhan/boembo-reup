@@ -335,7 +335,7 @@ export class TikTokScanner {
 
   // ── Download Video ────────────────────────────────
 
-  async downloadVideo(videoUrl: string, videoId: string): Promise<{ filePath: string }> {
+  async downloadVideo(videoUrl: string, videoId: string): Promise<{ filePath: string; description?: string }> {
     const downloadDir = AppSettingsService.getMediaStoragePath()
     if (!fs.existsSync(downloadDir)) fs.mkdirSync(downloadDir, { recursive: true })
 
@@ -354,6 +354,7 @@ export class TikTokScanner {
 
     // Phase 1: Extract mp4 stream URL via @tobyg74/tiktok-api-dl
     let streamUrl = ''
+    let realDescription: string | undefined
     try {
       console.log(`[TikTokScanner] Extracting stream URL for ${videoId}...`)
       const result = await Promise.race([
@@ -366,6 +367,10 @@ export class TikTokScanner {
         const playAddr = result.result.video.playAddr
         if (Array.isArray(playAddr) && playAddr.length > 0) streamUrl = playAddr[0]
         else if (typeof playAddr === 'string') streamUrl = playAddr
+      }
+      // Extract real caption/description from the API result
+      if (result?.result?.description) {
+        realDescription = result.result.description
       }
     } catch (err: any) {
       console.error(`[TikTokScanner] Library extraction failed:`, err.message)
@@ -388,7 +393,7 @@ export class TikTokScanner {
 
     fs.writeFileSync(filePath, buffer)
     console.log(`[TikTokScanner] Downloaded: ${filePath} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`)
-    return { filePath }
+    return { filePath, description: realDescription }
   }
 
   // ── Download Thumbnail ────────────────────────────

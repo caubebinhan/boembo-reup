@@ -3,12 +3,19 @@ interface Source {
     type: 'channel' | 'keyword'
     name: string
     avatar?: string
+    followerCount?: number
+    likeCount?: number
     historyLimit: number
     sortOrder: 'newest' | 'oldest' | 'most_liked' | 'most_viewed'
     timeRange: 'history_only' | 'future_only' | 'history_and_future' | 'custom_range'
     startDate?: string
     endDate?: string
     autoSchedule: boolean
+    // Filter conditions
+    minLikes?: number
+    minViews?: number
+    maxViews?: number
+    withinDays?: number
 }
 
 interface Step2Props {
@@ -103,10 +110,18 @@ export function Step2_Sources({ data, updateData }: Step2Props) {
                             {/* Card Header */}
                             <div className="flex justify-between items-center p-4 border-b border-gray-800 bg-gray-800/30">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-inner">
-                                        {source.avatar ? <img src={source.avatar} className="w-full h-full rounded-full" /> : source.name.charAt(0).toUpperCase()}
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-inner overflow-hidden">
+                                        {source.avatar ? <img src={source.avatar} className="w-full h-full rounded-full object-cover" /> : source.name.charAt(0).toUpperCase()}
                                     </div>
-                                    <span className="font-bold text-lg">{source.name}</span>
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-lg">{source.name}</span>
+                                        {(source.followerCount || source.likeCount) && (
+                                            <div className="flex items-center gap-3 text-xs text-gray-500">
+                                                {source.followerCount != null && <span>👥 {source.followerCount.toLocaleString()} followers</span>}
+                                                {source.likeCount != null && <span>❤️ {source.likeCount.toLocaleString()} likes</span>}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <button
                                     onClick={() => removeSource(index)}
@@ -191,6 +206,56 @@ export function Step2_Sources({ data, updateData }: Step2Props) {
                                     </div>
                                 </div>
 
+                                {/* FILTER CONDITIONS */}
+                                <div className="col-span-2 border-t border-gray-800 pt-5 mt-1">
+                                    <label className="text-xs font-bold text-gray-400 flex items-center gap-1 mb-3">
+                                        <span>🔍</span> FILTER CONDITIONS
+                                    </label>
+                                    <p className="text-xs text-gray-600 mb-3">Chỉ lấy video thoả mãn các điều kiện bên dưới. Để trống = không lọc.</p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-xs text-gray-500">Min Likes</label>
+                                            <input
+                                                type="number" min={0}
+                                                placeholder="e.g. 1000"
+                                                value={source.minLikes || ''}
+                                                onChange={(e) => updateSource(index, { minLikes: Number(e.target.value) || undefined })}
+                                                className="bg-gray-800 border border-gray-700 rounded-lg p-2 outline-none text-sm"
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-xs text-gray-500">Min Views</label>
+                                            <input
+                                                type="number" min={0}
+                                                placeholder="e.g. 10000"
+                                                value={source.minViews || ''}
+                                                onChange={(e) => updateSource(index, { minViews: Number(e.target.value) || undefined })}
+                                                className="bg-gray-800 border border-gray-700 rounded-lg p-2 outline-none text-sm"
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-xs text-gray-500">Max Views</label>
+                                            <input
+                                                type="number" min={0}
+                                                placeholder="e.g. 500000"
+                                                value={source.maxViews || ''}
+                                                onChange={(e) => updateSource(index, { maxViews: Number(e.target.value) || undefined })}
+                                                className="bg-gray-800 border border-gray-700 rounded-lg p-2 outline-none text-sm"
+                                            />
+                                        </div>
+                                        <div className="flex flex-col gap-1">
+                                            <label className="text-xs text-gray-500">Within Days</label>
+                                            <input
+                                                type="number" min={1}
+                                                placeholder="e.g. 30"
+                                                value={source.withinDays || ''}
+                                                onChange={(e) => updateSource(index, { withinDays: Number(e.target.value) || undefined })}
+                                                className="bg-gray-800 border border-gray-700 rounded-lg p-2 outline-none text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
                                 {/* AUTO SCHEDULE */}
                                 <div className="col-span-2 pt-2">
                                     <label className="flex items-center gap-3 cursor-pointer group">
@@ -202,7 +267,7 @@ export function Step2_Sources({ data, updateData }: Step2Props) {
                                         />
                                         <div>
                                             <div className="font-semibold group-hover:text-purple-400 transition">Auto-schedule videos</div>
-                                            <div className="text-sm text-gray-500">If off, you must manually approve videos from this source.</div>
+                                            <div className="text-sm text-gray-500">Nếu tắt, bạn phải duyệt thủ công video từ source này.</div>
                                         </div>
                                     </label>
                                 </div>

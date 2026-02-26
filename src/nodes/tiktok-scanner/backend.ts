@@ -16,6 +16,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
 
   const scanner = new TikTokScanner()
   const allVideos: any[] = []
+  const sourceCounts: string[] = []
 
   for (const source of sources) {
     if (!source) continue
@@ -39,7 +40,8 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
         result = await scanner.scanKeyword(source.name, scanOpts)
       }
 
-      const mapped = (result.videos || []).map((v: any) => ({
+      const sourceLabel = source.type === 'channel' ? `@${source.name.replace('@','')}` : `🔑${source.name}`
+      let mapped = (result.videos || []).map((v: any) => ({
         platform_id: v.platform_id || v.id,
         platform: 'tiktok',
         url: v.url,
@@ -52,33 +54,70 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
         tags: v.tags || [],
         created_at: v.created_at || Date.now(),
         download_url: v.download_url || '',
-        source_meta: { source_type: source.type, source_name: source.name },
+        source_meta: {
+          source_type: source.type,
+          source_name: source.name,
+          autoSchedule: source.autoSchedule !== false,
+        },
       }))
 
+      // ── Apply per-source filter conditions ────────────
+      const beforeCount = mapped.length
+      if (source.minLikes) {
+        mapped = mapped.filter((v: any) => (v.stats?.diggCount || v.stats?.likes || 0) >= source.minLikes)
+      }
+      if (source.minViews) {
+        mapped = mapped.filter((v: any) => (v.stats?.playCount || v.stats?.views || 0) >= source.minViews)
+      }
+      if (source.maxViews) {
+        mapped = mapped.filter((v: any) => (v.stats?.playCount || v.stats?.views || 0) <= source.maxViews)
+      }
+      if (source.withinDays) {
+        const cutoff = Date.now() - source.withinDays * 24 * 60 * 60 * 1000
+        mapped = mapped.filter((v: any) => (v.created_at || Date.now()) >= cutoff)
+      }
+
+      const filteredOut = beforeCount - mapped.length
+      if (filteredOut > 0) {
+        ctx.logger.info(`[Scanner] Filtered out ${filteredOut}/${beforeCount} videos from ${sourceLabel} (minLikes=${source.minLikes || '-'}, minViews=${source.minViews || '-'}, maxViews=${source.maxViews || '-'}, withinDays=${source.withinDays || '-'})`)
+      }
+
       allVideos.push(...mapped)
+      sourceCounts.push(`${sourceLabel}: ${mapped.length}`)
+      ctx.onProgress(`✅ ${sourceLabel}: ${mapped.length} videos${filteredOut > 0 ? ` (${filteredOut} filtered)` : ''}`)
     } catch (err: any) {
       ctx.logger.error(`Failed to scan ${source.name}`, err)
     }
   }
 
-  // Download thumbnails locally (non-blocking, parallel batches of 5)
+  // Build summary progress with per-source breakdown
+  const summary = sources.length > 1
+    ? `🔍 ${allVideos.length} videos (${sourceCounts.join(', ')})`
+    : `🔍 Scanned ${allVideos.length} videos`
+  ctx.logger.info(`Scanner found ${allVideos.length} videos from ${sources.length} sources`)
+  ctx.onProgress(summary)
+
+  // Schedule thumbnail downloads as async task (crash-recoverable)
   if (allVideos.length > 0) {
-    ctx.onProgress(`📥 Downloading ${allVideos.length} thumbnails...`)
-    const BATCH = 5
-    for (let i = 0; i < allVideos.length; i += BATCH) {
-      const batch = allVideos.slice(i, i + BATCH)
-      const results = await Promise.allSettled(
-        batch.map(v => scanner.downloadThumbnail(v.thumbnail, v.platform_id))
-      )
-      results.forEach((r, idx) => {
-        if (r.status === 'fulfilled' && r.value) {
-          batch[idx].local_thumbnail = r.value
-        }
+    const videosToDownload = allVideos.filter(v => v.thumbnail)
+    if (videosToDownload.length > 0) {
+      const campaignId = ctx.params.campaign_id || ctx.params.campaignId || ''
+      ctx.asyncTasks.schedule('tiktok.thumbnail.batch', {
+        campaignId,
+        videos: videosToDownload.map(v => ({
+          platform_id: v.platform_id,
+          thumbnailUrl: v.thumbnail,
+        })),
+      }, {
+        dedupeKey: `thumb-batch:${campaignId}:${Date.now()}`,
+        maxAttempts: 3,
+        firstRunAt: Date.now() + 2000, // slight delay, let scanner finish first
+        campaignId,
+        ownerKey: `campaign:${campaignId}:thumbnails`,
       })
+      ctx.logger.info(`[Scanner] Scheduled thumbnail batch task for ${videosToDownload.length} videos`)
     }
   }
 
-  ctx.logger.info(`Scanner found ${allVideos.length} videos from ${sources.length} sources`)
-  ctx.onProgress(`🔍 Scanned ${allVideos.length} videos`)
   return { data: allVideos }
 }

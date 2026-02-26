@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { WizardStepper } from './WizardStepper'
 import { getWizardSteps, workflowWizardRegistry } from '../wizard/workflowWizardRegistry'
 import { WizardStepConfig } from '../wizard/WizardStepTypes'
-import { FormField, TextInput, SelectInput } from '../wizard/shared'
+import { FormField, TextInput } from '../wizard/shared'
 
 interface CampaignWizardProps {
     onClose: () => void
@@ -21,7 +21,7 @@ interface WorkflowOption {
  */
 export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizardProps) {
     // ── State ──────────────────────────────────
-    const [selectedWorkflow, setSelectedWorkflow] = useState(initialFlowId || '')
+    const selectedWorkflow = initialFlowId || ''
     const [campaignName, setCampaignName] = useState('')
     const [currentStepIndex, setCurrentStepIndex] = useState(0)
     const [stepData, setStepData] = useState<Record<string, any>>({})
@@ -163,56 +163,54 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
     }
 
     // ── Step 0: Setup ──────────────────────────
-    const renderStep0 = () => (
-        <div>
-            <h2 className="text-xl font-bold text-white mb-1">Create Campaign</h2>
-            <p className="text-gray-400 text-sm mb-6">Name your campaign and select a workflow</p>
+    const renderStep0 = () => {
+        const wf = availableWorkflows.find(w => w.id === selectedWorkflow)
+        return (
+            <div>
+                <h2 className="text-xl font-bold text-white mb-1">Create Campaign</h2>
+                <p className="text-gray-400 text-sm mb-6">Name your campaign to get started</p>
 
-            <FormField label="Campaign Name" required>
-                <TextInput
-                    value={campaignName}
-                    onChange={setCampaignName}
-                    placeholder="My Campaign"
-                />
-            </FormField>
+                <FormField label="Campaign Name" required>
+                    <TextInput
+                        value={campaignName}
+                        onChange={setCampaignName}
+                        placeholder="My Campaign"
+                    />
+                </FormField>
 
-            <FormField label="Workflow" required hint="Each workflow has its own setup steps">
-                <SelectInput
-                    value={selectedWorkflow}
-                    onChange={v => {
-                        setSelectedWorkflow(v)
-                        // Reset workflow-specific data when switching
-                        setStepData(prev => ({ name: prev.name }))
-                    }}
-                    options={availableWorkflows.map(w => ({
-                        value: w.id,
-                        label: w.name,
-                        icon: w.icon,
-                    }))}
-                    placeholder="Select a workflow..."
-                />
-            </FormField>
-
-            {selectedWorkflow && (
-                <div className="mt-4 p-4 rounded-lg bg-[#0f172a] border border-gray-700">
-                    <div className="flex items-center gap-2 text-white mb-2">
-                        <span className="text-lg">{availableWorkflows.find(w => w.id === selectedWorkflow)?.icon}</span>
-                        <span className="font-medium">{availableWorkflows.find(w => w.id === selectedWorkflow)?.name}</span>
-                    </div>
-                    <p className="text-gray-400 text-sm">
-                        {availableWorkflows.find(w => w.id === selectedWorkflow)?.description || 'Configure this workflow in the following steps.'}
-                    </p>
-                    <div className="mt-3 flex gap-2 flex-wrap">
-                        {workflowSteps.map(s => (
-                            <span key={s.id} className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300">
-                                {s.icon} {s.title}
-                            </span>
-                        ))}
-                    </div>
+                <div className="mt-4 flex flex-col gap-1">
+                    <label className="text-sm font-medium text-gray-300">Campaign Start Time</label>
+                    <p className="text-xs text-gray-500">Campaign sẽ không chạy trước thời gian này. Để trống = chạy ngay.</p>
+                    <input
+                        type="datetime-local"
+                        className="mt-1 bg-gray-800 border border-gray-700 focus:border-purple-600 rounded-lg p-2.5 outline-none text-white text-sm w-full max-w-xs"
+                        value={stepData.firstRunAt || ''}
+                        min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+                        onChange={(e) => setStepData(prev => ({ ...prev, firstRunAt: e.target.value }))}
+                    />
                 </div>
-            )}
-        </div>
-    )
+
+                {wf && (
+                    <div className="mt-4 p-4 rounded-lg bg-[#0f172a] border border-gray-700">
+                        <div className="flex items-center gap-2 text-white mb-2">
+                            <span className="text-lg">{wf.icon}</span>
+                            <span className="font-medium">{wf.name}</span>
+                        </div>
+                        <p className="text-gray-400 text-sm">
+                            {wf.description || 'Configure this workflow in the following steps.'}
+                        </p>
+                        <div className="mt-3 flex gap-2 flex-wrap">
+                            {workflowSteps.map(s => (
+                                <span key={s.id} className="text-xs px-2 py-1 rounded bg-gray-800 text-gray-300">
+                                    {s.icon} {s.title}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        )
+    }
 
     // ── Render current workflow step ───────────
     const renderWorkflowStep = () => {

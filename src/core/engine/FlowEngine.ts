@@ -6,6 +6,7 @@ import { flowLoader } from '../flow/FlowLoader'
 import { ExecutionLogger } from './ExecutionLogger'
 import { FlowDefinition, FlowNodeDefinition } from '../flow/ExecutionContracts'
 import type { JobDocument } from '@main/db/models/Job'
+import { asyncTaskScheduler } from '@main/services/AsyncTaskScheduler'
 
 // ── DRY Helpers ─────────────────────────────────────
 
@@ -113,6 +114,9 @@ function buildNodeContext(
         campaign_id: job.campaign_id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
         level, title, body, created_at: Date.now(),
       })
+    },
+    asyncTasks: {
+      schedule: (taskType, payload, options) => asyncTaskScheduler.schedule(taskType, payload, options),
     },
   }
 }

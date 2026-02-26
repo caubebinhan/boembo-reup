@@ -141,14 +141,6 @@ export function Step5_Target({ data, updateData }: Step5Props) {
                                     ) : (
                                         <span className="bg-red-500/20 text-red-400 border border-red-500/30 px-3 py-1 rounded-full text-xs font-bold tracking-wider">EXPIRED</span>
                                     )}
-
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); alert('Settings') }}
-                                        className="text-xl text-gray-500 hover:text-white transition p-2"
-                                        title="Account Settings"
-                                    >
-                                        ⚙️
-                                    </button>
                                 </div>
                             </div>
                         )
