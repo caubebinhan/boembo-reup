@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useMemo, useRef, useLayoutEffect } from 'react'
+import { useEffect, useState, useMemo, useRef, useLayoutEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../../store/store'
 import { updateNodeProgress } from '../../store/nodeEventsSlice'
@@ -13,6 +13,7 @@ interface FlowNodeInfo {
     instance_id: string
     children?: string[]
     editable_settings?: any
+    on_save_event?: string
     // From manifest.ts of each node
     icon?: string
     label?: string
@@ -459,9 +460,51 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
     )
 }
 
-function InspectPanel({ node, campaignId, onClose }: { node: FlowNodeInfo; campaignId: string; onClose: () => void }) {
+function InspectPanel({ node, campaignId, onClose, campaignParams, onParamsUpdate }: {
+    node: FlowNodeInfo; campaignId: string; onClose: () => void;
+    campaignParams?: any; onParamsUpdate?: (params: any) => void;
+}) {
     const { status, stat, progressMsg, error } = useNodeStatus(campaignId, node.instance_id)
     const meta = nodeMeta(node)
+    const fields = node.editable_settings?.fields || []
+    const [editValues, setEditValues] = useState<Record<string, any>>({})
+    const [saving, setSaving] = useState(false)
+
+    // Initialize edit values from campaign params
+    useEffect(() => {
+        if (fields.length > 0 && campaignParams) {
+            const initial: Record<string, any> = {}
+            fields.forEach((f: any) => {
+                initial[f.key] = campaignParams[f.key] ?? f.default ?? ''
+            })
+            setEditValues(initial)
+        }
+    }, [campaignParams, node.instance_id])
+
+    const handleSave = async () => {
+        setSaving(true)
+        try {
+            // @ts-ignore
+            const result = await window.api.invoke('campaign:update-params', {
+                id: campaignId,
+                params: editValues,
+            })
+            if (result?.success && onParamsUpdate) onParamsUpdate(result.params)
+            // Emit the on_save_event if defined (e.g. 'reschedule')
+            if (node.on_save_event) {
+                // @ts-ignore
+                await window.api.invoke('campaign:trigger-event', {
+                    id: campaignId,
+                    event: node.on_save_event,
+                    params: editValues,
+                })
+            }
+        } catch (err: any) {
+            console.error('[InspectPanel] Save failed:', err)
+        } finally {
+            setSaving(false)
+        }
+    }
 
     return (
         <div className="w-[280px] border-l border-white/10 bg-[#0f172a]/90 backdrop-blur-2xl p-5 flex flex-col gap-4 shrink-0 shadow-[-10px_0_30px_rgba(0,0,0,0.5)] z-20">
@@ -516,6 +559,35 @@ function InspectPanel({ node, campaignId, onClose }: { node: FlowNodeInfo; campa
                 <div className="text-xs p-3 rounded-xl bg-rose-950/40 border border-rose-900/50 shadow-[0_0_15px_rgba(225,29,72,0.1)]">
                     <p className="text-rose-500 text-[10px] mb-1 font-bold tracking-wider">ERROR TRACE</p>
                     <p className="text-rose-300 font-mono break-words leading-tight">{error}</p>
+                </div>
+            )}
+
+            {/* ── Editable Settings ── */}
+            {fields.length > 0 && (
+                <div className="border-t border-white/5 pt-3 flex flex-col gap-3">
+                    <p className="text-[10px] text-gray-500 font-bold tracking-wider">⚙ SETTINGS</p>
+                    {fields.map((field: any) => (
+                        <div key={field.key} className="flex flex-col gap-1">
+                            <label className="text-[11px] text-gray-400 font-medium">{field.label || field.key}</label>
+                            {field.description && <p className="text-[9px] text-gray-600">{field.description}</p>}
+                            <input
+                                type={field.type === 'number' ? 'number' : 'text'}
+                                className="bg-black/40 border border-white/10 rounded-md px-2.5 py-1.5 text-xs text-white focus:border-purple-500/60 outline-none transition"
+                                value={editValues[field.key] ?? ''}
+                                onChange={(e) => setEditValues(prev => ({
+                                    ...prev,
+                                    [field.key]: field.type === 'number' ? Number(e.target.value) || 0 : e.target.value
+                                }))}
+                            />
+                        </div>
+                    ))}
+                    <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="mt-1 px-3 py-1.5 text-xs font-semibold rounded-md bg-purple-600 hover:bg-purple-700 text-white transition disabled:opacity-50"
+                    >
+                        {saving ? '⏳ Saving...' : '💾 Save & Apply'}
+                    </button>
                 </div>
             )}
         </div>
@@ -661,7 +733,7 @@ export function PipelineVisualizer({ campaignId, workflowId }: PipelineVisualize
                 </div>
             </div>
 
-            {selectedNode && <InspectPanel node={selectedNode} campaignId={campaignId} onClose={() => setSelectedNode(null)} />}
+            {selectedNode && <InspectPanel node={selectedNode} campaignId={campaignId} onClose={() => setSelectedNode(null)} campaignParams={campaignParams} onParamsUpdate={(p) => setCampaignParams(p)} />}
         </div>
     )
 }

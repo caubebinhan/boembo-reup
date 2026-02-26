@@ -24,7 +24,7 @@ import '../workflows'
 
 // Register local-thumb:// scheme before app is ready (required by Electron)
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'local-thumb', privileges: { secure: true, standard: true, stream: true } },
+  { scheme: 'local-thumb', privileges: { secure: true, supportFetchAPI: true, stream: true } },
 ])
 
 // Sentry

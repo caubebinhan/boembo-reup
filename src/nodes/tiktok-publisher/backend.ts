@@ -1,4 +1,4 @@
-﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 import { VideoPublisher } from '@main/tiktok/publisher/VideoPublisher'
 import { selectPublishAccount } from '@main/tiktok/publisher/PublishAccountResolver'
@@ -36,10 +36,14 @@ function estimateRetryDelayMs(stat?: ReviewRetryStats, attempt = 1): number {
   return Math.max(minMs, Math.min(maxMs, target))
 }
 
-/** DRY helper: update video status in campaign store */
+/** DRY helper: update video status in campaign store + sync counters */
 function setVideoStatus(ctx: NodeExecutionContext, platformId: string, status: string, publishUrl?: string) {
   try {
     ctx.store.updateVideo(platformId, { status, publish_url: publishUrl || undefined })
+    // Sync counters for terminal statuses
+    if (status === 'published') ctx.store.increment('published')
+    else if (status === 'failed') ctx.store.increment('failed')
+    else if (status === 'verification_incomplete') ctx.store.increment('verification_incomplete' as any)
     ctx.store.save()
   } catch (err) {
     ctx.logger.error(`Failed to update video status to ${status}`, err)
@@ -139,6 +143,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       videoId: video.platform_id, error: result.error,
       description: video.description, author: video.author,
     })
+    setVideoStatus(ctx, video.platform_id, 'failed')
     throw new Error(`Publish failed: ${result.error}`)
   }
 

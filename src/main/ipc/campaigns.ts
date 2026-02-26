@@ -1,4 +1,4 @@
-﻿import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-types'
 import * as crypto from 'crypto'
 import { flowLoader } from '@core/flow/FlowLoader'
@@ -166,5 +166,39 @@ export function setupCampaignIPC() {
       w.webContents.send('campaign:params-updated', { id, params: store.doc.params })
     })
     return { success: true, params: store.doc.params }
+  })
+
+  // ── Trigger event on campaign (e.g. reschedule) ───
+  ipcMain.handle('campaign:trigger-event', async (_event, { id, event, params }) => {
+    const store = campaignRepo.tryOpen(id)
+    if (!store) return { success: false, error: 'Campaign not found' }
+
+    if (event === 'reschedule') {
+      const intervalMinutes = params?.intervalMinutes ?? store.doc.params?.intervalMinutes ?? 60
+      const intervalMs = intervalMinutes * 60 * 1000
+      const videos = store.videos
+      if (videos.length === 0) return { success: true, message: 'No videos to reschedule' }
+
+      let cursor = Date.now()
+      for (let i = 0; i < videos.length; i++) {
+        videos[i].scheduled_for = cursor
+        videos[i].queue_index = i
+        // Only reschedule non-published/non-failed videos
+        if (!['published', 'failed', 'violation'].includes(videos[i].status)) {
+          videos[i].status = 'queued'
+        }
+        cursor += intervalMs
+      }
+      store.lastProcessedIndex = 0
+      store.save()
+
+      BrowserWindow.getAllWindows().forEach(w => {
+        w.webContents.send('campaigns-updated')
+        w.webContents.send('campaign:params-updated', { id, params: store.doc.params })
+      })
+      return { success: true, message: `Rescheduled ${videos.length} videos with ${intervalMinutes}min interval` }
+    }
+
+    return { success: false, error: `Unknown event: ${event}` }
   })
 }

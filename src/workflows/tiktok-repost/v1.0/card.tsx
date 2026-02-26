@@ -48,8 +48,8 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
 
             {/* Stats row */}
             <div className="flex items-center gap-4 text-sm">
-                <div className="flex items-center gap-1.5" title="Scanned">
-                    <span>🔍</span>
+                <div className="flex items-center gap-1.5" title="Total videos">
+                    <span>📋</span>
                     <span className="text-gray-400">{campaign.counters?.queued || 0}</span>
                 </div>
                 <span className="text-gray-700">|</span>
@@ -60,8 +60,8 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                 <span className="text-gray-700">|</span>
                 <div className="flex items-center gap-1.5" title="Published">
                     <span>📤</span>
-                    <span className={campaign.counters?.published > 0 ? 'text-green-400 font-medium' : 'text-gray-400'}>
-                        {campaign.counters?.published || 0}
+                    <span className={(campaign.counters?.published || 0) + (campaign.counters?.verification_incomplete || 0) > 0 ? 'text-green-400 font-medium' : 'text-gray-400'}>
+                        {(campaign.counters?.published || 0) + (campaign.counters?.verification_incomplete || 0)}
                     </span>
                 </div>
                 {(campaign.counters?.failed || 0) > 0 && (

@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import { net } from 'electron'
 import { AppSettingsService } from '@main/services/AppSettingsService'
+import { Downloader } from '@tobyg74/tiktok-api-dl'
 
 // ── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -59,19 +60,29 @@ function filterByTimeRange(videos: VideoInfo[], opts: ScanOptions): VideoInfo[] 
   if (!opts.timeRange || opts.timeRange === 'history_and_future') return videos
   const now = Date.now()
   const start = opts.startDate ? new Date(opts.startDate).getTime() : 0
-  const end = opts.endDate ? new Date(opts.endDate).getTime() : now
+  const endRaw = opts.endDate ? new Date(opts.endDate) : new Date()
+  // Include the entire end date (23:59:59.999)
+  endRaw.setHours(23, 59, 59, 999)
+  const end = endRaw.getTime()
   return videos.filter(v => {
     if (opts.timeRange === 'future_only') return v.created_at >= now
     if (opts.timeRange === 'from_now') return v.created_at >= now
-    if (opts.timeRange === 'custom') return v.created_at >= start && v.created_at <= end
+    if (opts.timeRange === 'history_only') return v.created_at < now
+    if (opts.timeRange === 'custom' || opts.timeRange === 'custom_range') {
+      return v.created_at >= start && v.created_at <= end
+    }
     return true
   })
 }
 
 function applySortOrder(videos: VideoInfo[], sortOrder?: string): VideoInfo[] {
   const arr = [...videos]
-  if (sortOrder === 'oldest') arr.sort((a, b) => a.created_at - b.created_at)
-  else arr.sort((a, b) => b.created_at - a.created_at) // newest default
+  switch (sortOrder) {
+    case 'oldest':      arr.sort((a, b) => a.created_at - b.created_at); break
+    case 'most_liked':   arr.sort((a, b) => (b.stats.likes || 0) - (a.stats.likes || 0)); break
+    case 'most_viewed':  arr.sort((a, b) => (b.stats.views || 0) - (a.stats.views || 0)); break
+    default:             arr.sort((a, b) => b.created_at - a.created_at); break // newest
+  }
   return arr
 }
 
@@ -81,17 +92,34 @@ async function injectCookies(page: Page, cookies: any[]) {
   if (!cookies || cookies.length === 0) return
   try {
     const ctx = page.context()
+    const normalizeSameSite = (raw: any): 'Strict' | 'Lax' | 'None' | undefined => {
+      if (raw == null || raw === '') return undefined
+      const v = String(raw).trim().toLowerCase()
+      if (v === 'strict') return 'Strict'
+      if (v === 'lax') return 'Lax'
+      if (v === 'none' || v === 'no_restriction' || v === 'no restriction') return 'None'
+      if (v === 'unspecified' || v === 'unspec' || v === 'default') return undefined
+      return undefined
+    }
     const normalized = cookies
       .filter(c => c?.name && c?.value)
-      .map(c => ({
-        name: String(c.name),
-        value: String(c.value),
-        domain: c.domain || '.tiktok.com',
-        path: c.path || '/',
-        httpOnly: c.httpOnly ?? false,
-        secure: c.secure ?? true,
-        sameSite: (c.sameSite as any) || 'None',
-      }))
+      .map(c => {
+        const sameSite = normalizeSameSite(c.sameSite)
+        const cookie: any = {
+          name: String(c.name),
+          value: String(c.value),
+          domain: c.domain || '.tiktok.com',
+          path: c.path || '/',
+          httpOnly: c.httpOnly ?? false,
+          secure: c.secure ?? true,
+        }
+        if (sameSite) cookie.sameSite = sameSite
+        // Chrome exports often use expirationDate (seconds). Keep only valid numeric values.
+        const expiresRaw = c.expires ?? c.expirationDate
+        const expiresNum = Number(expiresRaw)
+        if (Number.isFinite(expiresNum) && expiresNum > 0) cookie.expires = expiresNum
+        return cookie
+      })
     if (normalized.length > 0) await ctx.addCookies(normalized)
     console.log(`[TikTokScanner] Injected ${normalized.length} cookies`)
   } catch (err: any) {
@@ -128,17 +156,24 @@ async function extractVideosFromPage(page: Page, authorFilter?: string): Promise
         link.closest('div[class*="DivItemContainer"]') ||
         link.parentElement
 
-      let views = '0', likes = '0', comments = '0'
+      let views = '0', likes = '0', comments = '0', shares = '0'
+      let desc = ''
       if (container) {
         views = container.querySelector('[data-e2e="video-views"]')?.textContent || '0'
         likes = container.querySelector('[data-e2e="video-likes"]')?.textContent || '0'
         comments = container.querySelector('[data-e2e="video-comments"]')?.textContent || '0'
+        shares = container.querySelector('[data-e2e="video-shares"]')?.textContent || '0'
+        // TikTok puts caption in desc container or img alt
+        const descEl = container.querySelector('[data-e2e="user-post-item-desc"]')
+        desc = descEl?.textContent?.trim() || ''
       }
 
       const img = link.querySelector('img') as HTMLImageElement | null
       const thumb = img?.src || ''
+      // Fallback description from img alt text (TikTok puts caption there)
+      if (!desc && img?.alt) desc = img.alt.trim()
 
-      // Author from URL e.g. /video/@username/video/123
+      // Author from URL e.g. /@username/video/123
       const urlAuthor = (link.href.match(/@([\w.-]+)\/video\//) || [])[1] || ''
       if (authorFilter && urlAuthor && urlAuthor.toLowerCase() !== authorFilter.toLowerCase()) continue
 
@@ -146,9 +181,11 @@ async function extractVideosFromPage(page: Page, authorFilter?: string): Promise
         id,
         url: (link as HTMLAnchorElement).href,
         thumb,
+        desc,
         views,
         likes,
         comments,
+        shares,
         urlAuthor,
       })
     }
@@ -158,7 +195,7 @@ async function extractVideosFromPage(page: Page, authorFilter?: string): Promise
       platform_id: v.id,
       url: v.url,
       thumbnail: v.thumb || '',
-      description: '',
+      description: v.desc || '',
       author: v.urlAuthor || authorFilter || '',
       author_id: v.urlAuthor || '',
       duration_seconds: 0,
@@ -166,6 +203,7 @@ async function extractVideosFromPage(page: Page, authorFilter?: string): Promise
         views: parseStatNum(v.views),
         likes: parseStatNum(v.likes),
         comments: parseStatNum(v.comments),
+        shares: parseStatNum(v.shares),
       },
       tags: [],
       created_at: createdAtFromId(v.id),
@@ -224,8 +262,9 @@ export class TikTokScanner {
       }
 
       const allVideos = Array.from(collected.values())
-      const filtered = filterByTimeRange(allVideos.slice(0, limit), opts)
-      const videos = applySortOrder(filtered, opts.sortOrder)
+      // Filter by time range FIRST, then slice to limit (avoids losing valid items)
+      const filtered = filterByTimeRange(allVideos, opts)
+      const videos = applySortOrder(filtered, opts.sortOrder).slice(0, limit)
       console.log(`[TikTokScanner] Found ${videos.length} videos from @${cleanName}`)
       return { videos }
 
@@ -280,8 +319,9 @@ export class TikTokScanner {
       }
 
       const allVideos = Array.from(collected.values())
-      const filtered = filterByTimeRange(allVideos.slice(0, limit), opts)
-      const videos = applySortOrder(filtered, opts.sortOrder)
+      // Filter by time range FIRST, then slice to limit
+      const filtered = filterByTimeRange(allVideos, opts)
+      const videos = applySortOrder(filtered, opts.sortOrder).slice(0, limit)
       console.log(`[TikTokScanner] Keyword found ${videos.length} videos`)
       return { videos }
 
@@ -300,20 +340,52 @@ export class TikTokScanner {
     if (!fs.existsSync(downloadDir)) fs.mkdirSync(downloadDir, { recursive: true })
 
     const filePath = path.join(downloadDir, `${videoId}.mp4`)
+
+    // Cache check — skip if valid file already exists
     if (fs.existsSync(filePath)) {
-      console.log(`[TikTokScanner] Already exists: ${filePath}`)
-      return { filePath }
+      const stats = fs.statSync(filePath)
+      if (stats.size > 50 * 1024) {
+        console.log(`[TikTokScanner] Cache hit: ${filePath} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
+        return { filePath }
+      }
+      // Corrupt cache — delete and re-download
+      fs.unlinkSync(filePath)
     }
 
+    // Phase 1: Extract mp4 stream URL via @tobyg74/tiktok-api-dl
+    let streamUrl = ''
+    try {
+      console.log(`[TikTokScanner] Extracting stream URL for ${videoId}...`)
+      const result = await Promise.race([
+        // @ts-ignore — library types may be incomplete
+        Downloader(videoUrl, { version: 'v1' }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Extraction timed out (60s)')), 60000)),
+      ]) as any
+
+      if (result?.status === 'success' && result.result?.video) {
+        const playAddr = result.result.video.playAddr
+        if (Array.isArray(playAddr) && playAddr.length > 0) streamUrl = playAddr[0]
+        else if (typeof playAddr === 'string') streamUrl = playAddr
+      }
+    } catch (err: any) {
+      console.error(`[TikTokScanner] Library extraction failed:`, err.message)
+    }
+
+    if (!streamUrl) throw new Error(`Could not extract download URL for video ${videoId}`)
+
+    // Phase 2: Download mp4 binary
     console.log(`[TikTokScanner] Downloading video ${videoId}...`)
-    const response = await net.fetch(videoUrl, {
+    const response = await net.fetch(streamUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Referer': 'https://www.tiktok.com/',
       },
     })
     if (!response.ok) throw new Error(`Download failed: ${response.status}`)
+
     const buffer = Buffer.from(await response.arrayBuffer())
+    if (buffer.length < 50 * 1024) throw new Error(`Downloaded file too small (${buffer.length}B) — likely not a video`)
+
     fs.writeFileSync(filePath, buffer)
     console.log(`[TikTokScanner] Downloaded: ${filePath} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`)
     return { filePath }

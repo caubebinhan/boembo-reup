@@ -135,8 +135,8 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                     thumbnail: (() => {
                         const local = meta?.local_thumbnail
                         if (local) {
-                            // Encode Windows backslashes → forward slashes for URL
-                            return `local-thumb://${encodeURIComponent(local.replace(/\\/g, '/'))}`
+                            // Replace backslashes only — no encoding needed for custom protocol
+                            return `local-thumb://${local.replace(/\\/g, '/')}`
                         }
                         return typeof meta?.thumbnail === 'string' ? meta.thumbnail : ''
                     })(),
