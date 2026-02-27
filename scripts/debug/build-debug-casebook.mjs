@@ -100,7 +100,10 @@ function parseCasesFromFile(filePath, defaults = {}) {
 
   let match
   while ((match = idPattern.exec(text))) {
-    const id = match[1]
+    const rawId = match[1]
+    const id = defaults.idPrefix && !rawId.startsWith('tiktok-repost-v1.')
+      ? `${defaults.idPrefix}${rawId}`
+      : rawId
     if (seen.has(id)) continue
     const block = extractObjectBlockFromId(text, match.index)
     if (!block) continue
@@ -149,10 +152,20 @@ function parseWorkflowCases() {
     const match = rel.match(/^([^/]+)\/(v[^/]+)\//)
     const workflowId = match?.[1]
     const workflowVersion = match?.[2]?.replace(/^v/, '')
+    const fileBase = path.basename(file, '.ts')
     const defaults = {
       workflowId,
       workflowVersion,
       suite: 'debug',
+      ...(fileBase === 'network'
+        ? {
+          idPrefix: 'tiktok-repost-v1.network.',
+          category: 'network',
+          group: 'network',
+          implemented: true,
+          level: 'advanced',
+        }
+        : {}),
     }
     entries.push(...parseCasesFromFile(file, defaults))
   }

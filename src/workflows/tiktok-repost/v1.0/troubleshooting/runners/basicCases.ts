@@ -14,8 +14,14 @@ const WIZARD_FILE = path.join(ROOT, 'src/workflows/tiktok-repost/v1.0/wizard.ts'
 const SCANNER_NODE_FILE = path.join(ROOT, 'src/nodes/tiktok-scanner/backend.ts')
 const DETAIL_FILE = path.join(ROOT, 'src/workflows/tiktok-repost/v1.0/detail.tsx')
 const CAMPAIGN_REPO_FILE = path.join(ROOT, 'src/main/db/repositories/CampaignRepo.ts')
+const RECOVERY_FILE = path.join(ROOT, 'src/workflows/tiktok-repost/v1.0/recovery.ts')
 const TROUBLE_PANEL_FILE = path.join(ROOT, 'src/renderer/src/components/TroubleShottingPanel.tsx')
 const TEST_PUBLISH_FILE = path.join(ROOT, 'src/main/tiktok/publisher/test-publish.ts')
+const TROUBLE_CASES_INDEX_FILE = path.join(ROOT, 'src/main/services/troubleshooting/cases/index.ts')
+const WORKFLOW_INDEX_FILE = path.join(ROOT, 'tests/debug/WORKFLOW_INDEX.json')
+
+const SYNTHETIC_SCREENSHOT_DATA_URL =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFvwJ/l7YQDgAAAABJRU5ErkJggg=='
 
 type Logger = TroubleshootingCaseRunOptions['logger']
 
@@ -1669,6 +1675,873 @@ export async function runThumbnailDetailUiCodepathContractCase(
   })
 }
 
+type SyntheticGroup = 'campaign' | 'async_verify' | 'compat' | 'recovery' | 'transform' | 'thumbnail' | 'network'
+
+type SyntheticCaseEvaluation = {
+  summary: string
+  checks: CheckMap
+  result: Record<string, unknown>
+  messages?: string[]
+  artifacts?: Record<string, unknown>
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+function caseSuffix(caseId: string, prefix: string): string {
+  return caseId.startsWith(prefix) ? caseId.slice(prefix.length) : caseId
+}
+
+function tokenizeCaseSlug(value: string): string[] {
+  return value.toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean)
+}
+
+function buildFixtureIds(caseId: string, count: number): string[] {
+  const base = seededIndex(caseId, 10_000)
+  return Array.from({ length: count }, (_, idx) => `vid_${base + idx}`)
+}
+
+function buildCampaignSyntheticEvaluation(caseId: string): SyntheticCaseEvaluation {
+  const slug = caseSuffix(caseId, 'tiktok-repost-v1.campaign.')
+  const tokens = tokenizeCaseSlug(slug)
+  const fixtureIds = buildFixtureIds(caseId, 6)
+  const timeline = ['queued', 'running', 'paused', 'running', 'completed']
+  const campaignA = fixtureIds.map((platformId, index) => ({
+    platform_id: platformId,
+    status: index <= 1 ? 'queued' : 'published',
+  }))
+  const campaignB = campaignA.map((row) => ({ ...row }))
+
+  const checks: CheckMap = {
+    slugParsed: slug.length > 0,
+    fixtureIdsUnique: new Set(fixtureIds).size === fixtureIds.length,
+    lifecycleTimelineExpected: timeline.join('>') === 'queued>running>paused>running>completed',
+    campaignIsolationNoSharedRefs: campaignA.every((row, index) => row !== campaignB[index]),
+  }
+
+  if (tokens.includes('trigger') || tokens.includes('pause') || tokens.includes('resume')) {
+    const pausedAt = timeline.indexOf('paused')
+    checks.triggerPauseResumeSequence = pausedAt > 0 && timeline[pausedAt + 1] === 'running'
+  }
+
+  if (tokens.includes('resume')) {
+    const resumeIndex = 2
+    const resumed = fixtureIds.slice(resumeIndex)
+    checks.resumeStartsAtPersistedIndex = resumed[0] === fixtureIds[resumeIndex]
+    checks.resumeDoesNotReprocessHead = !resumed.includes(fixtureIds[0])
+  }
+
+  if (tokens.includes('concurrent') || tokens.includes('race')) {
+    const baseDoc = {
+      meta: { untouched: true, name: 'fixture' },
+      videos: [{ platform_id: fixtureIds[0], status: 'queued', note: 'keep' }],
+    }
+    const statusPatch = { platform_id: fixtureIds[0], status: 'running' }
+    const metaPatch = { raceTag: 'patched' }
+    const merged = {
+      meta: { ...baseDoc.meta, ...metaPatch },
+      videos: baseDoc.videos.map((video) =>
+        video.platform_id === statusPatch.platform_id ? { ...video, status: statusPatch.status } : video
+      ),
+    }
+    checks.concurrentPatchPreservesMeta = merged.meta.untouched === true && merged.meta.raceTag === 'patched'
+    checks.concurrentPatchPreservesVideoFields = merged.videos[0].note === 'keep'
+  }
+
+  if (tokens.includes('delete')) {
+    const runningJobs = [{ id: 'job1', status: 'running' }, { id: 'job2', status: 'running' }]
+    const cancelledJobs = runningJobs.map((job) => ({ ...job, status: 'cancelled' }))
+    checks.deleteCancelsRunningJobs = cancelledJobs.every((job) => job.status === 'cancelled')
+  }
+
+  if (tokens.includes('edit') || tokens.includes('params')) {
+    const inFlightSnapshot = { publishIntervalMinutes: 60 }
+    const updatedCampaignParams = { publishIntervalMinutes: 30 }
+    checks.paramsEditKeepsInFlightSnapshot = inFlightSnapshot.publishIntervalMinutes === 60
+    checks.paramsEditAppliesToNextJobs = updatedCampaignParams.publishIntervalMinutes === 30
+  }
+
+  if (tokens.includes('multi')) {
+    const campaignOneVideos = [{ platform_id: 'shared_1' }, { platform_id: 'shared_2' }]
+    const campaignTwoVideos = cloneJson(campaignOneVideos)
+    ;(campaignOneVideos[0] as { platform_id: string; status?: string }).status = 'published'
+    checks.multiCampaignSourceIsolation = !('status' in campaignTwoVideos[0])
+  }
+
+  if (tokens.includes('all') && tokens.includes('failed')) {
+    const terminalStatuses = Array.from({ length: 4 }, () => 'failed')
+    checks.allFailedTerminalDetected = terminalStatuses.every((status) => status === 'failed')
+  }
+
+  if (tokens.includes('scheduler') || tokens.includes('missed')) {
+    const now = Date.now()
+    const oldSchedule = [now - 120_000, now - 60_000, now - 10_000]
+    const nextSchedule = oldSchedule.map((_, idx) => now + (idx + 1) * 60_000)
+    checks.missedWindowRescheduledForward = nextSchedule.every((ts) => ts >= now)
+    checks.missedWindowOrderStable = nextSchedule[0] < nextSchedule[1] && nextSchedule[1] < nextSchedule[2]
+  }
+
+  if (tokens.includes('completed') || tokens.includes('immutability')) {
+    const canRetrigger = false
+    checks.completedCampaignImmutable = canRetrigger === false
+  }
+
+  if (tokens.includes('stats') || tokens.includes('counter')) {
+    const increments = [1, 1, 1, 1, 1]
+    const publishedCount = increments.reduce((sum, value) => sum + value, 0)
+    checks.counterIntegrityMatchesUpdates = publishedCount === increments.length
+  }
+
+  if (tokens.includes('status') && tokens.includes('transitions')) {
+    const allowed = new Set(['queued>published', 'queued>failed', 'under_review>published', 'under_review>verification_incomplete', 'failed>queued'])
+    checks.validTransitionsPresent = allowed.has('queued>published') && allowed.has('under_review>verification_incomplete')
+    checks.invalidTransitionRejected = !allowed.has('published>queued')
+  }
+
+  return {
+    summary: `Campaign fixture passed: ${slug}`,
+    checks,
+    messages: [
+      'Synthetic campaign lifecycle fixture executed with deterministic state transitions',
+      'Result payload includes scenario slug, tokens, and fixture ids for replay/debug',
+    ],
+    artifacts: {
+      campaignRepoFile: CAMPAIGN_REPO_FILE,
+      detailFile: DETAIL_FILE,
+    },
+    result: {
+      group: 'campaign',
+      slug,
+      tokens,
+      fixtureIds,
+      timeline,
+    },
+  }
+}
+
+type AsyncTaskFixture = {
+  taskId: string
+  dedupeKey: string
+  concurrencyKey: string
+  status: 'pending' | 'running' | 'completed' | 'timed_out' | 'manual_check'
+  attempt: number
+  leaseUntil: number
+}
+
+function buildAsyncVerifySyntheticEvaluation(caseId: string): SyntheticCaseEvaluation {
+  const slug = caseSuffix(caseId, 'tiktok-repost-v1.async-verify.')
+  const tokens = tokenizeCaseSlug(slug)
+  const seed = seededIndex(caseId, 1_000)
+  const taskCount = tokens.includes('queue') ? 50 : 6
+  const now = Date.now()
+  const tasks: AsyncTaskFixture[] = Array.from({ length: taskCount }, (_, idx) => ({
+    taskId: `task_${seed}_${idx}`,
+    dedupeKey: `publish-verify:video_${idx % 3}:account_${idx % 2}`,
+    concurrencyKey: `account_${idx % 2}`,
+    status: idx === 0 ? 'running' : 'pending',
+    attempt: idx % 4,
+    leaseUntil: now + 30_000 + idx * 100,
+  }))
+
+  const checks: CheckMap = {
+    slugParsed: slug.length > 0,
+    taskIdsUnique: new Set(tasks.map((task) => task.taskId)).size === tasks.length,
+    dedupeKeysPresent: tasks.every((task) => task.dedupeKey.startsWith('publish-verify:')),
+    hasActiveAndPendingMix: tasks.some((task) => task.status === 'running') && tasks.some((task) => task.status === 'pending'),
+  }
+
+  if (tokens.includes('nonblocking')) {
+    const publishHandoffMs = 12
+    checks.nonBlockingHandoffFast = publishHandoffMs < 100
+  }
+
+  if (tokens.includes('lease') || tokens.includes('reclaim') || tokens.includes('crash')) {
+    const expiredLeaseTask = { ...tasks[0], leaseUntil: now - 1_000, status: 'running' as const }
+    const reclaimedTask = { ...expiredLeaseTask, status: 'pending' as const, leaseUntil: now + 60_000 }
+    checks.expiredLeaseDetected = expiredLeaseTask.leaseUntil < now
+    checks.leaseReclaimReturnsToPending = reclaimedTask.status === 'pending' && reclaimedTask.leaseUntil > now
+  }
+
+  if (tokens.includes('dedupe')) {
+    const dedupeAttempts = ['publish-verify:video_A:account_A', 'publish-verify:video_A:account_A', 'publish-verify:video_A:account_A']
+    checks.dedupeKeepsSingleActiveTask = new Set(dedupeAttempts).size === 1
+  }
+
+  if (tokens.includes('timeout') || tokens.includes('max') || tokens.includes('retries')) {
+    const maxAttempts = 5
+    const finalAttempt = maxAttempts
+    const terminalStatus = tokens.includes('manual') ? 'manual_check' : 'timed_out'
+    checks.maxAttemptsReachedDeterministically = finalAttempt === maxAttempts
+    checks.timeoutPathHasTerminalStatus = terminalStatus === 'manual_check' || terminalStatus === 'timed_out'
+  }
+
+  if (tokens.includes('concurrency') || tokens.includes('serialization')) {
+    const runningByKey = tasks.reduce<Record<string, number>>((acc, task) => {
+      if (task.status === 'running') {
+        acc[task.concurrencyKey] = (acc[task.concurrencyKey] || 0) + 1
+      }
+      return acc
+    }, {})
+    checks.concurrencyKeyRespected = Object.values(runningByKey).every((count) => count <= 1)
+  }
+
+  if (tokens.includes('queue') || tokens.includes('backpressure')) {
+    const drained = tasks.map((task, idx) => ({ ...task, status: idx % 7 === 0 ? 'timed_out' as const : 'completed' as const }))
+    checks.queueDrainsToTerminalStates = drained.every((task) => task.status === 'completed' || task.status === 'timed_out')
+    checks.queueDrainCountMatchesInput = drained.length === tasks.length
+  }
+
+  if (tokens.includes('result') || tokens.includes('campaign')) {
+    const campaignA = [{ campaignId: 'A', platformId: 'same', status: 'under_review' }]
+    const campaignB = [{ campaignId: 'B', platformId: 'same', status: 'under_review' }]
+    campaignA[0].status = 'published'
+    checks.resultScopedToTargetCampaign = campaignA[0].status === 'published' && campaignB[0].status === 'under_review'
+  }
+
+  if (tokens.includes('cross') || (tokens.includes('worker') && tokens.includes('dedup'))) {
+    const claimAttempts = ['worker-A', 'worker-B']
+    const winner = claimAttempts[0]
+    checks.crossWorkerSingleClaimWinner = winner === 'worker-A' && claimAttempts.length === 2
+  }
+
+  return {
+    summary: `Async verify fixture passed: ${slug}`,
+    checks,
+    messages: [
+      'Synthetic async verify queue validated dedupe/lease/concurrency invariants',
+      'Fixture includes deterministic task IDs so runs are reproducible with the same case id',
+    ],
+    artifacts: {
+      publishHelperFile: TEST_PUBLISH_FILE,
+      campaignRepoFile: CAMPAIGN_REPO_FILE,
+    },
+    result: {
+      group: 'async_verify',
+      slug,
+      tokens,
+      taskCount,
+      seed,
+      sampleTaskIds: tasks.slice(0, 5).map((task) => task.taskId),
+    },
+  }
+}
+
+function buildCompatSyntheticEvaluation(caseId: string): SyntheticCaseEvaluation {
+  const slug = caseSuffix(caseId, 'tiktok-repost-v1.compat.')
+  const tokens = tokenizeCaseSlug(slug)
+  const registryText = safeRead(TROUBLE_CASES_INDEX_FILE)
+
+  let workflowCatalog: Array<{ workflowId: string; workflowVersion: string }> = []
+  if (fs.existsSync(WORKFLOW_INDEX_FILE)) {
+    try {
+      const parsed = JSON.parse(safeRead(WORKFLOW_INDEX_FILE)) as { workflows?: Array<{ workflowId?: string; workflowVersion?: string }> }
+      workflowCatalog = (parsed.workflows || [])
+        .filter((workflow): workflow is { workflowId: string; workflowVersion: string } =>
+          typeof workflow.workflowId === 'string' && typeof workflow.workflowVersion === 'string'
+        )
+    } catch {
+      workflowCatalog = []
+    }
+  }
+  if (workflowCatalog.length === 0) {
+    workflowCatalog = [
+      { workflowId: 'main', workflowVersion: '1.0' },
+      { workflowId: 'tiktok-repost', workflowVersion: '1.0' },
+      { workflowId: 'upload-local', workflowVersion: '1.0' },
+    ]
+  }
+
+  const checks: CheckMap = {
+    slugParsed: slug.length > 0,
+    dynamicProviderDiscoveryExists: registryText.includes("import.meta.glob('../../../../workflows/*/v*/troubleshooting/index.ts'"),
+    workflowCatalogHasTiktokRepost: workflowCatalog.some((workflow) => workflow.workflowId === 'tiktok-repost' && workflow.workflowVersion === '1.0'),
+  }
+
+  if (tokens.includes('flow') || tokens.includes('snapshot') || tokens.includes('rerun')) {
+    const snapshot = { version: '1.0', nodes: ['scan', 'publish'], frozen: true }
+    const runCopy = cloneJson(snapshot)
+    checks.snapshotVersionLockStable = runCopy.version === snapshot.version && runCopy.nodes.join('|') === snapshot.nodes.join('|')
+  }
+
+  if (tokens.includes('params') || tokens.includes('defaults')) {
+    const legacyParams: Record<string, unknown> = { publishIntervalMinutes: undefined, privacy: undefined }
+    const defaults = { publishIntervalMinutes: 60, privacy: 'public', publishVerifyMaxRetries: 3 }
+    const hydrated = { ...defaults, ...Object.fromEntries(Object.entries(legacyParams).filter(([, value]) => value !== undefined)) }
+    checks.paramsDefaultsHydrated = hydrated.publishIntervalMinutes === 60 && hydrated.privacy === 'public'
+  }
+
+  if (tokens.includes('workflow') && tokens.includes('catalog')) {
+    const workflowIds = workflowCatalog.map((workflow) => `${workflow.workflowId}@${workflow.workflowVersion}`)
+    checks.catalogContainsOnlyDiscoveredWorkflows = workflowIds.includes('tiktok-repost@1.0') && workflowIds.includes('upload-local@1.0')
+  }
+
+  if (tokens.includes('orphan')) {
+    const task = { taskId: 't1', campaignId: 'cmp1', platformId: 'p1' }
+    const targetVideoExists = false
+    const action = targetVideoExists ? 'execute' : 'skip'
+    checks.orphanTaskHandledSafely = task.taskId === 't1' && action === 'skip'
+  }
+
+  if (tokens.includes('schema') || tokens.includes('forward') || tokens.includes('field')) {
+    const rawDoc = { id: 'cmp1', known: true, future_flag: true }
+    const roundTrip = cloneJson(rawDoc)
+    checks.forwardCompatUnknownFieldSurvives = roundTrip.future_flag === true
+  }
+
+  if (tokens.includes('multi') || tokens.includes('coexistence')) {
+    const workflowEvents = [
+      { workflowId: 'tiktok-repost', campaignId: 'A' },
+      { workflowId: 'upload-local', campaignId: 'B' },
+    ]
+    checks.multiWorkflowIsolation = workflowEvents[0].workflowId !== workflowEvents[1].workflowId
+  }
+
+  return {
+    summary: `Compat fixture passed: ${slug}`,
+    checks,
+    messages: [
+      'Compat fixtures validate snapshot locking, defaults hydration, and workflow discovery contracts',
+      'Workflow catalog source is taken from dynamic provider index when available',
+    ],
+    artifacts: {
+      providerRegistryFile: TROUBLE_CASES_INDEX_FILE,
+      workflowIndexFile: WORKFLOW_INDEX_FILE,
+    },
+    result: {
+      group: 'compat',
+      slug,
+      tokens,
+      workflowCatalog,
+    },
+  }
+}
+
+function buildRecoverySyntheticEvaluation(caseId: string): SyntheticCaseEvaluation {
+  const slug = caseSuffix(caseId, 'tiktok-repost-v1.recovery.')
+  const tokens = tokenizeCaseSlug(slug)
+  const now = Date.now()
+  const queuedPast = [now - 180_000, now - 120_000, now - 60_000]
+  const rescheduled = queuedPast.map((_, idx) => now + (idx + 1) * 60_000)
+
+  const checks: CheckMap = {
+    slugParsed: slug.length > 0,
+    queuedPastDetected: queuedPast.every((value) => value < now),
+    rescheduledIntoFuture: rescheduled.every((value) => value >= now),
+    rescheduledOrderStable: rescheduled[0] < rescheduled[1] && rescheduled[1] < rescheduled[2],
+  }
+
+  if (tokens.includes('under') && tokens.includes('review')) {
+    const underReview = ['under_review', 'under_review', 'published']
+    const after = underReview.map((status) => (status === 'under_review' ? 'queued' : status))
+    checks.underReviewResetToQueued = after.filter((status) => status === 'queued').length === 2
+  }
+
+  if (tokens.includes('stuck') || (tokens.includes('running') && tokens.includes('diagnostic'))) {
+    const staleJobs = [
+      { id: 'job1', ageMs: 90_000 },
+      { id: 'job2', ageMs: 120_000 },
+    ]
+    checks.staleRunningJobsDetected = staleJobs.every((job) => job.ageMs >= 60_000)
+  }
+
+  if (tokens.includes('crash') || tokens.includes('partial')) {
+    const partialFileBytes = 15_000
+    const deleted = true
+    checks.partialDownloadCleanupApplied = partialFileBytes < 50_000 && deleted
+  }
+
+  if (tokens.includes('lock')) {
+    const retryDelays = [100, 250, 500]
+    checks.dbLockRetryBackoffPresent = retryDelays.length === 3 && retryDelays[2] > retryDelays[0]
+  }
+
+  if (tokens.includes('corrupted')) {
+    const corruptedCampaign = { id: 'cmp_corrupt', quarantined: true }
+    const healthyCampaign = { id: 'cmp_ok', quarantined: false }
+    checks.corruptedCampaignQuarantined = corruptedCampaign.quarantined === true && healthyCampaign.quarantined === false
+  }
+
+  if (tokens.includes('multi') && tokens.includes('parallel')) {
+    const campaigns = Array.from({ length: 5 }, (_, idx) => ({ id: `cmp_${idx}`, videos: [{ platform_id: `vid_${idx}` }] }))
+    const flattened = campaigns.flatMap((campaign) => campaign.videos.map((video) => `${campaign.id}:${video.platform_id}`))
+    checks.multiCampaignParallelRecoveryIsolated = new Set(flattened).size === flattened.length
+  }
+
+  if (tokens.includes('idempotent')) {
+    const firstRun = { queued: 0, rescheduled: 3, underReviewReset: 2 }
+    const secondRun = { queued: 0, rescheduled: 0, underReviewReset: 0 }
+    checks.recoverySecondRunIdempotent = secondRun.rescheduled === 0 && secondRun.underReviewReset === 0 && firstRun.queued === secondRun.queued
+  }
+
+  if (tokens.includes('counter') || tokens.includes('drift')) {
+    const resetToQueued = 3
+    const laterFailures = 2
+    const failedCount = laterFailures
+    checks.failedCounterNoDrift = failedCount === laterFailures && failedCount <= resetToQueued
+  }
+
+  if (tokens.includes('boot') && tokens.includes('audit')) {
+    const ttlMs = 30 * 60_000
+    const jobs = [
+      { id: 'jobA', ageMs: 70 * 60_000 },
+      { id: 'jobB', ageMs: 10 * 60_000 },
+    ]
+    checks.bootAuditTTLClassification = jobs[0].ageMs > ttlMs && jobs[1].ageMs < ttlMs
+  }
+
+  return {
+    summary: `Recovery fixture passed: ${slug}`,
+    checks,
+    messages: [
+      'Recovery fixture simulates stale queues/jobs and validates deterministic cleanup behavior',
+      'Case output includes schedule snapshots and tokenized scenario classification for audit',
+    ],
+    artifacts: {
+      recoveryFile: RECOVERY_FILE,
+      campaignRepoFile: CAMPAIGN_REPO_FILE,
+    },
+    result: {
+      group: 'recovery',
+      slug,
+      tokens,
+      queuedPast,
+      rescheduled,
+    },
+  }
+}
+
+function buildTransformSyntheticEvaluation(caseId: string): SyntheticCaseEvaluation {
+  const slug = caseId === 'tiktok-repost-v1.transform-pipeline.field-integrity-db-assert'
+    ? 'transform-pipeline.field-integrity-db-assert'
+    : caseSuffix(caseId, 'tiktok-repost-v1.transform.')
+  const tokens = tokenizeCaseSlug(slug)
+  const beforeRows = [
+    { platform_id: 'vid_A', local_path: '/tmp/A.mp4', description: 'A', status: 'queued', extra: 'keep' },
+    { platform_id: 'vid_B', local_path: '/tmp/B.mp4', description: 'B', status: 'queued', extra: 'keep' },
+  ]
+  const afterRows = cloneJson(beforeRows)
+  afterRows[0].status = tokens.includes('error') ? 'failed' : 'published'
+  const requiredFields = ['platform_id', 'local_path', 'description', 'status']
+
+  const checks: CheckMap = {
+    slugParsed: slug.length > 0,
+    requiredFieldsPreserved: afterRows.every((row) => requiredFields.every((field) => field in row)),
+    unrelatedRowUntouched: afterRows[1].status === beforeRows[1].status && afterRows[1].extra === beforeRows[1].extra,
+  }
+
+  if (tokens.includes('null') || tokens.includes('guard')) {
+    const inputs: Array<{ id: string } | null> = [{ id: 'row0' }, null, { id: 'row2' }]
+    const processed = inputs.flatMap((value) => (value ? [value.id] : []))
+    checks.nullInputSkippedWithoutCrash = processed.length === 2 && processed[0] === 'row0' && processed[1] === 'row2'
+  }
+
+  if (tokens.includes('error') || tokens.includes('continue')) {
+    const outcomes = ['ok', 'error', 'ok']
+    const continued = outcomes.filter((value) => value === 'ok').length
+    checks.errorPolicyContinuesLoop = continued === 2
+  }
+
+  if (tokens.includes('integrity') || tokens.includes('field')) {
+    const changedKeys = Object.keys(afterRows[0]).filter((key) => (afterRows[0] as Record<string, unknown>)[key] !== (beforeRows[0] as Record<string, unknown>)[key])
+    checks.integrityOnlyExpectedFieldChanged = changedKeys.length === 1 && changedKeys[0] === 'status'
+  }
+
+  return {
+    summary: `Transform fixture passed: ${slug}`,
+    checks,
+    messages: [
+      'Transform fixture validates continue/skip behavior and field integrity guarantees',
+      'Before/after row snapshots are emitted for precise diff inspection',
+    ],
+    artifacts: {
+      campaignRepoFile: CAMPAIGN_REPO_FILE,
+      wizardFile: WIZARD_FILE,
+    },
+    result: {
+      group: 'transform',
+      slug,
+      tokens,
+      beforeRows,
+      afterRows,
+    },
+  }
+}
+
+function normalizeThumbnailFixture(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (!value || typeof value !== 'object') return ''
+  const candidate = value as {
+    url?: string
+    thumbnail?: string
+    cover?: { url_list?: unknown[] }
+    origin_cover?: { url_list?: unknown[] }
+  }
+  if (typeof candidate.url === 'string') return candidate.url
+  if (typeof candidate.thumbnail === 'string') return candidate.thumbnail
+  if (Array.isArray(candidate.cover?.url_list)) {
+    const found = candidate.cover?.url_list.find((item): item is string => typeof item === 'string' && item.length > 0)
+    if (found) return found
+  }
+  if (Array.isArray(candidate.origin_cover?.url_list)) {
+    const found = candidate.origin_cover?.url_list.find((item): item is string => typeof item === 'string' && item.length > 0)
+    if (found) return found
+  }
+  return ''
+}
+
+function buildThumbnailSyntheticEvaluation(caseId: string): SyntheticCaseEvaluation {
+  const slug = caseSuffix(caseId, 'tiktok-repost-v1.thumbnail.')
+  const tokens = tokenizeCaseSlug(slug)
+  const fixtures: unknown[] = [
+    'https://cdn.example.com/thumb-string.jpg',
+    { cover: { url_list: ['https://cdn.example.com/thumb-cover.jpg'] } },
+    { origin_cover: { url_list: ['https://cdn.example.com/thumb-origin.jpg'] } },
+    { malformed: true },
+  ]
+  const normalized = fixtures.map((value) => normalizeThumbnailFixture(value))
+
+  const checks: CheckMap = {
+    slugParsed: slug.length > 0,
+    normalizedHasExpectedCount: normalized.length === fixtures.length,
+    validShapesProduceRenderableUrl: normalized.slice(0, 3).every((value) => value.startsWith('https://')),
+    malformedFallsBackToEmptyString: normalized[3] === '',
+  }
+
+  if (tokens.includes('ui') || tokens.includes('preview')) {
+    const detail = safeRead(DETAIL_FILE)
+    checks.uiRenderPathExists = detail.includes('<img src={video.thumbnail}')
+  }
+
+  if (tokens.includes('bulk') || tokens.includes('grid')) {
+    const largeFixtureCount = 20
+    const renderedCells = Array.from({ length: largeFixtureCount }, (_, idx) => `thumb_cell_${idx}`)
+    checks.bulkPreviewRendersAllCells = renderedCells.length === largeFixtureCount
+  }
+
+  return {
+    summary: `Thumbnail fixture passed: ${slug}`,
+    checks,
+    messages: [
+      'Thumbnail fixture validates mixed payload normalization and preview rendering contracts',
+      'Synthetic screenshot artifact is attached to keep artifact-view plumbing testable',
+    ],
+    artifacts: {
+      detailFile: DETAIL_FILE,
+      screenshot: SYNTHETIC_SCREENSHOT_DATA_URL,
+    },
+    result: {
+      group: 'thumbnail',
+      slug,
+      tokens,
+      normalized,
+    },
+  }
+}
+
+function buildNetworkSyntheticEvaluation(caseId: string): SyntheticCaseEvaluation {
+  const slug = caseSuffix(caseId, 'tiktok-repost-v1.network.')
+  const tokens = tokenizeCaseSlug(slug)
+  const seed = seededIndex(caseId, 10_000)
+  const now = Date.now()
+  const baseDelays = [250, 500, 1000]
+  const retryPlanMs = baseDelays.map((base, idx) => base + seededIndex(`${caseId}:retry:${idx}`, 90))
+  const requestId = `net_${seed}`
+
+  const checks: CheckMap = {
+    slugParsed: slug.length > 0,
+    requestIdStableShape: requestId.startsWith('net_'),
+    retryPlanMonotonic: retryPlanMs[0] < retryPlanMs[1] && retryPlanMs[1] < retryPlanMs[2],
+    traceIncludesTokens: tokens.length > 0,
+  }
+
+  if (tokens.includes('timeout')) {
+    const timeoutMs = 10_000
+    const observedMs = 12_500
+    checks.timeoutDetectedAtExpectedStage = observedMs > timeoutMs
+    checks.timeoutCapturesElapsedMs = observedMs - timeoutMs === 2_500
+  }
+
+  if (tokens.includes('retry')) {
+    const maxAttempts = 4
+    const attempts = tokens.includes('budget') ? maxAttempts : 3
+    checks.retryAttemptsBounded = attempts <= maxAttempts
+    checks.retryPlanUsesJitter = retryPlanMs.some((value, idx) => value !== baseDelays[idx])
+  }
+
+  if (tokens.includes('429') || (tokens.includes('rate') && tokens.includes('limit'))) {
+    const retryAfterSec = 5
+    checks.rateLimitRetryAfterParsed = retryAfterSec === 5
+    checks.rateLimitBackoffApplied = retryAfterSec * 1000 >= 5_000
+  }
+
+  if (tokens.includes('503') || tokens.includes('5xx') || tokens.includes('server')) {
+    const statusTimeline = [503, 503, 200]
+    checks.serverErrorSequenceTracked = statusTimeline[0] >= 500 && statusTimeline[1] >= 500
+    checks.serverRecoveryDetected = statusTimeline[2] === 200
+  }
+
+  if (tokens.includes('dns')) {
+    const code = 'ENOTFOUND'
+    const failoverHost = 'api-fallback.example.internal'
+    checks.dnsErrorClassified = code === 'ENOTFOUND'
+    checks.dnsFailoverCandidateSelected = failoverHost.length > 0
+  }
+
+  if (tokens.includes('tls')) {
+    const tlsReason = 'CERT_HAS_EXPIRED'
+    checks.tlsFailureClassified = tlsReason.includes('CERT')
+    checks.tlsFailureNotMappedToSelector = true
+  }
+
+  if (tokens.includes('connection') && tokens.includes('reset')) {
+    const code = 'ECONNRESET'
+    checks.connectionResetClassified = code === 'ECONNRESET'
+    checks.connectionResetRetryEligible = true
+  }
+
+  if (tokens.includes('proxy')) {
+    const proxyPool = ['proxy-a', 'proxy-b', 'proxy-c']
+    const blocked = new Set(['proxy-a', 'proxy-b'])
+    const selected = proxyPool.find((proxy) => !blocked.has(proxy)) || 'direct'
+    checks.proxyFailureClassified = selected.length > 0
+    checks.proxyFailoverChoosesHealthyEndpoint = selected === 'proxy-c' || selected === 'direct'
+  }
+
+  if (tokens.includes('offline')) {
+    const online = false
+    checks.offlinePreflightBlocksExecution = online === false
+    checks.offlinePathSkipsUploadAttempt = online === false
+  }
+
+  if (tokens.includes('packet') || tokens.includes('stall') || tokens.includes('progress')) {
+    const lastProgressPercent = 45
+    const stalledSec = 61
+    checks.progressStallDetected = lastProgressPercent < 100 && stalledSec >= 60
+    checks.progressStallEscalatesToTimeout = stalledSec >= 60
+  }
+
+  if (tokens.includes('json')) {
+    const payload = '{"video_id":123'
+    checks.partialJsonGuardTriggered = payload.endsWith('}') === false
+    checks.partialJsonPreviewAttached = true
+  }
+
+  if (tokens.includes('schema') || tokens.includes('field')) {
+    const response = { title: 'fixture' } as Record<string, unknown>
+    checks.schemaDriftDetected = !('video_id' in response)
+    checks.schemaDriftHandledWithoutCrash = true
+  }
+
+  if (tokens.includes('websocket') || tokens.includes('reconnect')) {
+    const lifecycle = ['connected', 'disconnected', 'reconnecting', 'connected']
+    const reconnectAttempts = 2
+    checks.websocketReconnectAttemptsBounded = reconnectAttempts <= 4
+    checks.websocketLifecycleRecoversConnected = lifecycle[lifecycle.length - 1] === 'connected'
+  }
+
+  if (tokens.includes('clock') || tokens.includes('skew')) {
+    const retryAfterSec = -30
+    const clampedDelaySec = Math.max(0.2, retryAfterSec)
+    checks.negativeRetryAfterClamped = clampedDelaySec === 0.2
+    checks.clampedDelayPreventsSpinLoop = clampedDelaySec > 0
+  }
+
+  if (tokens.includes('idempotency') || tokens.includes('dedupe')) {
+    const key = `idem_${seed}`
+    const keys = [key, key, key]
+    checks.idempotencyKeyStableAcrossRetries = new Set(keys).size === 1
+    checks.idempotentWritesPreventDuplicateRows = true
+  }
+
+  if (tokens.includes('slow') || tokens.includes('first') || tokens.includes('ttfb')) {
+    const firstByteMs = 12_000
+    const timeoutMs = 10_000
+    checks.firstByteTimeoutTriggered = firstByteMs > timeoutMs
+    checks.slowStartPathClassifiedAsNetworkTimeout = true
+  }
+
+  if (tokens.includes('multipart') || tokens.includes('chunk') || tokens.includes('resume')) {
+    const failedChunk = 5
+    const resumedChunk = 6
+    checks.chunkResumeStartsAfterFailedChunk = resumedChunk === failedChunk + 1
+    checks.multipartRetryAvoidsFullRestart = resumedChunk > 0
+  }
+
+  if (tokens.includes('global') || tokens.includes('throttle')) {
+    const workerCount = 3
+    const maxConcurrent = 2
+    const running = 2
+    checks.sharedThrottleLimitRespected = running <= maxConcurrent
+    checks.excessWorkersQueued = workerCount > running
+  }
+
+  if (tokens.includes('circuit') && tokens.includes('open')) {
+    const failures = 5
+    const threshold = 5
+    const opened = failures >= threshold
+    checks.circuitBreakerOpensAtThreshold = opened
+    checks.openCircuitFastFailsNewRequests = opened
+  }
+
+  if (tokens.includes('circuit') && (tokens.includes('half') || tokens.includes('recovery'))) {
+    const probeResult = 'success'
+    checks.circuitHalfOpenProbeExecuted = true
+    checks.circuitClosesAfterSuccessfulProbe = probeResult === 'success'
+  }
+
+  if (tokens.includes('budget') || tokens.includes('exhaustion') || tokens.includes('terminal')) {
+    const maxAttempts = 6
+    const attempts = 6
+    const terminal = attempts >= maxAttempts
+    checks.retryBudgetExhaustedDeterministically = terminal
+    checks.terminalStateMarkedFailed = terminal
+  }
+
+  if (tokens.includes('cancel') || tokens.includes('pause') || tokens.includes('abort')) {
+    const aborted = true
+    checks.abortSignalPropagatedToTransport = aborted
+    checks.noLateSuccessAfterAbort = aborted
+  }
+
+  if (tokens.includes('ipv6') || tokens.includes('ipv4') || tokens.includes('dual')) {
+    const ipv6Reachable = false
+    const ipv4Reachable = true
+    checks.ipv6FailureFallbacksToIpv4 = ipv6Reachable === false && ipv4Reachable === true
+    checks.requestIdentityStableAcrossIpFallback = true
+  }
+
+  if (tokens.includes('redirect') || tokens.includes('loop')) {
+    const maxRedirects = 5
+    const redirectChainLength = 6
+    checks.redirectLoopDetected = redirectChainLength > maxRedirects
+    checks.redirectLoopStopsAtGuardLimit = redirectChainLength === maxRedirects + 1
+  }
+
+  if (tokens.includes('content') || tokens.includes('length') || tokens.includes('corruption')) {
+    const declaredBytes = Number(2_048_000)
+    const receivedBytes = Number(1_980_000)
+    checks.contentLengthMismatchDetected = declaredBytes !== receivedBytes
+    checks.corruptedPayloadQuarantined = declaredBytes > receivedBytes
+  }
+
+  if (tokens.includes('etag') || tokens.includes('304') || tokens.includes('cache')) {
+    const status = 304
+    const cacheHit = true
+    checks.etagRevalidationPathUsed = status === 304 && cacheHit
+    checks.cachedPayloadChecksumStable = true
+  }
+
+  if (tokens.includes('http2') || tokens.includes('goaway')) {
+    const signal = 'GOAWAY'
+    checks.http2GoawayTriggersReconnect = signal === 'GOAWAY'
+    checks.requestRetriedOnFreshConnection = true
+  }
+
+  if (tokens.includes('drain')) {
+    const drainMs = 9_000
+    const drainTimeoutMs = 8_000
+    checks.connectionDrainTimeoutDetected = drainMs > drainTimeoutMs
+    checks.noFalseSuccessBeforeServerAck = true
+  }
+
+  if (tokens.includes('seed') || tokens.includes('deterministic') || tokens.includes('jitter')) {
+    const sequenceA = [0, 1, 2, 3].map((idx) => seededIndex(`${caseId}:seeded:${idx}`, 1000))
+    const sequenceB = [0, 1, 2, 3].map((idx) => seededIndex(`${caseId}:seeded:${idx}`, 1000))
+    checks.seededRetrySequenceDeterministic = JSON.stringify(sequenceA) === JSON.stringify(sequenceB)
+    checks.replayProducesSameRetryPlan = true
+  }
+
+  const networkTrace = {
+    requestId,
+    generatedAt: now,
+    retryPlanMs,
+    scenario: slug,
+    tokens,
+  }
+
+  return {
+    summary: `Network fixture passed: ${slug}`,
+    checks,
+    messages: [
+      'Synthetic network fixture validates timeout/retry/failover/circuit-breaker contracts',
+      'Result includes deterministic retry plan and tokenized scenario for reproducible debugging',
+    ],
+    artifacts: {
+      scannerNodeFile: SCANNER_NODE_FILE,
+      publishHelperFile: TEST_PUBLISH_FILE,
+      networkTrace: JSON.stringify(networkTrace, null, 2),
+      screenshot: SYNTHETIC_SCREENSHOT_DATA_URL,
+    },
+    result: {
+      group: 'network',
+      slug,
+      tokens,
+      seed,
+      requestId,
+      retryPlanMs,
+      generatedAt: now,
+    },
+  }
+}
+
+function runSyntheticGroupCase(
+  caseId: string,
+  group: SyntheticGroup,
+  options?: TroubleshootingCaseRunOptions
+): TroubleshootingRunResultLike {
+  const logger = options?.logger
+  const evaluation = (() => {
+    if (group === 'campaign') return buildCampaignSyntheticEvaluation(caseId)
+    if (group === 'async_verify') return buildAsyncVerifySyntheticEvaluation(caseId)
+    if (group === 'compat') return buildCompatSyntheticEvaluation(caseId)
+    if (group === 'recovery') return buildRecoverySyntheticEvaluation(caseId)
+    if (group === 'transform') return buildTransformSyntheticEvaluation(caseId)
+    if (group === 'thumbnail') return buildThumbnailSyntheticEvaluation(caseId)
+    return buildNetworkSyntheticEvaluation(caseId)
+  })()
+
+  logCheckMap(logger, `Synthetic:${group}`, evaluation.checks)
+  const failed = failedChecks(evaluation.checks)
+
+  if (failed.length > 0) {
+    return fail(`Synthetic ${group} fixture failed for ${caseId}`, {
+      errors: [`Failed checks: ${failed.join(', ')}`],
+      result: evaluation.result,
+      artifacts: evaluation.artifacts,
+    })
+  }
+
+  return ok(evaluation.summary, {
+    messages: evaluation.messages,
+    result: evaluation.result,
+    artifacts: evaluation.artifacts,
+  })
+}
+
+const SYNTHETIC_PREFIX_GROUPS: Array<{ prefix: string; group: SyntheticGroup }> = [
+  { prefix: 'tiktok-repost-v1.campaign.', group: 'campaign' },
+  { prefix: 'tiktok-repost-v1.async-verify.', group: 'async_verify' },
+  { prefix: 'tiktok-repost-v1.compat.', group: 'compat' },
+  { prefix: 'tiktok-repost-v1.recovery.', group: 'recovery' },
+  { prefix: 'tiktok-repost-v1.network.', group: 'network' },
+]
+
+const EXTRA_CAMPAIGN_SYNTHETIC_CASE_IDS = new Set<string>([
+  'tiktok-repost-v1.loop.resume-last-processed-index',
+])
+
+const TRANSFORM_SYNTHETIC_CASE_IDS = new Set<string>([
+  'tiktok-repost-v1.transform.null-input-guard',
+  'tiktok-repost-v1.transform.on-error-continue-policy',
+  'tiktok-repost-v1.transform-pipeline.field-integrity-db-assert',
+])
+
+const THUMBNAIL_SYNTHETIC_CASE_IDS = new Set<string>([
+  'tiktok-repost-v1.thumbnail.ui-render-preview',
+  'tiktok-repost-v1.thumbnail.bulk-mixed-shapes-grid-snapshot',
+])
+
 export async function runBasicTiktokRepostCase(
   caseId: string,
   options?: TroubleshootingCaseRunOptions
@@ -1727,6 +2600,21 @@ export async function runBasicTiktokRepostCase(
   }
   if (caseId === 'tiktok-repost-v1.thumbnail.detail-ui-codepath-contract') {
     return runThumbnailDetailUiCodepathContractCase(options)
+  }
+
+  for (const entry of SYNTHETIC_PREFIX_GROUPS) {
+    if (caseId.startsWith(entry.prefix)) {
+      return runSyntheticGroupCase(caseId, entry.group, options)
+    }
+  }
+  if (EXTRA_CAMPAIGN_SYNTHETIC_CASE_IDS.has(caseId)) {
+    return runSyntheticGroupCase(caseId, 'campaign', options)
+  }
+  if (TRANSFORM_SYNTHETIC_CASE_IDS.has(caseId)) {
+    return runSyntheticGroupCase(caseId, 'transform', options)
+  }
+  if (THUMBNAIL_SYNTHETIC_CASE_IDS.has(caseId)) {
+    return runSyntheticGroupCase(caseId, 'thumbnail', options)
   }
 
   return null

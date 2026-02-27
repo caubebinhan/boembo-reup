@@ -1,6 +1,6 @@
 # src/flows/presets/tiktok-repost.flow.yaml
 # ─────────────────────────────────────────
-# Workflow: Scan → Schedule → Loop(check → dedup → download → caption → publish) → Finish
+# Workflow: Scan → Schedule → Loop(check → dedup → download → edit → caption → publish) → Finish
 # Notifications are handled by events.ts (no notify nodes needed in YAML)
 
 # ── METADATA ─────────────────────────────
@@ -37,6 +37,7 @@ nodes:
       - check_time_1
       - dedup_1
       - downloader_1
+      - video_edit_1
       - caption_1
       - account_dedup_1
       - publisher_1
@@ -49,6 +50,9 @@ nodes:
 
   - node_id: core.downloader
     instance_id: downloader_1
+
+  - node_id: core.video_edit
+    instance_id: video_edit_1
 
   - node_id: core.caption_gen
     instance_id: caption_1

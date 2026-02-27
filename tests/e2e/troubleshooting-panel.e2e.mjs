@@ -7,7 +7,11 @@ import test from 'node:test'
 import { chromium } from 'playwright'
 import { e2eCaseGroups, e2eCaseIndex } from './cases/index.mjs'
 import {
+  TROUBLESHOOTING_PANEL_FIXTURE_ACCOUNTS,
   TROUBLESHOOTING_PANEL_FIXTURE_CASES,
+  TROUBLESHOOTING_PANEL_FIXTURE_SOURCE_CANDIDATES,
+  TROUBLESHOOTING_PANEL_FIXTURE_VIDEO_CANDIDATES,
+  TROUBLESHOOTING_PANEL_FIXTURE_WORKFLOWS,
   TROUBLESHOOTING_PANEL_FIXTURE_RUNS,
 } from './cases/troubleshooting/fixtures.mjs'
 
@@ -89,10 +93,29 @@ test.before(async () => {
   page = await browser.newPage()
 
   await page.addInitScript(
-    ({ fixtureCases, fixtureRuns, runtime }) => {
+    ({ fixtureCases, fixtureRuns, fixtureWorkflows, fixtureAccounts, fixtureVideos, fixtureSources, runtime }) => {
       const listeners = new Map()
+      const clone = (value) => JSON.parse(JSON.stringify(value))
+      const emit = (channel, payload) => {
+        const callbacks = listeners.get(channel)
+        if (!callbacks) return
+        for (const callback of callbacks) {
+          try {
+            callback(payload)
+          } catch {}
+        }
+      }
+      const state = {
+        cases: clone(fixtureCases),
+        runs: clone(fixtureRuns),
+        workflows: clone(fixtureWorkflows),
+        accounts: clone(fixtureAccounts),
+        videos: clone(fixtureVideos),
+        sources: clone(fixtureSources),
+      }
+
       const api = {
-        invoke: async (channel) => {
+        invoke: async (channel, payload) => {
           if (channel === 'campaign:list') return []
           if (channel === 'settings:db-info') return { dbPath: runtime.dbPath, runtime: { platform: runtime.platform, arch: runtime.arch } }
           if (channel === 'settings:inspect-schema') {
@@ -100,22 +123,59 @@ test.before(async () => {
           }
           if (channel === 'healthcheck:storage') return { ok: true, freeMB: 4096, path: runtime.storagePath }
           if (channel === 'healthcheck:services') return { ok: true, services: [] }
-          if (channel === 'troubleshooting:list-cases') return fixtureCases
-          if (channel === 'troubleshooting:list-workflows') {
-            return [
-              {
-                workflowId: 'tiktok-repost',
-                workflowVersion: '1.0',
-                totalCases: fixtureCases.length,
-                runnableCases: fixtureCases.length,
-                plannedCases: 0,
-              },
-            ]
+
+          if (channel === 'troubleshooting:list-cases') return clone(state.cases)
+          if (channel === 'troubleshooting:list-workflows') return clone(state.workflows)
+          if (channel === 'troubleshooting:list-runs') return clone(state.runs)
+          if (channel === 'account:list') return clone(state.accounts)
+
+          if (channel === 'troubleshooting:list-video-candidates') {
+            const workflowId = payload?.workflowId
+            const videos = workflowId
+              ? state.videos.filter((item) => item.workflowId === workflowId)
+              : state.videos
+            return clone(videos)
           }
-          if (channel === 'troubleshooting:list-runs') return fixtureRuns
-          if (channel === 'troubleshooting:list-video-candidates') return []
-          if (channel === 'troubleshooting:list-source-candidates') return []
-          if (channel === 'account:list') return []
+          if (channel === 'troubleshooting:list-source-candidates') {
+            const workflowId = payload?.workflowId
+            const sources = workflowId
+              ? state.sources.filter((item) => item.workflowId === workflowId)
+              : state.sources
+            return clone(sources)
+          }
+
+          if (channel === 'troubleshooting:run-case') {
+            const caseId = payload?.caseId
+            const caseDef = state.cases.find((entry) => entry.id === caseId)
+            if (!caseDef) throw new Error(`Unknown fixture case: ${caseId}`)
+            if (caseDef.implemented === false) throw new Error(`Case not implemented in fixture: ${caseId}`)
+            const now = Date.now()
+            const run = {
+              id: `fixture-run-${now}-${Math.random().toString(36).slice(2, 7)}`,
+              caseId,
+              title: `${caseDef.title} (Fixture Run)`,
+              status: 'passed',
+              startedAt: now,
+              endedAt: now + 100,
+              summary: `Synthetic pass for ${caseDef.id}`,
+              workflowId: caseDef.workflowId,
+              workflowVersion: caseDef.workflowVersion,
+              category: caseDef.category,
+              group: caseDef.group,
+              tags: caseDef.tags || [],
+              level: caseDef.level,
+              logs: [{ ts: now, level: 'info', line: `Fixture run executed for ${caseDef.id}` }],
+              logStats: { total: 1, info: 1, warn: 0, error: 0 },
+              result: {
+                success: true,
+                runtime: payload?.runtime || {},
+              },
+            }
+            state.runs.unshift(run)
+            emit('troubleshooting:run-update', { record: clone(run) })
+            return clone(run)
+          }
+
           if (channel === 'troubleshooting:send-run-to-sentry') {
             return {
               success: true,
@@ -133,7 +193,10 @@ test.before(async () => {
               },
             }
           }
-          if (channel === 'troubleshooting:clear-runs') return { success: true }
+          if (channel === 'troubleshooting:clear-runs') {
+            state.runs = []
+            return { success: true }
+          }
           return null
         },
         on: (channel, callback) => {
@@ -154,6 +217,10 @@ test.before(async () => {
     {
       fixtureCases: TROUBLESHOOTING_PANEL_FIXTURE_CASES,
       fixtureRuns: TROUBLESHOOTING_PANEL_FIXTURE_RUNS,
+      fixtureWorkflows: TROUBLESHOOTING_PANEL_FIXTURE_WORKFLOWS,
+      fixtureAccounts: TROUBLESHOOTING_PANEL_FIXTURE_ACCOUNTS,
+      fixtureVideos: TROUBLESHOOTING_PANEL_FIXTURE_VIDEO_CANDIDATES,
+      fixtureSources: TROUBLESHOOTING_PANEL_FIXTURE_SOURCE_CANDIDATES,
       runtime: runtimeEnv,
     }
   )

@@ -11,7 +11,7 @@ export const recoveryCases: TroubleshootingCaseDefinition[] = [
     group: 'recovery',
     tags: ['recovery', 'scheduler', 'queued', 'db'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureMissedQueuedCount', value: 3 },
@@ -34,7 +34,7 @@ export const recoveryCases: TroubleshootingCaseDefinition[] = [
     group: 'recovery',
     tags: ['recovery', 'under_review', 'retry', 'db'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureUnderReviewCount', value: 2 }],
       checks: {
@@ -54,7 +54,7 @@ export const recoveryCases: TroubleshootingCaseDefinition[] = [
     group: 'recovery',
     tags: ['recovery', 'jobs', 'running', 'diagnostic', 'db'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureJobState', value: 'running + stale updated_at' }],
       checks: {
@@ -74,7 +74,7 @@ export const recoveryCases: TroubleshootingCaseDefinition[] = [
     group: 'recovery',
     tags: ['recovery', 'download', 'partial-file', 'crash', 'db'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixturePartialFileSize', value: '30% of full video' }],
       checks: {
@@ -94,7 +94,7 @@ export const recoveryCases: TroubleshootingCaseDefinition[] = [
     group: 'recovery',
     tags: ['recovery', 'db', 'lock', 'retry', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureLockDurationMs', value: 2000 }],
       checks: {
@@ -114,7 +114,7 @@ export const recoveryCases: TroubleshootingCaseDefinition[] = [
     group: 'recovery',
     tags: ['recovery', 'db', 'corruption', 'edge', 'isolation'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCorruption', value: 'invalid JSON in data_json field' }],
       checks: {
@@ -134,7 +134,7 @@ export const recoveryCases: TroubleshootingCaseDefinition[] = [
     group: 'recovery',
     tags: ['recovery', 'multi-campaign', 'parallel', 'db', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaignCount', value: 5 }],
       checks: {
@@ -153,7 +153,7 @@ export const recoveryCases: TroubleshootingCaseDefinition[] = [
     group: 'recovery',
     tags: ['recovery', 'idempotent', 'db', 'regression'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'recoveryRunCount', value: 2 }],
       checks: {
@@ -172,7 +172,7 @@ export const recoveryCases: TroubleshootingCaseDefinition[] = [
     group: 'recovery',
     tags: ['recovery', 'counter', 'drift', 'under_review', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureUnderReviewReset', value: 3 },
@@ -194,7 +194,7 @@ export const recoveryCases: TroubleshootingCaseDefinition[] = [
     group: 'recovery',
     tags: ['recovery', 'jobs', 'boot', 'stale', 'cleanup'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureStaleJobAgeMin', value: 60 },

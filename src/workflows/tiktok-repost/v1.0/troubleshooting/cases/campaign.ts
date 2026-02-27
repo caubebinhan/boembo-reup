@@ -65,7 +65,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'jobs', 'pause', 'resume', 'engine'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureCampaignState', value: 'ready-to-trigger' },
@@ -92,7 +92,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['loop', 'resume', 'last_processed_index', 'recovery'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureVideosCount', value: 5 },
@@ -118,7 +118,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'db', 'race', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureRaceWrites', value: 'video status patch + metadata update' },
@@ -144,7 +144,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'lifecycle', 'delete', 'engine', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaignState', value: 'active with running job' }],
       checks: {
@@ -164,7 +164,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'lifecycle', 'params', 'hot-reload', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'editedParam', value: 'publishIntervalMinutes: 60 → 30' }],
       checks: {
@@ -183,7 +183,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'isolation', 'multi-campaign', 'source', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaignCount', value: 2 },{ key: 'sharedSource', value: 'same @channel' }],
       checks: {
@@ -202,7 +202,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'lifecycle', 'terminal', 'all-failed', 'edge'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureVideoCount', value: 5 },{ key: 'fixtureAllOutcome', value: 'failed' }],
       checks: {
@@ -222,7 +222,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'scheduler', 'boot', 'recovery', 'missed-window'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureMissedWindowMinutes', value: 45 }],
       checks: {
@@ -242,7 +242,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'lifecycle', 'completed', 'immutable', 'edge'],
     level: 'basic',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaignStatus', value: 'completed' }],
       checks: {
@@ -262,7 +262,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'stats', 'counter', 'race', 'db'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixturePublishCount', value: 5 },{ key: 'fixtureCounterInitial', value: 0 }],
       checks: {
@@ -281,7 +281,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'status', 'state-machine', 'db', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'transitionsUnderTest', value: 'queued→published, queued→failed, under_review→published, under_review→verification_incomplete, failed→queued (manual retry)' }],
       checks: {

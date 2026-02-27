@@ -1,6 +1,6 @@
-import { spawn } from 'node:child_process'
 import { constants as fsConstants } from 'node:fs'
 import { access } from 'fs/promises'
+import { resolveBinary, runBinary, ensureFfmpegAvailable } from '@main/ffmpeg'
 
 type ProbeStream = {
   codec_type?: string
@@ -55,14 +55,7 @@ export type MediaSimilarityResult = {
   reason: string
 }
 
-type CommandResult = {
-  code: number | null
-  stdout: Buffer
-  stderr: Buffer
-}
-
 const HEX_BITCOUNT = [0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4]
-let ffmpegAvailabilityCache: { checkedAt: number; ffmpeg: boolean; ffprobe: boolean } | null = null
 
 function parseNum(v: any): number | undefined {
   const n = Number(v)
@@ -76,63 +69,6 @@ async function fileExists(filePath: string): Promise<boolean> {
   } catch {
     return false
   }
-}
-
-function resolveBinary(name: 'ffmpeg' | 'ffprobe'): string {
-  if (name === 'ffmpeg') return process.env.FFMPEG_PATH || 'ffmpeg'
-  return process.env.FFPROBE_PATH || 'ffprobe'
-}
-
-function runBinary(command: string, args: string[], timeoutMs = 60_000): Promise<CommandResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      windowsHide: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-
-    const stdoutChunks: Buffer[] = []
-    const stderrChunks: Buffer[] = []
-    let finished = false
-    const timer = setTimeout(() => {
-      if (finished) return
-      finished = true
-      child.kill('SIGKILL')
-      reject(new Error(`Command timeout: ${command}`))
-    }, timeoutMs)
-
-    child.stdout?.on('data', (chunk: Buffer | string) => stdoutChunks.push(Buffer.from(chunk)))
-    child.stderr?.on('data', (chunk: Buffer | string) => stderrChunks.push(Buffer.from(chunk)))
-    child.on('error', (err) => {
-      if (finished) return
-      finished = true
-      clearTimeout(timer)
-      reject(err)
-    })
-    child.on('close', (code) => {
-      if (finished) return
-      finished = true
-      clearTimeout(timer)
-      resolve({
-        code,
-        stdout: Buffer.concat(stdoutChunks),
-        stderr: Buffer.concat(stderrChunks),
-      })
-    })
-  })
-}
-
-async function ensureFfmpegAvailable(): Promise<{ ok: boolean; reason?: string }> {
-  const now = Date.now()
-  if (ffmpegAvailabilityCache && now - ffmpegAvailabilityCache.checkedAt < 5 * 60_000) {
-    const ok = ffmpegAvailabilityCache.ffmpeg && ffmpegAvailabilityCache.ffprobe
-    return ok ? { ok } : { ok: false, reason: 'ffmpeg_or_ffprobe_not_available' }
-  }
-
-  const ffmpeg = await runBinary(resolveBinary('ffmpeg'), ['-version'], 8_000).then(r => r.code === 0).catch(() => false)
-  const ffprobe = await runBinary(resolveBinary('ffprobe'), ['-version'], 8_000).then(r => r.code === 0).catch(() => false)
-  ffmpegAvailabilityCache = { checkedAt: now, ffmpeg, ffprobe }
-  if (!ffmpeg || !ffprobe) return { ok: false, reason: 'ffmpeg_or_ffprobe_not_available' }
-  return { ok: true }
 }
 
 async function probeMedia(filePath: string): Promise<ProbeResponse | null> {

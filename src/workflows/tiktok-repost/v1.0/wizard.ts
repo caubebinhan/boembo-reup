@@ -1,6 +1,7 @@
 import { WizardStepConfig } from '@renderer/wizard/WizardStepTypes'
 import { Step1_Details } from '@renderer/components/wizard/Step1_Details'
 import { Step2_Sources } from '@renderer/components/wizard/Step2_Sources'
+import { Step3_VideoEdit } from '@renderer/components/wizard/Step3_VideoEdit'
 import { Step4_Schedule } from '@renderer/components/wizard/Step4_Schedule'
 import { Step5_Target } from '@renderer/components/wizard/Step5_Target'
 
@@ -29,6 +30,13 @@ export const tiktokRepostSteps: WizardStepConfig[] = [
       if (hasEmpty) return 'All sources must have a name'
       return null
     },
+  },
+  {
+    id: 'video_edit',
+    title: 'Video Edit',
+    icon: '🎬',
+    description: 'Configure video editing operations',
+    component: Step3_VideoEdit,
   },
   {
     id: 'schedule',

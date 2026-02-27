@@ -87,7 +87,7 @@ export const captionTransformCases: TroubleshootingCaseDefinition[] = [
     group: 'transform',
     tags: ['transform', 'loop', 'null-input', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureInjectNullAtIndex', value: 1 }],
       checks: {
@@ -125,7 +125,7 @@ export const captionTransformCases: TroubleshootingCaseDefinition[] = [
     group: 'transform',
     tags: ['transform', 'error-policy', 'continue', 'loop', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureThrowAtIndex', value: 1 },
@@ -148,7 +148,7 @@ export const captionTransformCases: TroubleshootingCaseDefinition[] = [
     group: 'transform',
     tags: ['transform', 'db', 'integrity', 'regression'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'requiredFields', value: 'platform_id,local_path,description,status' }],
       checks: {

@@ -1,0 +1,98 @@
+/**
+ * FFmpeg Binary Utilities (Shared)
+ * ─────────────────────────────────
+ * Shared helpers for resolving, checking, and spawning FFmpeg/FFprobe binaries.
+ * Refactored from MediaSimilarity.ts to be reusable across the codebase.
+ */
+import { spawn } from 'node:child_process'
+
+export interface CommandResult {
+  code: number | null
+  stdout: Buffer
+  stderr: Buffer
+}
+
+let availabilityCache: { checkedAt: number; ffmpeg: boolean; ffprobe: boolean } | null = null
+const AVAILABILITY_CACHE_TTL = 5 * 60_000 // 5 minutes
+
+/**
+ * Resolve absolute/system path for ffmpeg or ffprobe binary.
+ * Honors FFMPEG_PATH / FFPROBE_PATH env vars (useful for bundled binaries).
+ */
+export function resolveBinary(name: 'ffmpeg' | 'ffprobe'): string {
+  if (name === 'ffmpeg') return process.env.FFMPEG_PATH || 'ffmpeg'
+  return process.env.FFPROBE_PATH || 'ffprobe'
+}
+
+/**
+ * Spawn a binary with args and collect stdout/stderr.
+ * Rejects on spawn error or timeout.
+ */
+export function runBinary(command: string, args: string[], timeoutMs = 60_000): Promise<CommandResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    const stdoutChunks: Buffer[] = []
+    const stderrChunks: Buffer[] = []
+    let finished = false
+
+    const timer = setTimeout(() => {
+      if (finished) return
+      finished = true
+      child.kill('SIGKILL')
+      reject(new Error(`Command timeout: ${command} (${timeoutMs}ms)`))
+    }, timeoutMs)
+
+    child.stdout?.on('data', (chunk: Buffer | string) => stdoutChunks.push(Buffer.from(chunk)))
+    child.stderr?.on('data', (chunk: Buffer | string) => stderrChunks.push(Buffer.from(chunk)))
+
+    child.on('error', (err) => {
+      if (finished) return
+      finished = true
+      clearTimeout(timer)
+      reject(err)
+    })
+
+    child.on('close', (code) => {
+      if (finished) return
+      finished = true
+      clearTimeout(timer)
+      resolve({
+        code,
+        stdout: Buffer.concat(stdoutChunks),
+        stderr: Buffer.concat(stderrChunks),
+      })
+    })
+  })
+}
+
+/**
+ * Check that both ffmpeg and ffprobe are available on the system.
+ * Result is cached for 5 minutes.
+ */
+export async function ensureFfmpegAvailable(): Promise<{ ok: boolean; reason?: string }> {
+  const now = Date.now()
+  if (availabilityCache && now - availabilityCache.checkedAt < AVAILABILITY_CACHE_TTL) {
+    const ok = availabilityCache.ffmpeg && availabilityCache.ffprobe
+    return ok ? { ok } : { ok: false, reason: 'ffmpeg_or_ffprobe_not_available' }
+  }
+
+  const ffmpeg = await runBinary(resolveBinary('ffmpeg'), ['-version'], 8_000)
+    .then((r) => r.code === 0)
+    .catch(() => false)
+  const ffprobe = await runBinary(resolveBinary('ffprobe'), ['-version'], 8_000)
+    .then((r) => r.code === 0)
+    .catch(() => false)
+
+  availabilityCache = { checkedAt: now, ffmpeg, ffprobe }
+  if (!ffmpeg || !ffprobe) return { ok: false, reason: 'ffmpeg_or_ffprobe_not_available' }
+  return { ok: true }
+}
+
+/** Clear the availability cache (useful for tests) */
+export function clearAvailabilityCache(): void {
+  availabilityCache = null
+}

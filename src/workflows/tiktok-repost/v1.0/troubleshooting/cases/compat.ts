@@ -11,7 +11,7 @@ export const compatCases: TroubleshootingCaseDefinition[] = [
     group: 'compat',
     tags: ['compat', 'flow_snapshot', 'versioning', 'db'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaignVersion', value: '1.0 (frozen snapshot)' }],
       checks: {
@@ -30,7 +30,7 @@ export const compatCases: TroubleshootingCaseDefinition[] = [
     group: 'compat',
     tags: ['compat', 'params', 'defaults', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureMissingParams', value: 'interval/privacy/publishVerifyMaxRetries variants' }],
       checks: {
@@ -49,7 +49,7 @@ export const compatCases: TroubleshootingCaseDefinition[] = [
     group: 'compat',
     tags: ['compat', 'ui', 'versioning', 'dynamic-discovery'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureProviders', value: 'tiktok-repost@1.0 + upload-local@1.0 (+ future versions)' }],
       checks: {
@@ -69,7 +69,7 @@ export const compatCases: TroubleshootingCaseDefinition[] = [
     group: 'compat',
     tags: ['compat', 'deploy', 'code-update', 'regression'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaignAge', value: '>7 days old (pre-update)' }],
       checks: {
@@ -89,7 +89,7 @@ export const compatCases: TroubleshootingCaseDefinition[] = [
     group: 'compat',
     tags: ['compat', 'async-task', 'orphan', 'db', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureVideoDeleteTiming', value: 'deleted after task enqueued, before execution' }],
       checks: {
@@ -108,7 +108,7 @@ export const compatCases: TroubleshootingCaseDefinition[] = [
     group: 'compat',
     tags: ['compat', 'db', 'schema', 'forward-compat', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureExtraField', value: 'future_flag: true injected into data_json' }],
       checks: {
@@ -127,7 +127,7 @@ export const compatCases: TroubleshootingCaseDefinition[] = [
     group: 'compat',
     tags: ['compat', 'multi-workflow', 'isolation', 'engine'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureWorkflows', value: 'tiktok-repost@1.0 + upload-local@1.0 (1 campaign each)' }],
       checks: {

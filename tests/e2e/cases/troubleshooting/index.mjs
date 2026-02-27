@@ -1,6 +1,48 @@
+import {
+  clearLogsCase,
+  plannedCaseButtonDisabledCase,
+  refreshMaintainsRunHistoryCase,
+  runAllAddsMultipleRunsCase,
+  runAllEnabledWhenRunnableCase,
+  runAllDisabledPlannedOnlyCase,
+  runCaseAddsHistoryEntryCase,
+} from './actions.case.mjs'
 import { groupingSuitesCase } from './grouping-suites.case.mjs'
+import {
+  manualPickersCandidateLoadCase,
+  manualPickersCandidateResetCase,
+  manualPickersDisabledCase,
+  manualPickersSummaryCase,
+  manualSeedSummaryWithoutManualPickersCase,
+  manualPickersWarningCase,
+} from './manual-pickers.case.mjs'
+import {
+  artifactEmptyStateCase,
+  artifactImagePathPreviewCase,
+  artifactTextPreviewCase,
+  cappedLogHintCase,
+  failedRunSentryActionCase,
+  footprintStatsCase,
+  footprintEmptyStateCase,
+  fullLogModalCase,
+  fullLogModalSnapshotContextCase,
+  noLogsStateCase,
+  passedRunNoSentryActionCase,
+  runCaseMetaEmptyStateCase,
+  runCaseMetaSectionsCase,
+  runSummaryFingerprintPathCase,
+} from './run-details.case.mjs'
 import { sentryFeedbackLinksCase } from './sentry-feedback-links.case.mjs'
 import { screenshotPreviewCase } from './screenshot-preview.case.mjs'
+import {
+  hiddenWorkflowRunPrunedCase,
+  workflowCardFilterCase,
+  workflowCatalogCase,
+  workflowSelectOptionsCase,
+  workflowVersionFilterCase,
+  workflowVersionOptionCase,
+  workflowVersionResetsOnScopeChangeCase,
+} from './workflow-catalog.case.mjs'
 
 /** @type {import('../types.mjs').E2ECaseGroup} */
 export const troubleshootingPanelCaseGroup = {
@@ -15,7 +57,41 @@ export const troubleshootingPanelCaseGroup = {
   },
   cases: [
     groupingSuitesCase,
+    workflowCatalogCase,
+    workflowSelectOptionsCase,
+    workflowVersionOptionCase,
+    workflowVersionFilterCase,
+    workflowVersionResetsOnScopeChangeCase,
+    workflowCardFilterCase,
+    hiddenWorkflowRunPrunedCase,
+    manualPickersWarningCase,
+    manualPickersDisabledCase,
+    manualPickersCandidateLoadCase,
+    manualPickersCandidateResetCase,
+    manualPickersSummaryCase,
+    manualSeedSummaryWithoutManualPickersCase,
+    failedRunSentryActionCase,
+    passedRunNoSentryActionCase,
+    runSummaryFingerprintPathCase,
+    runCaseMetaSectionsCase,
+    runCaseMetaEmptyStateCase,
+    artifactTextPreviewCase,
+    artifactImagePathPreviewCase,
+    artifactEmptyStateCase,
+    cappedLogHintCase,
+    footprintEmptyStateCase,
+    footprintStatsCase,
+    fullLogModalCase,
+    fullLogModalSnapshotContextCase,
+    noLogsStateCase,
     screenshotPreviewCase,
+    runCaseAddsHistoryEntryCase,
+    runAllAddsMultipleRunsCase,
+    runAllEnabledWhenRunnableCase,
+    runAllDisabledPlannedOnlyCase,
+    plannedCaseButtonDisabledCase,
+    refreshMaintainsRunHistoryCase,
     sentryFeedbackLinksCase,
+    clearLogsCase,
   ],
 }

@@ -3,6 +3,7 @@ import { asyncVerifyCases } from './asyncVerify'
 import { campaignCases } from './campaign'
 import { captionTransformCases } from './captionTransform'
 import { compatCases } from './compat'
+import { networkCases } from './network'
 import { publishCases } from './publish'
 import { recoveryCases } from './recovery'
 import { scanCases } from './scan'
@@ -15,6 +16,7 @@ export const tiktokRepostV1Cases: TroubleshootingCaseDefinition[] = [
   ...scanCases,
   ...thumbnailCases,
   ...captionTransformCases,
+  ...networkCases,
   ...publishCases,
   ...recoveryCases,
   ...compatCases,

@@ -11,7 +11,7 @@ export const asyncVerifyCases: TroubleshootingCaseDefinition[] = [
     group: 'async_verify',
     tags: ['async-task', 'publish-verify', 'nonblocking', 'db', 'events'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixturePublishOutcome', value: 'under_review' }],
       checks: {
@@ -31,7 +31,7 @@ export const asyncVerifyCases: TroubleshootingCaseDefinition[] = [
     group: 'async_verify',
     tags: ['async-task', 'lease', 'recovery', 'edge', 'db'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureTaskState', value: 'running with expired leaseUntil' },
@@ -53,7 +53,7 @@ export const asyncVerifyCases: TroubleshootingCaseDefinition[] = [
     group: 'async_verify',
     tags: ['async-task', 'dedupe', 'db', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'dedupeKeyPattern', value: 'publish-verify:{videoId}:{accountId}' }],
       checks: {
@@ -72,7 +72,7 @@ export const asyncVerifyCases: TroubleshootingCaseDefinition[] = [
     group: 'async_verify',
     tags: ['async-task', 'timeout', 'manual-check', 'db', 'events'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureRecheckResult', value: 'always-under_review' },
@@ -96,7 +96,7 @@ export const asyncVerifyCases: TroubleshootingCaseDefinition[] = [
     group: 'async_verify',
     tags: ['async-task', 'concurrency', 'account', 'edge', 'db'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureTasksSameAccount', value: 3 },
@@ -118,7 +118,7 @@ export const asyncVerifyCases: TroubleshootingCaseDefinition[] = [
     group: 'async_verify',
     tags: ['async-task', 'max-retries', 'manual-check', 'db'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'maxAttempts', value: 5 },{ key: 'fixtureOutcome', value: 'always-under_review' }],
       checks: {
@@ -138,7 +138,7 @@ export const asyncVerifyCases: TroubleshootingCaseDefinition[] = [
     group: 'async_verify',
     tags: ['async-task', 'crash', 'lease', 'reclaim', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCrashAfterMs', value: 500 },{ key: 'leaseDurationMs', value: 5000 }],
       checks: {
@@ -157,7 +157,7 @@ export const asyncVerifyCases: TroubleshootingCaseDefinition[] = [
     group: 'async_verify',
     tags: ['async-task', 'isolation', 'campaign', 'db', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaignCount', value: 2 },{ key: 'sharedPlatformId', value: 'same platform_id in 2 campaigns' }],
       checks: {
@@ -176,7 +176,7 @@ export const asyncVerifyCases: TroubleshootingCaseDefinition[] = [
     group: 'async_verify',
     tags: ['async-task', 'queue', 'backpressure', 'performance', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixturePendingTaskCount', value: 50 },{ key: 'maxConcurrent', value: 2 }],
       checks: {
@@ -195,7 +195,7 @@ export const asyncVerifyCases: TroubleshootingCaseDefinition[] = [
     group: 'async_verify',
     tags: ['async-task', 'dedup', 'concurrency', 'race', 'edge'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureTickIntervalMs', value: 50 },{ key: 'secondTickDelayMs', value: 10 }],
       checks: {

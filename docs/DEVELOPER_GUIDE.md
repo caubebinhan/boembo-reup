@@ -16,6 +16,9 @@ src/
        NodeDefinition.ts # Core types: NodeManifest, NodeConfigSchema, NodeExecutionContext
        NodeRegistry.ts  # Global node registry (auto-populated)
        NodeHelpers.ts   # Shared error handling: failGracefully, failBatchGracefully, setVideoStatus, isNetworkError, isDiskError
+   async-tasks/
+       types.ts         # AsyncTaskDocument, AsyncTaskHandler, AsyncTaskDecision interfaces
+       AsyncTaskRegistry.ts # Global handler registry (handlers self-register from their modules)
  nodes/                   # Node implementations (auto-discovered via import.meta.glob)
    _shared/
      timeWindow.ts    # Shared time-window utilities (normalizeTimeRanges, nextValidSlot)
@@ -24,14 +27,16 @@ src/
    video-scheduler/
    caption-generator/   # Generates captions from template (captionTemplate, removeHashtags, appendTags)
    tiktok-account-dedup/ # Per-account duplicate detection before publish (publish_history)
+   monitoring/          # Continuous re-scan node: polls sources, feeds new videos to scheduler
    tiktok-publisher/
-   ... (16 nodes total)
+   ... (17 nodes total)
  workflows/               # Versioned workflow packages (auto-discovered)
    tiktok-repost/
      v1.0/
        flow.yaml        # Pipeline definition (latest version cached by FlowLoader)
        recovery.ts      # Workflow-specific crash recovery logic (main)
        ipc.ts           # Workflow-specific IPC handlers (main)
+       services.ts      # Workflow-specific service setup (main auto-load)
        events.ts        # Workflow-specific event listeners (main)
        wizard.ts        # Wizard step configuration (renderer-side)
        card.tsx         # Campaign card component (renderer-side)
@@ -55,6 +60,7 @@ src/
      index.ts             # App entry: initDb, CrashRecovery, FlowLoader, FlowEngine, IPC setup
      services/
        CrashRecovery.ts           # On-startup: reset stuck jobs, delegate to per-workflow handlers
+       AsyncTaskScheduler.ts      # Background scheduler: DB-persisted async tasks, 30s tick
        ServiceHealthMonitor.ts    # Background service: periodic workflow URL pings, auto-pause on outage
        PublishAccountService.ts   # TikTok account management via BrowserWindow login
        BrowserService.ts          # Playwright browser pooling
@@ -67,8 +73,7 @@ src/
      tiktok/              # TikTok-specific modules (publisher, scanner)
      db/                  # SQLite database
          Database.ts      # Schema initialization (document-store)
-         models/          # TypeScript interfaces: Campaign, Job, Account, PublishHistory
-         repositories/    # BaseRepo + CampaignRepo, JobRepo, PublishHistoryRepo, etc.
+         repositories/    # BaseRepo + CampaignRepo, JobRepo, AsyncTaskRepo, PublishHistoryRepo, etc.
 ```
 
 > Workflow auto-discovery in `src/workflows/index.ts` is **main-process only** and scans versioned modules (`src/workflows/*/v*/recovery.ts`, `ipc.ts`, `services.ts`, `events.ts`) so multiple workflow versions can coexist.
@@ -119,6 +124,8 @@ interface NodeExecutionResult {
 interface NodeManifest {
   id: string                           // e.g. 'tiktok.scanner', 'core.video_scheduler'
   name: string
+  label?: string                       // Short display label (falls back to name)
+  color?: string                       // Hex color for visualizer node card
   category: 'source' | 'filter' | 'transform' | 'publish' | 'control'
   icon?: string
   description?: string
@@ -181,6 +188,8 @@ All domain data is stored as JSON documents (`data_json` column). Only fields ne
 | `id` | TEXT PK | Random 8-char hex ID |
 | `data_json` | TEXT (JSON) | Full `CampaignDocument` includes `name`, `workflow_id`, `workflow_version`, `status`, `params`, `videos[]`, `alerts[]`, `counters`, `meta`, `last_processed_index`, `flow_snapshot` |
 | `created_at` / `updated_at` | INTEGER | Unix timestamps (denormalized for sorting) |
+
+> `params` also includes `last_scan_times: Record<string, number>` — written by `core.monitoring` to track per-source last-scan timestamps across monitoring cycles.
 
 **`CampaignDocument` structure** (embedded in `data_json`):
 ```typescript
@@ -246,6 +255,25 @@ All domain data is stored as JSON documents (`data_json` column). Only fields ne
 | `updated_at` | INTEGER | Unix timestamp |
 
 > Used by `SettingsRepo` / `AppSettingsService` for global key-value app settings.
+
+### `async_tasks` table
+| Column | Type | Description |
+|---|---|---|
+| `id` | TEXT PK | UUID |
+| `data_json` | TEXT (JSON) | Full `AsyncTaskDocument` |
+| `task_type` | TEXT | Handler type key (e.g. `'tiktok.publish.verify'`) |
+| `status` | TEXT | `pending` / `claimed` / `running` / `completed` / `failed` / `timed_out` / `cancelled` |
+| `dedupe_key` | TEXT | UNIQUE active guard — prevents scheduling duplicate tasks |
+| `concurrency_key` | TEXT | Groups tasks for max-concurrency enforcement |
+| `campaign_id` | TEXT | Indexed for per-campaign queries |
+| `owner_key` | TEXT | Grouping key (e.g. `'campaign:{id}:publisher'`) |
+| `worker_id` | TEXT | Which `AsyncTaskScheduler` instance claimed it |
+| `next_run_at` | INTEGER | ms timestamp — scheduler polls this |
+| `lease_until` | INTEGER | ms timestamp — expired leases are reclaimed on startup / tick |
+| `attempt` | INTEGER | Incremented atomically on claim |
+| `created_at` / `updated_at` | INTEGER | Unix timestamps |
+
+> Managed by `AsyncTaskScheduler` + `AsyncTaskRepo`. Handlers self-register via `asyncTaskRegistry.register()` from their own modules.
 
 ---
 
@@ -478,12 +506,14 @@ src/workflows/my-workflow/
     |-- flow.yaml        # Required: pipeline definition
     |-- recovery.ts      # Optional: crash recovery handler (main auto-load)
     |-- ipc.ts           # Optional: workflow-specific IPC handlers (main auto-load)
-    |-- services.ts      # Optional: workflow-specific service setup (main auto-load)
+    |-- services.ts      # Optional: workflow-specific service/background setup (main auto-load)
     |-- events.ts        # Optional: workflow-specific event listeners (main auto-load)
     |-- wizard.tsx       # Optional: wizard step config (renderer auto-discovery)
     |-- card.tsx         # Optional: campaign list card (renderer auto-discovery)
     `-- detail.tsx       # Optional: campaign detail view (renderer auto-discovery)
 ```
+
+> **`services.ts`** is the right place for workflow-level background setup (e.g. registering `AsyncTaskHandler` types for deferred verification). It runs once on startup via the workflow auto-discovery barrel.
 
 ### flow.yaml Structure
 
@@ -565,6 +595,7 @@ edges:
 | `core.caption_gen` | transform | Generate caption from template | `captionTemplate`, `removeHashtags`, `appendTags` |
 | `tiktok.account_dedup` | filter | Per-account duplicate check via publish_history (exact + AV similarity) | |
 | `tiktok.publisher` | publish | Publish video to TikTok | `selectedAccounts`, `privacy` |
+| `core.monitoring` | control | Continuous re-scan loop: sleep → scan sources for new videos → return to scheduler | `monitorIntervalMinutes` (default 5) |
 | `core.timeout` | control | Wait N minutes between videos | `intervalMinutes`, `enableJitter` |
 | `core.limit` | filter | Limit number of items | `maxVideos` |
 | `core.condition` | control | Branch on expression | `expression` (supports inline node `params` via merged `ctx.params`) |
@@ -574,10 +605,17 @@ edges:
 | `core.loop` | control | Iterate over items array, run children per item (FlowEngine special-case; no `src/nodes` manifest) | - |
 | `core.file_source` | source | Load videos from local files | - |
 
-> **Note:** `tiktok-repost` (`v1.0`) loop child order is:
-> `check_time_1` -> `dedup_1` -> `downloader_1` -> `caption_1` -> `account_dedup_1` -> `publisher_1`
->
-> After loop completion, it branches via `cond_mode_check_1` to `monitor_1` or `finish_1`. Desktop notifications are handled by `src/workflows/tiktok-repost/v1.0/events.ts` (listening to `node:event`), not by `core.notify` nodes in YAML.
+> **`tiktok-repost` v1.0 pipeline (actual flow.yaml):**
+> ```
+> start_gate (check_in_time) → scanner_1 → scheduler_1 → video_loop
+>   Loop children: check_time_1 → dedup_1 → downloader_1 → caption_1 → account_dedup_1 → publisher_1
+> video_loop → cond_mode_check_1
+>   → [branch=true]  monitor_1 → scheduler_1   (continuous mode)
+>   → [branch=false] finish_1                   (history-only / custom range with endDate)
+> ```
+> `start_gate` runs a time-window check **before** the scanner (guards the whole pipeline against off-hours starts).
+> `cond_mode_check_1` evaluates whether any source has `timeRange !== 'history_only'` and is not a closed custom range — if true, feeds `monitor_1` which continuously polls for new videos.
+> Desktop notifications are handled by `src/workflows/tiktok-repost/v1.0/events.ts` (listening to `node:event`), not by `core.notify` nodes in YAML.
 
 ---
 
@@ -679,19 +717,80 @@ The publisher emits structured `node:event` logs/UI events (e.g. `captcha:detect
 
 ```
 app.whenReady() -> 
-  1. initDb()                           # Create SQLite tables (IF NOT EXISTS)
+  1. initDb()                           # Create SQLite tables (IF NOT EXISTS); WAL mode enabled
   2. CrashRecoveryService.recoverPendingTasks()  # Fix stuck jobs, delegate to workflow handlers
   3. flowLoader.loadAll(workflowsDir)    # Scan + parse flow.yaml (incl. health_checks)
   4. flowEngine.start()                  # Begin 5s polling loop
   5. serviceHealthMonitor.start()        # Background URL pinger (60s interval)
-  6. setup*IPC()                         # Register all IPC handlers
-  7. createWindow()                      # Launch Electron BrowserWindow
-  8. SplashScreen                        # Sequential health checks before app shows
+  6. asyncTaskScheduler.start()          # Reclaim expired leases; begin 30s async-task tick
+  7. setup*IPC()                         # Register all IPC handlers
+  8. protocol.handle('local-thumb', ...) # Serve local thumbnail files via custom Electron scheme
+  9. createWindow()                      # Launch Electron BrowserWindow
+  10. SplashScreen                       # Sequential health checks before app shows
 ```
 
 The `import '../workflows'` barrel in `index.ts` auto-imports workflow main-process modules from versioned folders (`*/v*/recovery.ts`, `ipc.ts`, `services.ts`, `events.ts`) which register themselves (e.g. `CrashRecoveryService.registerRecovery(workflowId, { recover })`).
 
-> **Note:** Node auto-discovery happens at import time (`import '../nodes'` in `index.ts`), which uses `import.meta.glob('./**/index.ts', { eager: true })` to find and register all 16 nodes.
+> **`local-thumb://` custom protocol**: Electron's `webSecurity` blocks `file://` access to local thumbnails from the renderer. A custom `local-thumb://` scheme (registered as privileged before `app.ready`) proxies requests via `net.fetch` → `file:///...`. Used by thumbnail `<img>` tags in campaign detail views.
+
+> **Note:** Node auto-discovery happens at import time (`import '../nodes'` in `index.ts`), which uses `import.meta.glob('./**/index.ts', { eager: true })` to find and register all 17 nodes.
+
+---
+
+## Async Task Scheduler
+
+`AsyncTaskScheduler` (`src/main/services/AsyncTaskScheduler.ts`) is a generic, DB-persisted background task system. It handles deferred / retryable work that should survive app crashes (e.g. post-publish verification).
+
+| Feature | Detail |
+|---|---|
+| **Tick interval** | Every 30s |
+| **Lease duration** | 5 min default (handlers can extend via `heartbeat.extend()`) |
+| **Max retries** | 6 attempts default (exponential backoff on failure) |
+| **Concurrency** | Per `concurrencyKey` max-concurrent enforcement |
+| **Deduplication** | UNIQUE active guard on `dedupe_key` prevents double-scheduling |
+| **Prune** | Old terminated tasks pruned every 1h (older than 7 days) |
+| **Crash recovery** | Expired leases reclaimed on `start()` and every tick |
+
+### Writing an AsyncTask Handler
+
+```typescript
+import { asyncTaskRegistry } from '@core/async-tasks'
+import type { AsyncTaskHandler } from '@core/async-tasks/types'
+
+const myHandler: AsyncTaskHandler = {
+  taskType: 'my.task.type',
+  estimatedMaxExecutionMs: 120_000,
+
+  validate(payload, version) {
+    if (!payload.videoId) return 'Missing videoId'
+    return null
+  },
+
+  async execute(task, heartbeat) {
+    heartbeat.extend()  // Reset lease timer for long ops
+    // ... do work ...
+    return { action: 'complete', result: { ok: true } }
+    // Or: { action: 'reschedule', nextRunAt: Date.now() + 60_000, patchState: { cursor: 42 } }
+    // Or: { action: 'fail', error: 'reason', retryable: true }
+  },
+}
+
+asyncTaskRegistry.register(myHandler)
+```
+
+Register handlers in your workflow's `services.ts` so they are loaded at startup.
+
+### Scheduling a Task from a Node
+
+```typescript
+// ctx.asyncTasks is available in NodeExecutionContext
+const { taskId, created } = ctx.asyncTasks.schedule('my.task.type', payload, {
+  dedupeKey: `my.task:${ctx.campaign_id}:${videoId}`,  // Prevents duplicates
+  campaignId: ctx.campaign_id,
+  retryIntervalMs: 60_000,
+  maxAttempts: 6,
+})
+```
 
 ---
 

@@ -1,3 +1,5 @@
+import { resetWorkflowVersionFilters, selectRunByTitle } from './helpers.mjs'
+
 /** @type {import('../types.mjs').E2ECaseDefinition} */
 export const sentryFeedbackLinksCase = {
   id: 'e2e.troubleshooting.sentry.feedback-links-visible',
@@ -13,6 +15,8 @@ export const sentryFeedbackLinksCase = {
     ],
   },
   run: async ({ page, assert }) => {
+    await resetWorkflowVersionFilters(page)
+    await selectRunByTitle(page, 'Fixture Publish Failed Run')
     await page.getByRole('button', { name: 'Send To Sentry' }).click()
     const eventLink = page.getByRole('link', { name: 'Open Sentry Event' })
     const issueLink = page.getByRole('link', { name: 'Open Sentry Issue Search' })

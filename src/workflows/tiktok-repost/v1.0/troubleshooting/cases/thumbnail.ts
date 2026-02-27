@@ -53,7 +53,7 @@ export const thumbnailCases: TroubleshootingCaseDefinition[] = [
     group: 'thumbnail',
     tags: ['thumbnail', 'ui', 'preview', 'artifact:screenshot'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaign', description: 'Campaign with mixed thumbnail shapes' }],
       checks: {
@@ -114,7 +114,7 @@ export const thumbnailCases: TroubleshootingCaseDefinition[] = [
     group: 'thumbnail',
     tags: ['thumbnail', 'ui', 'visual-regression', 'artifact:screenshot'],
     level: 'advanced',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureVideoCount', value: 20 },

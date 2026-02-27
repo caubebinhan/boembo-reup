@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": 1772176008301,
-  "total": 63,
+  "generatedAt": 1772180544314,
+  "total": 141,
   "entries": [
     {
       "id": "dashboard-verify",
@@ -122,20 +122,39 @@
       "group": "async_verify",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-778f04ed36ef0c1e",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.async-verify.cross-worker-dedup-safety",
+      "title": "Async Verify Cross-Worker Dedup Safety",
+      "description": "Two scheduler ticks fire nearly simultaneously; only one worker successfully claims each task due to atomic lease.",
+      "category": "async_verify",
+      "group": "async_verify",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-9d35e05eb671bcb4",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.async-verify.dedupe-active-task",
@@ -145,20 +164,18 @@
       "group": "async_verify",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-41f28500c5534942",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.async-verify.lease-reclaim",
@@ -168,20 +185,39 @@
       "group": "async_verify",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-e35bdfc391506206",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.async-verify.max-retries-exceeded-manual-fallback",
+      "title": "Async Verify Max Retries Exceeded → Manual Fallback",
+      "description": "Verify task exceeds maxAttempts; task transitions to manual_check and UI surfaces actionable next steps.",
+      "category": "async_verify",
+      "group": "async_verify",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-399eebcb362b250a",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.async-verify.nonblocking-smoke",
@@ -191,20 +227,60 @@
       "group": "async_verify",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-3b7f87f786b1bd40",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.async-verify.queue-backpressure",
+      "title": "Async Verify Queue Backpressure (Many Pending Tasks)",
+      "description": "50+ pending verify tasks queue up; verify scheduler processes them sequentially per concurrency key without memory spike or starvation.",
+      "category": "async_verify",
+      "group": "async_verify",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-990cf873fc4eaddf",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.async-verify.result-persisted-correct-campaign",
+      "title": "Async Verify Result Persisted to Correct Campaign",
+      "description": "Background verify completion updates the correct campaign video, not another campaign with similar platform_id.",
+      "category": "async_verify",
+      "group": "async_verify",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-6f7744a4614897a4",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.async-verify.timeout-manual-check",
@@ -214,20 +290,81 @@
       "group": "async_verify",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-91281dce9cce1961",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.async-verify.worker-crash-mid-verify",
+      "title": "Async Verify Worker Crash Mid-Verification",
+      "description": "Worker crashes while verifying; verify lease expiry and task reclaim resets state correctly for next worker.",
+      "category": "async_verify",
+      "group": "async_verify",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-e32a9e5107bd7b94",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.campaign.all-videos-failed-terminal",
+      "title": "Campaign Terminal: All Videos Failed",
+      "description": "Every video in campaign transitions to failed; verify campaign auto-stops, alert fires, and status is final/failed.",
+      "category": "campaign",
+      "group": "campaign",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-4f0fa4eb2d85e9a6",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.campaign.completed-immutability",
+      "title": "Completed Campaign is Immutable",
+      "description": "Completed/finished campaign cannot be triggered again; any re-trigger attempt is rejected with clear error.",
+      "category": "campaign",
+      "group": "campaign",
+      "risk": "safe",
+      "level": "basic",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-cf9542debaa09a58",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.campaign.concurrent-save-race-smoke",
@@ -237,20 +374,18 @@
       "group": "campaign",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-3961e99a78b8d06d",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.campaign.create-smoke",
@@ -266,6 +401,27 @@
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-09d071f4b4970dc7",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.campaign.delete-while-running",
+      "title": "Campaign Delete While Running",
+      "description": "User deletes campaign while FlowEngine has an active job; verify engine stops gracefully and campaign document is cleaned up.",
+      "category": "campaign",
+      "group": "campaign",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-5d0342200552bc93",
       "todos": [
         "Keep runner branch stable and keep output summary deterministic.",
         "Keep artifact payload compatible with Debug tab preview.",
@@ -295,6 +451,90 @@
       "status": "runnable"
     },
     {
+      "id": "tiktok-repost-v1.campaign.edit-params-while-running",
+      "title": "Campaign Params Edited While Running",
+      "description": "User edits campaign interval while a job is in progress; verify running job uses old params, next job uses updated params.",
+      "category": "campaign",
+      "group": "campaign",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-8217b4763b83c12e",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.campaign.multi-campaign-same-source",
+      "title": "Multiple Campaigns Scanning Same Source Channel",
+      "description": "Two active campaigns both scan the same @channel; verify no cross-contamination of video rows.",
+      "category": "campaign",
+      "group": "campaign",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-f9fef22fbd8c498c",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.campaign.scheduler-missed-window-auto-reschedule",
+      "title": "Campaign Scheduler: Missed Window Auto-Reschedule on Boot",
+      "description": "App restarts after scheduled_for is in the past; FlowEngine reschedules missed jobs from now without skipping.",
+      "category": "campaign",
+      "group": "campaign",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-46fa351d469825a1",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.campaign.stats-counter-integrity",
+      "title": "Campaign Stats Counter Integrity on Concurrent Updates",
+      "description": "Concurrent publish completions update published_count; verify counter reflects exact total without missed increments or double-counts.",
+      "category": "campaign",
+      "group": "campaign",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-da6825503669e116",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
       "id": "tiktok-repost-v1.campaign.trigger-pause-resume",
       "title": "Campaign Trigger / Pause / Resume",
       "description": "Trigger campaign, pause, resume, and verify jobs/campaign status transitions stay consistent.",
@@ -302,20 +542,39 @@
       "group": "campaign",
       "risk": "safe",
       "level": "intermediate",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-872c960b8d61613f",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.campaign.video-status-transitions-valid",
+      "title": "Campaign Video Status Transitions: Valid State Machine",
+      "description": "Verify all allowed status transitions (queued→published, queued→failed, under_review→published, etc.) occur correctly; invalid transitions are rejected.",
+      "category": "campaign",
+      "group": "campaign",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-27912b464664825c",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.caption.generated-override",
@@ -381,6 +640,27 @@
       "status": "runnable"
     },
     {
+      "id": "tiktok-repost-v1.compat.db-schema-forward-compat-new-field",
+      "title": "Compat: DB Schema Forward Compat — Unknown Fields Survive Round-Trip",
+      "description": "Future version writes extra fields to campaign data_json; current version loads and saves without stripping unknown fields.",
+      "category": "compat",
+      "group": "compat",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-8ea6ccb6b03587bc",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
       "id": "tiktok-repost-v1.compat.flow-snapshot-version-lock",
       "title": "Compat: Flow Snapshot Version Lock",
       "description": "Old campaign with frozen flow_snapshot continues to run after code changes without version drift.",
@@ -388,20 +668,81 @@
       "group": "compat",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-9522b59ab2f49ecf",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.compat.multi-workflow-coexistence",
+      "title": "Compat: tiktok-repost@1.0 and upload-local@1.0 Coexist",
+      "description": "Both workflow types run simultaneously; verify no shared mutable state, duplicate event listeners, or job queue cross-contamination.",
+      "category": "compat",
+      "group": "compat",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-eba49647a7771d42",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.compat.old-campaign-rerun-after-code-update",
+      "title": "Compat: Existing Campaign Re-runs After Workflow Code Update",
+      "description": "Deploy a workflow code update; existing active campaign re-triggers and completes without schema mismatch or runtime error.",
+      "category": "compat",
+      "group": "compat",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-9e1bcf8f8ff802b5",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.compat.orphan-async-tasks-deleted-video",
+      "title": "Compat: Orphan Async Tasks After Campaign Video Deleted",
+      "description": "Video row deleted from campaign while async verify task is pending; verify task cleanup or skip-on-missing behavior.",
+      "category": "compat",
+      "group": "compat",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-fa0944f882c16aa1",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.compat.params-defaults-upgrade",
@@ -411,20 +752,18 @@
       "group": "compat",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-e7283877a64b3961",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.compat.workflow-catalog-dynamic-discovery",
@@ -434,20 +773,18 @@
       "group": "compat",
       "risk": "safe",
       "level": "intermediate",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-04ffbde7ce246362",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.debug-panel.workflow-filter-smoke",
@@ -478,20 +815,648 @@
       "group": "campaign",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-260d80c1ce46e469",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.cache-etag-304-revalidation",
+      "title": "Network: Cache ETag 304 Revalidation Path",
+      "description": "304 responses should reuse cached payload deterministically and maintain checksum consistency.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-dde198c6983ca572",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.cancel-inflight-on-campaign-pause",
+      "title": "Network: Cancel Inflight Requests on Campaign Pause",
+      "description": "Pausing campaign should abort inflight network requests and prevent stale callbacks after pause.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-65b7e9b4e0d31e3a",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.circuit-breaker-half-open-recovery",
+      "title": "Network: Circuit Breaker Half-Open Recovery",
+      "description": "After cooldown, half-open probe succeeds and circuit returns to closed state without dropping queued items.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-189a798c25bc50a0",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.circuit-breaker-open-on-repeated-failures",
+      "title": "Network: Circuit Breaker Opens on Repeated Failures",
+      "description": "Repeated network failures should open circuit breaker and fast-fail new attempts during cooldown period.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-0b7b0b240fc5e963",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.clock-skew-retry-after-clamp",
+      "title": "Network: Retry-After Clock Skew Clamp",
+      "description": "Negative retry delays due to clock skew should clamp to minimum safe delay instead of immediate spin-loop.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-66fd2a1c45273c6e",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.connection-reset-mid-upload",
+      "title": "Network: Connection Reset Mid Upload",
+      "description": "ECONNRESET during upload should produce resumable retry path or deterministic terminal failure.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-b5c4cccb09df31cf",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.content-length-mismatch-corruption-guard",
+      "title": "Network: Content-Length Mismatch Corruption Guard",
+      "description": "Received bytes mismatch declared content-length should flag corruption and block downstream parsing/publish.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-95130b49b07010e6",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.dns-resolution-failure-failover",
+      "title": "Network: DNS Resolution Failure with Failover",
+      "description": "ENOTFOUND or EAI_AGAIN errors should classify as DNS issues and trigger endpoint failover where configured.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-70027b677ee12dc0",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.dual-stack-ipv6-to-ipv4-fallback",
+      "title": "Network: Dual Stack IPv6 to IPv4 Fallback",
+      "description": "IPv6 connection failures should fallback to IPv4 path where supported and preserve request id.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-0a41fec8bcd84717",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.global-rate-limit-shared-account-throttle",
+      "title": "Network: Global Rate Limit Shared Account Throttle",
+      "description": "Multiple flows using same account respect shared throttle budget to prevent burst violations.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-0313a8f008867e4c",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.http-429-retry-after",
+      "title": "Network: HTTP 429 Retry-After Handling",
+      "description": "Retry-After header drives pause duration for rate-limited requests and respects global throttle state.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-a6426d269fe564c6",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.http-503-exponential-backoff",
+      "title": "Network: HTTP 503 Exponential Backoff",
+      "description": "Transient 503 responses should trigger bounded exponential backoff with retry budget enforcement.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-200832daf1614727",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.http2-goaway-retry-path",
+      "title": "Network: HTTP/2 GOAWAY Retry Path",
+      "description": "GOAWAY frames should trigger safe connection recycle and idempotent retry on a new stream.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-242f44d17db152ec",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.idempotency-key-dedupe-on-retry",
+      "title": "Network: Idempotency Key Dedupe on Retry",
+      "description": "Repeated requests after timeout should reuse idempotency key and avoid duplicate remote writes.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-036c53b893df9d17",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.jitter-seed-deterministic-retry-order",
+      "title": "Network: Deterministic Retry Order via Seeded Jitter",
+      "description": "Given same random seed, retry delay sequence remains deterministic to support reproducible debugging.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-9975be0365499010",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.multipart-chunk-resume-after-failure",
+      "title": "Network: Multipart Chunk Resume After Failure",
+      "description": "Chunk upload failures resume from last committed chunk and do not restart full payload when resumable mode is enabled.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-2b98a1fdffe612c9",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.offline-preflight-block",
+      "title": "Network: Offline Preflight Block",
+      "description": "Connectivity preflight should block publish/scan execution when host is offline and emit actionable message.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-1220d758a5815578",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.packet-loss-progress-stall-detect",
+      "title": "Network: Packet Loss Progress Stall Detection",
+      "description": "High packet loss can stall progress updates; watchdog should detect stall and trigger timeout policy.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-4b0c7a979acdd32e",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.partial-json-response-guard",
+      "title": "Network: Partial JSON Response Guard",
+      "description": "Truncated JSON payloads from network path should fail safely with parser diagnostics and raw payload preview.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-236c24469d3f5748",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.proxy-auth-required-407",
+      "title": "Network: Proxy Auth Required (407)",
+      "description": "Proxy authentication failures should stop early with explicit proxy diagnostics and no hidden retries.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-0d96e7a0579e5e41",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.proxy-pool-failover-rotation",
+      "title": "Network: Proxy Pool Failover Rotation",
+      "description": "Bad proxy endpoints rotate out after threshold and fallback to healthy endpoint without blocking campaign.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-f6dd7723838c5022",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.redirect-loop-detection",
+      "title": "Network: Redirect Loop Detection",
+      "description": "Redirect loops should terminate after limit with explicit error classification and final URL chain artifact.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-ec4068971859c2e5",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.retry-budget-exhaustion-terminal",
+      "title": "Network: Retry Budget Exhaustion Terminal Path",
+      "description": "Retry budget exhaustion transitions to terminal failed state with complete retry timeline in logs.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-2e58727417024f94",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.schema-drift-missing-required-field",
+      "title": "Network: Response Schema Drift Missing Required Field",
+      "description": "Missing required API fields should trigger schema drift classification and avoid downstream null crashes.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-77b82989e167f8ab",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.slow-start-first-byte-timeout",
+      "title": "Network: Slow Start First-Byte Timeout",
+      "description": "Server accepts connection but never returns first byte; first-byte timeout should abort with clear diagnostics.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-d5063eac01a1988a",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.tls-handshake-failure-classification",
+      "title": "Network: TLS Handshake Failure Classification",
+      "description": "TLS handshake errors should not be misclassified as selector/auth failures and must include cert context.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-8d7ff6778742ffc9",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.upload-connection-drain-timeout",
+      "title": "Network: Upload Connection Drain Timeout",
+      "description": "Connection drains too slowly after body upload; timeout path should not mark success before server ack.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-a1b7ab5877ceb1a9",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.upload-timeout-midstream",
+      "title": "Network: Upload Timeout Midstream",
+      "description": "Upload stalls midstream; retry policy should recover or fail cleanly with stage-aware diagnostics.",
+      "category": "network",
+      "group": "network",
+      "risk": "real_publish",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-93707540a5a590af",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.upload-timeout-retry-jitter",
+      "title": "Network: Upload Timeout Retry with Jitter",
+      "description": "Consecutive upload timeouts should apply jittered retry delays to avoid synchronized retry storms.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-1bdbae9b7b455a76",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.network.websocket-disconnect-reconnect",
+      "title": "Network: WebSocket Disconnect/Reconnect Sequence",
+      "description": "Socket transport drops should reconnect within retry policy and preserve event ordering guarantees.",
+      "category": "network",
+      "group": "network",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-8d4d8ffd2dcb60c7",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.publish.captcha-event",
@@ -507,6 +1472,98 @@
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-a37bdeb75c601aed",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.publish.caption-hashtag-injection",
+      "title": "Publish Caption Hashtag Injection from Template",
+      "description": "Caption template includes [Tags] placeholder; verify hashtag list is injected and appears in final submitted caption.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "real_publish",
+      "level": "basic",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-26ef15e3d534c171",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.publish.caption-too-long-truncate",
+      "title": "Publish Caption Exceeds TikTok 2200-Char Limit",
+      "description": "Caption derived from template or source description exceeds TikTok character limit; verify truncation and publish still succeeds.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "real_publish",
+      "level": "intermediate",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-3e221c45fefad60d",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.publish.concurrent-account-limit",
+      "title": "Publish Concurrent Account Limit (Same Video × N Accounts)",
+      "description": "Campaign has 3 accounts; same video publishes to all 3 sequentially respecting per-account concurrency keys.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "real_publish",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-e0a0cb853c0d7062",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.publish.cookie-refresh-mid-publish",
+      "title": "Publish: Cookie Refresh Triggers Mid-Upload",
+      "description": "TikTok redirects to re-auth partway through upload session; publisher detects redirect and surfaces session-expired instead of upload error.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "real_publish",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-e4502e2e985de826",
       "todos": [
         "Implement runner branch and wire caseId dispatch.",
         "Add deterministic fixture/setup for reproducible debug reruns.",
@@ -563,6 +1620,52 @@
       "status": "planned"
     },
     {
+      "id": "tiktok-repost-v1.publish.dedup-cross-account",
+      "title": "Publish Dedup: Same Source Video Across Multiple Accounts",
+      "description": "Dedup check is per-account; same source video can be published to account A but skip if already published to account B same day.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-859e48c0f977d51d",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.publish.disk-space-insufficient",
+      "title": "Publish Fails — Insufficient Disk Space",
+      "description": "Download phase detects low disk space before writing video file; campaign fails gracefully with user-facing alert.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-fe28f7cb9c7f1b95",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
       "id": "tiktok-repost-v1.publish.duplicate-dedup",
       "title": "Publish Dedup Duplicate Detection",
       "description": "Duplicate source/fingerprint should skip upload and emit duplicate status/event with existing URL.",
@@ -586,6 +1689,98 @@
       "status": "planned"
     },
     {
+      "id": "tiktok-repost-v1.publish.network-timeout-upload",
+      "title": "Publish Network Timeout During Upload",
+      "description": "Network drops mid-upload; engine retries or marks failed cleanly without partial corrupt publish_history row.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-88326fd093e2d8ba",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.publish.overlapping-schedule-coalesce",
+      "title": "Publish Overlapping Schedule Slots Coalesce",
+      "description": "Two schedule slots compute the same publish time concurrently; engine deduplicates and executes only once.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-6208d9656bbd12a4",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.publish.post-publish-view-count-zero",
+      "title": "Publish: Post-Publish View Count Initially 0",
+      "description": "Immediately after publish, view/like/comment counts start at 0; verify rescan later updates counters without duplicating video row.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-d13313b619caa471",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.publish.privacy-mode-propagation",
+      "title": "Publish Privacy Mode Propagation (Public/Friends/Private)",
+      "description": "Campaign privacy param propagates correctly to TikTok Studio upload form; verify all three modes are selectable.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "real_publish",
+      "level": "intermediate",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-a76a00979c1a19d1",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
       "id": "tiktok-repost-v1.publish.public-path",
       "title": "Publish Path (Public Immediate)",
       "description": "Publish returns public immediately; publish_history, counters, and UI status all update correctly.",
@@ -599,6 +1794,29 @@
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-785753b247fae1f6",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.publish.selector-drift-upload-button",
+      "title": "Publish Selector Drift — Upload Button Not Found",
+      "description": "TikTok Studio changes \"Post\" button selector; publisher fails with clear selector-drift error and dumps diagnostic HTML + screenshot.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-92980a0429ad20ef",
       "todos": [
         "Implement runner branch and wire caseId dispatch.",
         "Add deterministic fixture/setup for reproducible debug reruns.",
@@ -655,6 +1873,29 @@
       "status": "planned"
     },
     {
+      "id": "tiktok-repost-v1.publish.upload-progress-hang",
+      "title": "Publish Upload Progress Stalls (Hang Detection)",
+      "description": "Upload progress indicator freezes at <100% for >60s; publisher times out and surfaces recoverable error.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "real_publish",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-9e87ebb6fe771344",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
       "id": "tiktok-repost-v1.publish.verification-incomplete-path",
       "title": "Publish Path (verification_incomplete)",
       "description": "Force verification_incomplete branch and ensure it does not regress into under_review behavior.",
@@ -668,6 +1909,52 @@
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-2000cf738486943f",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.publish.video-file-corrupted",
+      "title": "Publish Fails — Video File Corrupted (Below Min Size)",
+      "description": "Downloaded video file is < 50KB; publisher rejects upload attempt and marks video for re-download or failed.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-1e16f7326e4597e5",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.publish.video-file-not-found",
+      "title": "Publish Fails — Video File Missing at Publish Time",
+      "description": "Local video file was deleted between download and publish step; publisher detects missing file and marks job failed.",
+      "category": "publish",
+      "group": "publish",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-2fb46b9939987a8c",
       "todos": [
         "Implement runner branch and wire caseId dispatch.",
         "Add deterministic fixture/setup for reproducible debug reruns.",
@@ -701,6 +1988,132 @@
       "status": "planned"
     },
     {
+      "id": "tiktok-repost-v1.recovery.boot-job-audit-stale-cleanup",
+      "title": "Boot Job Audit: Stale Running Jobs Cleaned Up",
+      "description": "On boot, jobs still in running state from crashed session are detected; verify they are reset to failed or re-queued with TTL check.",
+      "category": "recovery",
+      "group": "recovery",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-15b4428030317172",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.corrupted-campaign-doc",
+      "title": "Recovery: Corrupted Campaign Document",
+      "description": "Campaign data_json is invalid JSON or has null required fields; recovery detects and quarantines the document without crashing other campaigns.",
+      "category": "recovery",
+      "group": "recovery",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-f241011e5111e970",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.crash-mid-download",
+      "title": "Recovery: Crash During Video Download",
+      "description": "App crashes while downloading video file (partial file on disk); recovery detects partial file, deletes it, and re-queues video.",
+      "category": "recovery",
+      "group": "recovery",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-9d2ad00b10274318",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.db-lock-during-recovery",
+      "title": "Recovery: DB Locked During Recovery Write",
+      "description": "Another process holds DB write lock during recovery; verify recovery retries gracefully instead of crashing.",
+      "category": "recovery",
+      "group": "recovery",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-65c04ed5b45a6361",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.failed-counter-drift",
+      "title": "Recovery: failed_count Counter Drift After Rescheduling",
+      "description": "Recovery resets under_review videos to queued; verify failed_count counter is not double-counted when those videos later fail again.",
+      "category": "recovery",
+      "group": "recovery",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-ead5152534ac4b48",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.idempotent-second-run",
+      "title": "Recovery is Idempotent on Repeated Runs",
+      "description": "Run boot recovery twice in a row; second run produces no additional state changes.",
+      "category": "recovery",
+      "group": "recovery",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-13dc2a8547a4e514",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
       "id": "tiktok-repost-v1.recovery.missed-scheduled-videos",
       "title": "Recovery Reschedules Missed Videos",
       "description": "Crash recovery detects past-due queued videos and reschedules them from now with interval spacing.",
@@ -708,20 +2121,39 @@
       "group": "recovery",
       "risk": "safe",
       "level": "intermediate",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-ef1c0eff2dbea644",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.multi-campaign-parallel-recovery",
+      "title": "Recovery: Multiple Campaigns Recover in Parallel",
+      "description": "Boot recovery runs on 5 campaigns simultaneously; verify no cross-campaign mutation or deadlock.",
+      "category": "recovery",
+      "group": "recovery",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": true,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-d02a58a05664695b",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.recovery.reset-under-review",
@@ -731,20 +2163,18 @@
       "group": "recovery",
       "risk": "safe",
       "level": "intermediate",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-606b138253fb5164",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.recovery.stuck-running-job-diagnostic",
@@ -754,12 +2184,33 @@
       "group": "recovery",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-420945a6c75f4a51",
+      "todos": [
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
+      ],
+      "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.author-filter-keyword-search",
+      "title": "Scan Author Filter on Keyword Search",
+      "description": "Keyword scan produces videos from multiple creators; author filter configured to exact @handle reduces to expected subset.",
+      "category": "scan",
+      "group": "scan",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-8790cf9bec2aa2a4",
       "todos": [
         "Implement runner branch and wire caseId dispatch.",
         "Add deterministic fixture/setup for reproducible debug reruns.",
@@ -791,6 +2242,29 @@
       "status": "runnable"
     },
     {
+      "id": "tiktok-repost-v1.scan.duplicate-sources-same-campaign",
+      "title": "Scan Duplicate Sources in Same Campaign",
+      "description": "Campaign has two identical source channels; verify scanner deduplicates scanned videos at ingestion, not just display.",
+      "category": "scan",
+      "group": "scan",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-170bb5b258fa6e68",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
       "id": "tiktok-repost-v1.scan.empty-channel",
       "title": "Channel Scan Empty Result",
       "description": "Source scan returns zero videos and workflow exits/alerts gracefully without crashing.",
@@ -810,6 +2284,29 @@
         "Keep fingerprint stable unless case identity changes."
       ],
       "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.filter-combination-exclusive",
+      "title": "Scan Filter Combination: minViews + maxViews Excludes All",
+      "description": "minViews=9000 and maxViews=1000 (impossible range); scanner returns nothing and logs the contradiction without crashing.",
+      "category": "scan",
+      "group": "scan",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-01fdd8d460ee4408",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
     },
     {
       "id": "tiktok-repost-v1.scan.filter-thresholds-fixture",
@@ -833,6 +2330,121 @@
       "status": "runnable"
     },
     {
+      "id": "tiktok-repost-v1.scan.keyword-multi-source-merge",
+      "title": "Scan Multiple Sources: Keyword + Channel Merge",
+      "description": "Campaign has both a keyword source and a channel source; results merge correctly with dedup by platform_id.",
+      "category": "scan",
+      "group": "scan",
+      "risk": "safe",
+      "level": "intermediate",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-b6c984bb0c194e7f",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.large-history-limit",
+      "title": "Scan Large historyLimit (500+)",
+      "description": "historyLimit set to 500; verify pagination continues to final page without infinite loop or memory spike.",
+      "category": "scan",
+      "group": "scan",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-bca9cfa66aceb274",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.partial-page-load-incomplete",
+      "title": "Scan Partial Page Load (Slow Connection)",
+      "description": "TikTok page loads partially (JS timeout); scanner detects incomplete page and retries or exits cleanly.",
+      "category": "scan",
+      "group": "scan",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-b10b035df9c78d05",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.private-account-zero-result",
+      "title": "Scan Private / Non-existent Account Returns Zero",
+      "description": "Private account or typo in channel URL produces zero results; scanner exits cleanly without error crash.",
+      "category": "scan",
+      "group": "scan",
+      "risk": "safe",
+      "level": "basic",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-3e8b0719a06c04cb",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.rate-limit-backoff",
+      "title": "Scan Rate Limit / 429 Backoff",
+      "description": "TikTok API returns 429 (rate limit) during scan; verify scanner backs off, retries, and surfaces rate-limit alert.",
+      "category": "scan",
+      "group": "scan",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-bad52e447bcee7a3",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    },
+    {
       "id": "tiktok-repost-v1.scan.rescan-dedupe-existing-items",
       "title": "Channel Re-scan Dedupe Existing Items",
       "description": "Re-scan same source and verify existing videos are deduped/merged rather than duplicated in campaign.",
@@ -852,6 +2464,29 @@
         "Keep fingerprint stable unless case identity changes."
       ],
       "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.scan-then-publish-integration",
+      "title": "Scan → Publish Integration: Full Pipeline Smoke",
+      "description": "End-to-end: scan source, apply filters, download thumbnail, queue video, publish. Verify each handoff preserves required fields.",
+      "category": "scan",
+      "group": "scan",
+      "risk": "real_publish",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-03bd02a3052bdaa3",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
     },
     {
       "id": "tiktok-repost-v1.scan.selector-drift-dump-artifacts",
@@ -896,6 +2531,29 @@
         "Keep fingerprint stable unless case identity changes."
       ],
       "status": "runnable"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.time-range-boundary-midnight",
+      "title": "Scan Time Range: Videos Straddling Midnight Boundary",
+      "description": "withinDays filter boundary: videos posted at 23:59 yesterday vs 00:01 today treated correctly by date comparison.",
+      "category": "scan",
+      "group": "scan",
+      "risk": "safe",
+      "level": "advanced",
+      "implemented": false,
+      "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+      "workflowId": "tiktok-repost",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-04993456276c4a12",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
     },
     {
       "id": "tiktok-repost-v1.scan.wizard-sources-edge-validation-gaps",
@@ -947,20 +2605,18 @@
       "group": "thumbnail",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-a46c3a83f435f0b3",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.thumbnail.detail-ui-codepath-contract",
@@ -1054,20 +2710,18 @@
       "group": "thumbnail",
       "risk": "safe",
       "level": "intermediate",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-41bcab9e8b620f3d",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.transform-pipeline.field-integrity-db-assert",
@@ -1077,20 +2731,18 @@
       "group": "transform",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-f91eaf92ed21e786",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.transform.chain-smoke",
@@ -1142,20 +2794,18 @@
       "group": "transform",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-0c0701db3e477cc8",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.transform.on-error-continue-policy",
@@ -1165,20 +2815,18 @@
       "group": "transform",
       "risk": "safe",
       "level": "advanced",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-fb002b6b3644c2c8",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-studio-smoke",
