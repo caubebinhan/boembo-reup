@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { randomUUID } from 'crypto'
+import { randomUUID } from 'node:crypto'
 import { AppSettingsService } from './AppSettingsService'
 import { accountRepo } from '../db/repositories/AccountRepo'
 import type { AccountDocument } from '../db/models/Account'

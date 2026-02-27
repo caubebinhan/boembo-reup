@@ -5,7 +5,12 @@ import { campaignRepo } from '../db/repositories/CampaignRepo'
 import { settingsRepo } from '../db/repositories/SettingsRepo'
 import { AppSettingsService } from './AppSettingsService'
 import { sendSentryMessageToChannel, verifySentryEventIngestion } from './SentryStagingService'
-import { findTroubleshootingCase, listTroubleshootingCases, runTroubleshootingCase } from './troubleshooting/cases'
+import {
+  findTroubleshootingCase,
+  listTroubleshootingCases,
+  listTroubleshootingWorkflowSummaries,
+  runTroubleshootingCase,
+} from './troubleshooting/cases'
 import type {
   TroubleshootingArtifactManifestEntry,
   TroubleshootingCaseId,
@@ -16,6 +21,7 @@ import type {
   TroubleshootingRunResultLike,
   TroubleshootingSourceCandidate,
   TroubleshootingVideoCandidate,
+  TroubleshootingWorkflowSummary,
 } from './troubleshooting/types'
 
 export type {
@@ -24,6 +30,7 @@ export type {
   TroubleshootingRunRecord,
   TroubleshootingSourceCandidate,
   TroubleshootingVideoCandidate,
+  TroubleshootingWorkflowSummary,
 } from './troubleshooting/types'
 
 interface RunHooks {
@@ -404,6 +411,10 @@ export class TroubleshootingService {
 
   static listCases() {
     return listTroubleshootingCases()
+  }
+
+  static listWorkflows(): TroubleshootingWorkflowSummary[] {
+    return listTroubleshootingWorkflowSummaries()
   }
 
   static getRuns(limit = MAX_RUNS): TroubleshootingRunRecord[] {

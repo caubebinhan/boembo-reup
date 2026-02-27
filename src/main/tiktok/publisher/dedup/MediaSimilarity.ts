@@ -1,5 +1,5 @@
-import { spawn } from 'child_process'
-import { constants as fsConstants } from 'fs'
+import { spawn } from 'node:child_process'
+import { constants as fsConstants } from 'node:fs'
 import { access } from 'fs/promises'
 
 type ProbeStream = {

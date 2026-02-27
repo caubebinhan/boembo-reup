@@ -53,7 +53,7 @@ export class OverlayHelper {
                 selectors.forEach(sel => {
                     document.querySelectorAll(sel).forEach(el => {
                         const style = window.getComputedStyle(el)
-                        const zIndex = parseInt(style.zIndex) || 0
+                        const zIndex = Number.parseInt(style.zIndex, 10) || 0
                         const position = style.position
                         // Remove high z-index overlays or fixed/sticky positioned overlays
                         if (zIndex > 100 || position === 'fixed' || position === 'sticky') {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   groupCasesBySuiteAndGroup,
   mapArtifactsForView,
@@ -123,6 +123,14 @@ type TroubleSentryFeedback = {
   elapsedMs?: number
 }
 
+type TroubleWorkflowSummary = {
+  workflowId: string
+  workflowVersion: string
+  totalCases: number
+  runnableCases: number
+  plannedCases: number
+}
+
 const levelColor: Record<string, string> = {
   info: 'text-gray-300',
   warn: 'text-amber-300',
@@ -157,22 +165,77 @@ export function TroubleShottingPanel() {
   const [sourceCandidates, setSourceCandidates] = useState<TroubleSourceCandidate[]>([])
   const [selectedSourceId, setSelectedSourceId] = useState<string>('auto')
   const [autoRandomSeed, setAutoRandomSeed] = useState<string>('')
+  const [workflows, setWorkflows] = useState<TroubleWorkflowSummary[]>([])
+  const workflowFilterRef = useRef<string>('all')
 
   const workflowOptions = useMemo(() => {
-    const byWorkflow = new Map<string, Set<string>>()
-    for (const c of cases) {
-      const workflowId = c.workflowId || 'unscoped'
-      const version = c.workflowVersion || 'unversioned'
-      if (!byWorkflow.has(workflowId)) byWorkflow.set(workflowId, new Set())
-      byWorkflow.get(workflowId)?.add(version)
+    const byWorkflow = new Map<
+      string,
+      {
+        workflowId: string
+        versions: Set<string>
+        totalCases: number
+        runnableCases: number
+        plannedCases: number
+      }
+    >()
+
+    const addWorkflowSummary = (
+      workflowId: string | undefined,
+      workflowVersion: string | undefined,
+      totalCases: number,
+      runnableCases: number,
+      plannedCases: number
+    ) => {
+      const id = workflowId || 'unscoped'
+      const version = workflowVersion || 'unversioned'
+      if (!byWorkflow.has(id)) {
+        byWorkflow.set(id, {
+          workflowId: id,
+          versions: new Set<string>(),
+          totalCases: 0,
+          runnableCases: 0,
+          plannedCases: 0,
+        })
+      }
+      const bucket = byWorkflow.get(id)!
+      bucket.versions.add(version)
+      bucket.totalCases += totalCases
+      bucket.runnableCases += runnableCases
+      bucket.plannedCases += plannedCases
     }
-    return [...byWorkflow.entries()]
-      .map(([workflowId, versions]) => ({
-        workflowId,
-        versions: [...versions].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+
+    if (workflows.length > 0) {
+      for (const workflow of workflows) {
+        addWorkflowSummary(
+          workflow.workflowId,
+          workflow.workflowVersion,
+          workflow.totalCases,
+          workflow.runnableCases,
+          workflow.plannedCases
+        )
+      }
+    } else {
+      for (const c of cases) {
+        const runnable = c.implemented === false ? 0 : 1
+        addWorkflowSummary(c.workflowId, c.workflowVersion, 1, runnable, runnable ? 0 : 1)
+      }
+    }
+
+    return [...byWorkflow.values()]
+      .map((entry) => ({
+        workflowId: entry.workflowId,
+        versions: [...entry.versions].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+        totalCases: entry.totalCases,
+        runnableCases: entry.runnableCases,
+        plannedCases: entry.plannedCases,
       }))
       .sort((a, b) => a.workflowId.localeCompare(b.workflowId))
-  }, [cases])
+  }, [cases, workflows])
+
+  const existingWorkflowIds = useMemo(() => {
+    return new Set(workflowOptions.map((w) => w.workflowId))
+  }, [workflowOptions])
 
   const versionOptions = useMemo(() => {
     if (workflowFilter === 'all') {
@@ -183,6 +246,17 @@ export function TroubleShottingPanel() {
     const workflow = workflowOptions.find(w => w.workflowId === workflowFilter)
     return workflow?.versions || []
   }, [cases, workflowFilter, workflowOptions])
+
+  useEffect(() => {
+    workflowFilterRef.current = workflowFilter
+  }, [workflowFilter])
+
+  useEffect(() => {
+    if (workflowFilter === 'all') return
+    if (!existingWorkflowIds.has(workflowFilter)) {
+      setWorkflowFilter('all')
+    }
+  }, [existingWorkflowIds, workflowFilter])
 
   useEffect(() => {
     if (versionFilter === 'all') return
@@ -224,11 +298,13 @@ export function TroubleShottingPanel() {
 
   const filteredRuns = useMemo(() => {
     return runs.filter(r => {
+      const runWorkflowId = r.workflowId || 'unscoped'
+      if (existingWorkflowIds.size > 0 && !existingWorkflowIds.has(runWorkflowId)) return false
       if (workflowFilter !== 'all' && (r.workflowId || 'unscoped') !== workflowFilter) return false
       if (versionFilter !== 'all' && (r.workflowVersion || 'unversioned') !== versionFilter) return false
       return true
     })
-  }, [runs, workflowFilter, versionFilter])
+  }, [runs, workflowFilter, versionFilter, existingWorkflowIds])
 
   const selectedRun = useMemo(
     () => filteredRuns.find(r => r.id === selectedRunId) || filteredRuns[0] || null,
@@ -254,22 +330,44 @@ export function TroubleShottingPanel() {
     [sourceCandidates, selectedSourceId]
   )
 
+  const activeWorkflowScope = workflowFilter === 'all' ? '' : workflowFilter
+  const manualPickersEnabled = manualTiktokRepostPickersEnabled && !!activeWorkflowScope
+
+  const loadWorkflowCandidates = async (workflowId?: string) => {
+    if (!workflowId) {
+      setVideoCandidates([])
+      setSourceCandidates([])
+      return
+    }
+    try {
+      const [videoList, sourceList] = await Promise.all([
+        api.invoke('troubleshooting:list-video-candidates', { workflowId, limit: 100 }).catch(() => []),
+        api.invoke('troubleshooting:list-source-candidates', { workflowId, limit: 100 }).catch(() => []),
+      ])
+      setVideoCandidates(Array.isArray(videoList) ? videoList : [])
+      setSourceCandidates(Array.isArray(sourceList) ? sourceList : [])
+    } catch (err) {
+      console.error('[TroubleShottingPanel] load workflow candidates failed', err)
+      setVideoCandidates([])
+      setSourceCandidates([])
+    }
+  }
+
   const load = async () => {
     setLoading(true)
     try {
-      const [caseList, runList, accountList, videoList, sourceList] = await Promise.all([
+      const [caseList, runList, accountList, workflowList] = await Promise.all([
         api.invoke('troubleshooting:list-cases'),
         api.invoke('troubleshooting:list-runs', { limit: 50 }),
         api.invoke('account:list').catch(() => []),
-        api.invoke('troubleshooting:list-video-candidates', { workflowId: 'tiktok-repost', limit: 100 }).catch(() => []),
-        api.invoke('troubleshooting:list-source-candidates', { workflowId: 'tiktok-repost', limit: 100 }).catch(() => []),
+        api.invoke('troubleshooting:list-workflows').catch(() => []),
       ])
       setCases(Array.isArray(caseList) ? caseList : [])
       setRuns(Array.isArray(runList) ? runList : [])
       setAccounts(Array.isArray(accountList) ? accountList : [])
-      setVideoCandidates(Array.isArray(videoList) ? videoList : [])
-      setSourceCandidates(Array.isArray(sourceList) ? sourceList : [])
+      setWorkflows(Array.isArray(workflowList) ? workflowList : [])
       setSelectedRunId((prev: string | null) => prev || (Array.isArray(runList) && runList[0]?.id) || null)
+      await loadWorkflowCandidates(workflowFilterRef.current !== 'all' ? workflowFilterRef.current : undefined)
     } catch (err: any) {
       console.error('[TroubleShottingPanel] load failed', err)
       setMessageTone('error')
@@ -278,6 +376,10 @@ export function TroubleShottingPanel() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    loadWorkflowCandidates(activeWorkflowScope || undefined)
+  }, [activeWorkflowScope])
 
   useEffect(() => {
     load()
@@ -326,13 +428,23 @@ export function TroubleShottingPanel() {
     })
     const offTroubleRefreshVideos = api.on?.('troubleshooting:refresh-videos', async () => {
       try {
-        const videoList = await api.invoke('troubleshooting:list-video-candidates', { workflowId: 'tiktok-repost', limit: 100 })
+        const scopedWorkflowId = workflowFilterRef.current !== 'all' ? workflowFilterRef.current : undefined
+        if (!scopedWorkflowId) {
+          setVideoCandidates([])
+          return
+        }
+        const videoList = await api.invoke('troubleshooting:list-video-candidates', { workflowId: scopedWorkflowId, limit: 100 })
         setVideoCandidates(Array.isArray(videoList) ? videoList : [])
       } catch {}
     })
     const offTroubleRefreshSources = api.on?.('troubleshooting:refresh-sources', async () => {
       try {
-        const sourceList = await api.invoke('troubleshooting:list-source-candidates', { workflowId: 'tiktok-repost', limit: 100 })
+        const scopedWorkflowId = workflowFilterRef.current !== 'all' ? workflowFilterRef.current : undefined
+        if (!scopedWorkflowId) {
+          setSourceCandidates([])
+          return
+        }
+        const sourceList = await api.invoke('troubleshooting:list-source-candidates', { workflowId: scopedWorkflowId, limit: 100 })
         setSourceCandidates(Array.isArray(sourceList) ? sourceList : [])
       } catch {}
     })
@@ -352,20 +464,20 @@ export function TroubleShottingPanel() {
     setSentryFeedback(null)
     try {
       const caseDef = cases.find(c => c.id === caseId)
-      const isTiktokRepostCase = caseDef?.workflowId === 'tiktok-repost'
-      const applyTiktokRepostManualPickers =
-        manualTiktokRepostPickersEnabled && isTiktokRepostCase
+      const caseWorkflowId = caseDef?.workflowId || ''
+      const caseMatchesPickerScope = !!activeWorkflowScope && caseWorkflowId === activeWorkflowScope
+      const applyManualPickers = manualPickersEnabled && caseMatchesPickerScope
       const run = await api.invoke('troubleshooting:run-case', {
         caseId,
         runtime: {
-          accountId: applyTiktokRepostManualPickers && selectedAccountId !== 'auto' ? selectedAccountId : undefined,
-          videoLocalPath: applyTiktokRepostManualPickers ? (selectedVideoCandidate?.localPath || undefined) : undefined,
-          videoPlatformId: applyTiktokRepostManualPickers ? (selectedVideoCandidate?.platformId || undefined) : undefined,
-          videoCampaignId: applyTiktokRepostManualPickers ? (selectedVideoCandidate?.campaignId || undefined) : undefined,
-          sourceName: applyTiktokRepostManualPickers ? (selectedSourceCandidate?.sourceName || undefined) : undefined,
-          sourceType: applyTiktokRepostManualPickers ? (selectedSourceCandidate?.sourceType || undefined) : undefined,
-          sourceCampaignId: applyTiktokRepostManualPickers ? (selectedSourceCandidate?.campaignId || undefined) : undefined,
-          randomSeed: isTiktokRepostCase && autoRandomSeed.trim() ? autoRandomSeed.trim() : undefined,
+          accountId: applyManualPickers && selectedAccountId !== 'auto' ? selectedAccountId : undefined,
+          videoLocalPath: applyManualPickers ? (selectedVideoCandidate?.localPath || undefined) : undefined,
+          videoPlatformId: applyManualPickers ? (selectedVideoCandidate?.platformId || undefined) : undefined,
+          videoCampaignId: applyManualPickers ? (selectedVideoCandidate?.campaignId || undefined) : undefined,
+          sourceName: applyManualPickers ? (selectedSourceCandidate?.sourceName || undefined) : undefined,
+          sourceType: applyManualPickers ? (selectedSourceCandidate?.sourceType || undefined) : undefined,
+          sourceCampaignId: applyManualPickers ? (selectedSourceCandidate?.campaignId || undefined) : undefined,
+          randomSeed: caseMatchesPickerScope && autoRandomSeed.trim() ? autoRandomSeed.trim() : undefined,
         },
       })
       if (run?.id) setSelectedRunId(run.id)
@@ -450,7 +562,7 @@ export function TroubleShottingPanel() {
               Run smoke/E2E checks and keep persistent logs for debugging user issues.
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              Manual account/video pickers apply only to TikTok Repost when enabled. Otherwise tests use auto mode (including random video selection for publish debug).
+              Case catalog and workflow filter are loaded dynamically from existing troubleshooting providers. Main-level cases live under workflow `main`.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -461,21 +573,21 @@ export function TroubleShottingPanel() {
                 onChange={(e) => setManualTiktokRepostPickersEnabled(e.target.checked)}
                 className="accent-cyan-500"
               />
-              <span>Manual Pickers (TikTok Repost)</span>
+              <span>Manual Runtime Pickers</span>
             </label>
             <input
               value={autoRandomSeed}
               onChange={(e) => setAutoRandomSeed(e.target.value)}
               placeholder="Auto Random Seed (optional)"
               className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-950 text-sm text-gray-200 w-[220px]"
-              title="Used by tiktok-repost auto selection (video/source) for reproducible debug reruns"
+              title="Used by selected workflow auto-selection paths for reproducible debug reruns"
             />
             <select
               value={selectedAccountId}
               onChange={(e) => setSelectedAccountId(e.target.value)}
-              disabled={!manualTiktokRepostPickersEnabled}
+              disabled={!manualPickersEnabled}
               className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-950 text-sm text-gray-200 max-w-[240px] disabled:opacity-50"
-              title="Manual account picker (TikTok Repost debug cases only)"
+              title="Manual account picker for the currently selected workflow scope"
             >
               <option value="auto">Debug Account: Auto Select</option>
               {accounts.map(acc => (
@@ -487,11 +599,11 @@ export function TroubleShottingPanel() {
             <select
               value={selectedVideoId}
               onChange={(e) => setSelectedVideoId(e.target.value)}
-              disabled={!manualTiktokRepostPickersEnabled}
+              disabled={!manualPickersEnabled}
               className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-950 text-sm text-gray-200 max-w-[360px] disabled:opacity-50"
-              title="Optional manual video picker for TikTok Repost publish debug cases"
+              title="Optional manual video picker for selected workflow debug cases"
             >
-              <option value="auto">Debug Video (TikTok Repost): Auto Select</option>
+              <option value="auto">Debug Video ({activeWorkflowScope || 'select workflow'}): Auto Select</option>
               {videoCandidates.map(v => {
                 const fileName = (v.localPath || '').split(/[\\/]/).pop() || v.localPath
                 const campaign = v.campaignName || v.campaignId.slice(0, 8)
@@ -507,11 +619,11 @@ export function TroubleShottingPanel() {
             <select
               value={selectedSourceId}
               onChange={(e) => setSelectedSourceId(e.target.value)}
-              disabled={!manualTiktokRepostPickersEnabled}
+              disabled={!manualPickersEnabled}
               className="px-3 py-2 rounded-lg border border-gray-700 bg-gray-950 text-sm text-gray-200 max-w-[360px] disabled:opacity-50"
-              title="Optional manual source picker (channel/keyword) for TikTok Repost scan debug cases"
+              title="Optional manual source picker (channel/keyword) for selected workflow scan debug cases"
             >
-              <option value="auto">Debug Source (TikTok Repost): Auto Random</option>
+              <option value="auto">Debug Source ({activeWorkflowScope || 'select workflow'}): Auto Random</option>
               {sourceCandidates.map(s => {
                 const campaign = s.campaignName || s.campaignId.slice(0, 8)
                 const label = `${campaign} · ${s.sourceType}:${s.sourceName}${s.minViews ? ` · minViews=${s.minViews}` : ''}${s.minLikes ? ` · minLikes=${s.minLikes}` : ''}`
@@ -530,7 +642,7 @@ export function TroubleShottingPanel() {
               <option value="all">All Workflows</option>
               {workflowOptions.map(w => (
                 <option key={w.workflowId} value={w.workflowId}>
-                  {w.workflowId}
+                  {w.workflowId} ({w.runnableCases}/{w.totalCases})
                 </option>
               ))}
             </select>
@@ -562,7 +674,7 @@ export function TroubleShottingPanel() {
               }
               className="px-3 py-2 rounded-lg border border-amber-600/40 text-amber-300 text-sm hover:bg-amber-500/10 transition disabled:opacity-50"
             >
-              Run Visible Cases
+              Run All Runnable
             </button>
             <button
               onClick={clearRuns}
@@ -634,10 +746,49 @@ export function TroubleShottingPanel() {
           </div>
         )}
 
-        {(autoRandomSeed.trim() || (manualTiktokRepostPickersEnabled && (selectedAccountId !== 'auto' || selectedVideoId !== 'auto' || selectedSourceId !== 'auto'))) && (
+        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] uppercase tracking-wider text-gray-500">Workflow Catalog</p>
+            <span className="text-xs text-gray-500">{workflowOptions.length} workflow(s)</span>
+          </div>
+          {workflowOptions.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+              {workflowOptions.map((workflow) => (
+                <button
+                  key={`wf-${workflow.workflowId}`}
+                  onClick={() => {
+                    setWorkflowFilter(workflow.workflowId)
+                    setVersionFilter('all')
+                  }}
+                  className={`text-left rounded-lg border px-3 py-2 transition ${
+                    workflowFilter === workflow.workflowId
+                      ? 'border-cyan-500/40 bg-cyan-500/10'
+                      : 'border-gray-800 bg-black/20 hover:border-gray-600'
+                  }`}
+                >
+                  <div className="text-sm font-mono text-gray-200">{workflow.workflowId}</div>
+                  <div className="text-[11px] text-gray-500 mt-1">versions: {workflow.versions.join(', ')}</div>
+                  <div className="text-[11px] text-gray-400 mt-1">
+                    runnable={workflow.runnableCases} / total={workflow.totalCases} / planned={workflow.plannedCases}
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500">No workflow providers discovered.</div>
+          )}
+        </div>
+
+        {manualTiktokRepostPickersEnabled && !activeWorkflowScope && (
+          <div className="rounded-lg border border-amber-700/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+            Manual runtime pickers are enabled. Select a specific workflow to load workflow-scoped account/video/source candidates.
+          </div>
+        )}
+
+        {((!!activeWorkflowScope && !!autoRandomSeed.trim()) || (manualPickersEnabled && (selectedAccountId !== 'auto' || selectedVideoId !== 'auto' || selectedSourceId !== 'auto'))) && (
           <div className="rounded-lg border border-gray-800 bg-gray-950/50 px-3 py-2 text-xs text-gray-400">
-            {autoRandomSeed.trim() && (
-              <div>Auto random seed (tiktok-repost): <span className="font-mono text-gray-300">{autoRandomSeed.trim()}</span></div>
+            {!!activeWorkflowScope && autoRandomSeed.trim() && (
+              <div>Auto random seed ({activeWorkflowScope}): <span className="font-mono text-gray-300">{autoRandomSeed.trim()}</span></div>
             )}
             <div>
               Debug account: {selectedAccountId === 'auto'
@@ -645,12 +796,12 @@ export function TroubleShottingPanel() {
                 : (accounts.find(a => a.id === selectedAccountId)?.handle || accounts.find(a => a.id === selectedAccountId)?.username || selectedAccountId)}
             </div>
             <div className="truncate">
-              Debug video (tiktok-repost): {selectedVideoCandidate
+              Debug video ({activeWorkflowScope || 'unscoped'}): {selectedVideoCandidate
                 ? `${selectedVideoCandidate.campaignName || selectedVideoCandidate.campaignId} · ${selectedVideoCandidate.platformId} · ${selectedVideoCandidate.localPath}`
                 : 'Auto Select'}
             </div>
             <div className="truncate">
-              Debug source (tiktok-repost): {selectedSourceCandidate
+              Debug source ({activeWorkflowScope || 'unscoped'}): {selectedSourceCandidate
                 ? `${selectedSourceCandidate.campaignName || selectedSourceCandidate.campaignId} · ${selectedSourceCandidate.sourceType}:${selectedSourceCandidate.sourceName}`
                 : 'Auto Random'}
             </div>

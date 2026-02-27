@@ -48,6 +48,14 @@ export interface TroubleshootingRunLogStats {
   error: number
 }
 
+export interface TroubleshootingWorkflowSummary {
+  workflowId: string
+  workflowVersion: string
+  totalCases: number
+  runnableCases: number
+  plannedCases: number
+}
+
 export interface TroubleshootingCaseParameter {
   key: string
   value?: string | number | boolean

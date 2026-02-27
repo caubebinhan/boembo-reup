@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { IPC_CHANNELS } from '@shared/ipc-types'
-import * as crypto from 'crypto'
+import * as crypto from 'node:crypto'
 import { flowLoader } from '@core/flow/FlowLoader'
 import { FlowResolver } from '@core/flow/FlowResolver'
 import { flowEngine } from '@core/engine/FlowEngine'
@@ -123,7 +123,7 @@ export function setupCampaignIPC() {
           instance_id: n.instance_id,
           children: n.children,
           execution: (n as any).execution,
-          // visualizer meta — sourced from each node's manifest.ts
+          // visualizer meta  Esourced from each node's manifest.ts
           icon: manifest?.icon,
           label: manifest?.label || manifest?.name,
           color: manifest?.color,

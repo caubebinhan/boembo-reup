@@ -10,6 +10,42 @@ import { asyncTaskScheduler } from '@main/services/AsyncTaskScheduler'
 import { isNetworkError, isDiskError } from '../nodes/NodeHelpers'
 import { getFreeDiskSpaceMB } from '@main/utils/diskSpace'
 
+// ── Error handling helpers ──────────────────────────
+
+/** Auto-pause campaign on network error. Returns true if handled. */
+function handleNetworkError(errorMsg: string, campaignId: string, instanceId: string, store?: CampaignStore): boolean {
+  if (!isNetworkError(errorMsg)) return false
+  if (store) {
+    store.status = 'paused'
+    store.save()
+  } else {
+    campaignRepo.updateStatus(campaignId, 'paused')
+  }
+  ExecutionLogger.campaignEvent(campaignId, 'campaign:network-error',
+    `⚠️ Auto-paused: network error in ${instanceId} — ${errorMsg}`)
+  ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
+    campaign_id: campaignId, errors: [errorMsg], message: `Network error: ${errorMsg}`,
+  })
+  return true
+}
+
+/** Auto-fail campaign on disk error. Returns true if handled. */
+function handleDiskError(errorMsg: string, campaignId: string, instanceId: string, store?: CampaignStore): boolean {
+  if (!isDiskError(errorMsg)) return false
+  if (store) {
+    store.status = 'error'
+    store.save()
+  } else {
+    campaignRepo.updateStatus(campaignId, 'error')
+  }
+  ExecutionLogger.campaignEvent(campaignId, 'campaign:disk-error',
+    `⛔ Failed: storage error in ${instanceId} — ${errorMsg}`)
+  ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
+    campaign_id: campaignId, errors: [errorMsg], message: `Disk error: ${errorMsg}`,
+  })
+  return true
+}
+
 // ── DRY Helpers ─────────────────────────────────────
 
 /** Safely evaluate a conditional edge expression against data. */
@@ -360,25 +396,8 @@ export class FlowEngine {
       jobRepo.updateStatus(job.id, 'failed', errorMsg)
       ExecutionLogger.nodeError(job.campaign_id, job.id, job.instance_id, job.node_id, errorMsg)
 
-      // Auto-pause on network errors
-      if (isNetworkError(errorMsg)) {
-        this.pauseCampaign(job.campaign_id)
-        ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:network-error',
-          `⚠️ Auto-paused: network error in ${job.instance_id} — ${errorMsg}`)
-        ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
-          campaign_id: job.campaign_id, errors: [errorMsg], message: `Network error: ${errorMsg}`,
-        })
-      }
-
-      // Auto-fail on disk errors (fatal — can't continue)
-      if (isDiskError(errorMsg)) {
-        campaignRepo.updateStatus(job.campaign_id, 'error')
-        ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:disk-error',
-          `⛔ Failed: storage error in ${job.instance_id} — ${errorMsg}`)
-        ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
-          campaign_id: job.campaign_id, errors: [errorMsg], message: `Disk error: ${errorMsg}`,
-        })
-      }
+      handleNetworkError(errorMsg, job.campaign_id, job.instance_id)
+      handleDiskError(errorMsg, job.campaign_id, job.instance_id)
     }
   }
 
@@ -539,29 +558,9 @@ export class FlowEngine {
           }
           skipToNextItem = true
 
-          // Auto-pause on network errors
-          if (isNetworkError(err.message)) {
-            store.status = 'paused'
-            store.save()
-            ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:network-error',
-              `⚠️ Auto-paused: network error in ${childDef.instance_id} — ${err.message}`)
-            ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
-              campaign_id: job.campaign_id, errors: [err.message], message: `Network error: ${err.message}`,
-            })
-            return
-          }
-
-          // Auto-fail on disk errors (fatal)
-          if (isDiskError(err.message)) {
-            store.status = 'error'
-            store.save()
-            ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:disk-error',
-              `⛔ Failed: storage error in ${childDef.instance_id} — ${err.message}`)
-            ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
-              campaign_id: job.campaign_id, errors: [err.message], message: `Disk error: ${err.message}`,
-            })
-            return
-          }
+          // Auto-pause on network or auto-fail on disk errors
+          if (handleNetworkError(err.message, job.campaign_id, childDef.instance_id, store)) return
+          if (handleDiskError(err.message, job.campaign_id, childDef.instance_id, store)) return
         }
       }
 

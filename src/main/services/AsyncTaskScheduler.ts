@@ -7,7 +7,7 @@ import type {
   LeaseHeartbeat,
 } from '@core/async-tasks/types'
 import { asyncTaskRepo } from '../db/repositories/AsyncTaskRepo'
-import * as crypto from 'crypto'
+import * as crypto from 'node:crypto'
 
 const DEFAULT_TICK_INTERVAL = 30_000  // 30s
 const DEFAULT_LEASE_MS = 300_000       // 5 min
@@ -132,7 +132,7 @@ export class AsyncTaskScheduler {
       }
     }
 
-    // Transition claimed → running
+    // Transition claimed ↁErunning
     asyncTaskRepo.markRunning(task.id)
     task.status = 'running'
 

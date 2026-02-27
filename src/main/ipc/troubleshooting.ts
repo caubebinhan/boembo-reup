@@ -14,6 +14,10 @@ export function setupTroubleshootingIPC() {
     return TroubleshootingService.listCases()
   })
 
+  ipcMain.handle('troubleshooting:list-workflows', async () => {
+    return TroubleshootingService.listWorkflows()
+  })
+
   ipcMain.handle('troubleshooting:list-runs', async (_event, payload?: { limit?: number }) => {
     return TroubleshootingService.getRuns(payload?.limit || 50)
   })

@@ -1,7 +1,7 @@
 import { Page } from 'playwright-core'
 import { browserService } from '@main/services/BrowserService'
-import fs from 'fs'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
 import { net } from 'electron'
 import { AppSettingsService } from '@main/services/AppSettingsService'
 import { Downloader } from '@tobyg74/tiktok-api-dl'
@@ -53,7 +53,7 @@ function parseStatNum(s: string | undefined): number {
   const txt = s.trim().toUpperCase()
   if (txt.endsWith('M')) return Math.round(parseFloat(txt) * 1_000_000)
   if (txt.endsWith('K')) return Math.round(parseFloat(txt) * 1_000)
-  return parseInt(txt.replace(/[^0-9]/g, '')) || 0
+  return Number.parseInt(txt.replace(/[^0-9]/g, ''), 10) || 0
 }
 
 function filterByTimeRange(videos: VideoInfo[], opts: ScanOptions): VideoInfo[] {
@@ -341,14 +341,14 @@ export class TikTokScanner {
 
     const filePath = path.join(downloadDir, `${videoId}.mp4`)
 
-    // Cache check — skip if valid file already exists
+    // Cache check  Eskip if valid file already exists
     if (fs.existsSync(filePath)) {
       const stats = fs.statSync(filePath)
       if (stats.size > 50 * 1024) {
         console.log(`[TikTokScanner] Cache hit: ${filePath} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
         return { filePath }
       }
-      // Corrupt cache — delete and re-download
+      // Corrupt cache  Edelete and re-download
       fs.unlinkSync(filePath)
     }
 
@@ -358,7 +358,7 @@ export class TikTokScanner {
     try {
       console.log(`[TikTokScanner] Extracting stream URL for ${videoId}...`)
       const result = await Promise.race([
-        // @ts-ignore — library types may be incomplete
+        // @ts-ignore  Elibrary types may be incomplete
         Downloader(videoUrl, { version: 'v1' }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Extraction timed out (60s)')), 60000)),
       ]) as any
@@ -389,7 +389,7 @@ export class TikTokScanner {
     if (!response.ok) throw new Error(`Download failed: ${response.status}`)
 
     const buffer = Buffer.from(await response.arrayBuffer())
-    if (buffer.length < 50 * 1024) throw new Error(`Downloaded file too small (${buffer.length}B) — likely not a video`)
+    if (buffer.length < 50 * 1024) throw new Error(`Downloaded file too small (${buffer.length}B)  Elikely not a video`)
 
     fs.writeFileSync(filePath, buffer)
     console.log(`[TikTokScanner] Downloaded: ${filePath} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`)

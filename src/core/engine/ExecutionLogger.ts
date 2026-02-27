@@ -1,6 +1,6 @@
 import { db } from '@main/db/Database'
 import { BrowserWindow } from 'electron'
-import { EventEmitter } from 'events'
+import { EventEmitter } from 'node:events'
 
 export interface LogEntry {
   campaign_id: string
@@ -68,7 +68,7 @@ export class ExecutionLogger {
       console.error('[ExecutionLogger] Failed to write to DB:', err)
     }
 
-    // 3) IPC → renderer
+    // 3) IPC ↁErenderer
     this.emitToUI('execution:log', {
       ...entry,
       data_json: entry.data ? JSON.stringify(entry.data) : null,
@@ -119,7 +119,7 @@ export class ExecutionLogger {
       campaignId, instanceId, nodeId, status: 'failed', jobId, error
     })
     // Push error toast to UI
-    this.sendToast('error', `❌ ${instanceId}`, error)
+    this.sendToast('error', `❁E${instanceId}`, error)
   }
 
   /** Push a toast notification to the renderer UI */

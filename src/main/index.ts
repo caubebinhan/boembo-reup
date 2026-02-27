@@ -1,5 +1,5 @@
 import { app, shell, BrowserWindow, protocol, net } from 'electron'
-import { join } from 'path'
+import { join } from 'node:path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
@@ -20,7 +20,7 @@ import { asyncTaskScheduler } from './services/AsyncTaskScheduler'
 // To add a new node: create the file, export + call nodeRegistry.register(), then add to src/nodes/index.ts
 import '../nodes'
 // Importing the workflows barrel triggers auto-discovery of all workflow modules
-// (recovery, ipc, services, events) — no manual imports needed.
+// (recovery, ipc, services, events)  Eno manual imports needed.
 import '../workflows'
 
 // Register local-thumb:// scheme before app is ready (required by Electron)
@@ -77,7 +77,7 @@ app.whenReady().then(() => {
   initDb()
   CrashRecoveryService.recoverPendingTasks()
   
-  // Initialize FlowLoader — scan src/workflows/*/flow.yaml
+  // Initialize FlowLoader  Escan src/workflows/*/flow.yaml
   const flowsDir = join(__dirname, '../../src/workflows')
   console.log('Loading yaml flows from:', flowsDir)
   const flows = flowLoader.loadAll(flowsDir)

@@ -6,6 +6,7 @@ import type {
   TroubleshootingCaseMeta,
   TroubleshootingCaseRunOptions,
   TroubleshootingRunResultLike,
+  TroubleshootingWorkflowSummary,
   WorkflowTroubleshootingProvider,
 } from '../types'
 import { nonWorkflowTroubleshootingCases } from './nonWorkflowCases'
@@ -20,7 +21,7 @@ const providers: WorkflowTroubleshootingProvider[] = Object.entries(providerModu
 
 const syntheticProviders: WorkflowTroubleshootingProvider[] = [
   {
-    workflowId: 'debug-platform',
+    workflowId: 'main',
     workflowVersion: '1.0',
     cases: nonWorkflowTroubleshootingCases,
   },
@@ -269,6 +270,28 @@ function ensureNoDuplicateCaseIds() {
 export function listTroubleshootingCases(): TroubleshootingCaseDefinition[] {
   ensureNoDuplicateCaseIds()
   return getProviders().flatMap(p => p.cases || [])
+}
+
+export function listTroubleshootingWorkflowSummaries(): TroubleshootingWorkflowSummary[] {
+  ensureNoDuplicateCaseIds()
+  return getProviders()
+    .map((provider) => {
+      const cases = provider.cases || []
+      const totalCases = cases.length
+      const runnableCases = cases.filter(c => c.implemented !== false).length
+      const plannedCases = Math.max(0, totalCases - runnableCases)
+      return {
+        workflowId: provider.workflowId,
+        workflowVersion: provider.workflowVersion,
+        totalCases,
+        runnableCases,
+        plannedCases,
+      }
+    })
+    .sort((a, b) => {
+      if (a.workflowId !== b.workflowId) return a.workflowId.localeCompare(b.workflowId)
+      return a.workflowVersion.localeCompare(b.workflowVersion, undefined, { numeric: true })
+    })
 }
 
 export function findTroubleshootingCase(caseId: TroubleshootingCaseId): TroubleshootingCaseDefinition | null {

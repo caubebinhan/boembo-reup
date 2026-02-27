@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { open as openFile } from 'fs/promises'
 import { publishHistoryRepo } from '../../../db/repositories/PublishHistoryRepo'
 import type { PublishHistoryDocument } from '../../../db/models/PublishHistory'

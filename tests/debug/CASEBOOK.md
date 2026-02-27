@@ -7,13 +7,13 @@ Central backlog/index for all troubleshooting/debug scenarios.
 - Total cases: **63**
 - Runnable: **17**
 - Planned: **46**
-- Generated at: 2026-02-27T06:28:42.620Z
+- Generated at: 2026-02-27T06:52:35.190Z
 
 ## Workflow Breakdown
 
 | Scope | Total | Runnable | Planned |
 |---|---:|---:|---:|
-| debug-platform@1.0 | 11 | 0 | 11 |
+| main@1.0 | 11 | 0 | 11 |
 | tiktok-repost@1.0 | 51 | 17 | 34 |
 | upload-local@1.0 | 1 | 0 | 1 |
 
@@ -21,9 +21,9 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### e2e.troubleshooting.artifact.screenshot-preview-visible
 - Title: E2E Mirror: screenshot artifact preview visible
-- Scope: debug-platform@1.0
+- Scope: main@1.0
 - Group: external-e2e | Category: e2e | Level: intermediate
-- Fingerprint: `case-38943e0ece92bba0`
+- Fingerprint: `case-1099ef16d144f29d`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -33,9 +33,9 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### e2e.troubleshooting.sentry.feedback-links-visible
 - Title: E2E Mirror: sentry feedback links visible
-- Scope: debug-platform@1.0
+- Scope: main@1.0
 - Group: external-e2e | Category: e2e | Level: intermediate
-- Fingerprint: `case-74263b0b7c73df11`
+- Fingerprint: `case-5dedf6ed8caec44b`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -45,9 +45,9 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### e2e.troubleshooting.suites.grouping-visible
 - Title: E2E Mirror: suite grouping visible
-- Scope: debug-platform@1.0
+- Scope: main@1.0
 - Group: external-e2e | Category: e2e | Level: intermediate
-- Fingerprint: `case-d66d3e47d0fe7bd5`
+- Fingerprint: `case-ecc4b013f6caa92a`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -465,9 +465,9 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### unit.core.pipeline-runner.sequence-resolve-vars
 - Title: Unit Mirror: pipeline runner resolves vars in sequence
-- Scope: debug-platform@1.0
+- Scope: main@1.0
 - Group: external-unit | Category: unit | Level: intermediate
-- Fingerprint: `case-bfc4177cf0598023`
+- Fingerprint: `case-784d5d592b844544`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -477,9 +477,9 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### unit.main.sentry-staging.service-contracts
 - Title: Unit Mirror: sentry staging service contracts
-- Scope: debug-platform@1.0
+- Scope: main@1.0
 - Group: external-unit | Category: unit | Level: intermediate
-- Fingerprint: `case-c92764e0f8b966ac`
+- Fingerprint: `case-550086971f3045e0`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -489,9 +489,9 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### unit.troubleshooting.artifact-view.data-url-renders-image
 - Title: Unit Mirror: data URL renders as image
-- Scope: debug-platform@1.0
+- Scope: main@1.0
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-10f73846d6414aac`
+- Fingerprint: `case-a0f5bcd585c2e0de`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -501,9 +501,9 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### unit.troubleshooting.artifact-view.screenshot-path-renders-image
 - Title: Unit Mirror: screenshot path renders as image
-- Scope: debug-platform@1.0
+- Scope: main@1.0
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-657f1e35b1a09291`
+- Fingerprint: `case-c860e164f1f2fdcd`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -513,9 +513,9 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### unit.troubleshooting.grouping.suite-and-group-order
 - Title: Unit Mirror: grouped ordering is deterministic
-- Scope: debug-platform@1.0
+- Scope: main@1.0
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-5dc5153dd6e39d34`
+- Fingerprint: `case-3cc19c318f21546c`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -525,9 +525,9 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### unit.troubleshooting.suite-classification.db-is-integration
 - Title: Unit Mirror: db tag maps to Integration suite
-- Scope: debug-platform@1.0
+- Scope: main@1.0
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-18948fc031e07bc4`
+- Fingerprint: `case-a21c5ca930eefe7c`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -537,9 +537,9 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### unit.troubleshooting.suite-classification.real-publish-is-e2e
 - Title: Unit Mirror: real_publish maps to E2E suite
-- Scope: debug-platform@1.0
+- Scope: main@1.0
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-5c58e74f85a5bd56`
+- Fingerprint: `case-231fe9cc2caeb919`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -549,9 +549,9 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### unit.troubleshooting.suite-classification.static-analysis-is-unit
 - Title: Unit Mirror: static-analysis maps to Unit suite
-- Scope: debug-platform@1.0
+- Scope: main@1.0
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-9c90342efab343c8`
+- Fingerprint: `case-7d543143859da020`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.

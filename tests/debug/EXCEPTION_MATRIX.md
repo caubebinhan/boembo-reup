@@ -21,13 +21,13 @@ Backlog of additional edge/exception scenarios not yet registered as runnable tr
 | `tiktok-repost-v1.db.publish-history-index-drift` | db | Missing index hurts dedup perf | schema report, query timing | Add schema drift alarm |
 | `tiktok-repost-v1.async-task.requeue-after-crash` | async verify | Worker crash mid-attempt | async task row timeline | Verify reclaim + no duplicate run |
 | `tiktok-repost-v1.async-task.max-retry-backoff` | async verify | Backoff exceeds expected window | task metadata, logs | Validate cap and metadata visibility |
-| `debug-platform.ui.case-filter-large-catalog` | debug tab/ui | 100+ cases with filters/tags | screenshot, UI perf metrics | Validate filter responsiveness |
-| `debug-platform.ui.run-log-cap-rotation` | debug tab/ui | Log lines exceed cap (5000) | run payload, log stats | Verify capped display correctness |
-| `debug-platform.sentry.strict-verify-timeout` | sentry | Send success but verify timeout | sentry payload, verify response | Assert strict-mode failure surface |
-| `debug-platform.sentry.invalid-dsn-routing` | sentry | Channel DSN missing/invalid | send result + error text | Ensure explicit route-level errors |
-| `debug-platform.artifact.non-image-binary` | debug tab/artifacts | Artifact is binary/non-previewable | artifact manifest entry | Render safe fallback preview |
-| `debug-platform.artifact.path-permission-denied` | debug tab/artifacts | Path exists but unreadable | file meta + error | Keep run inspectable with warnings |
-| `debug-platform.case-id-duplicate-guard` | catalog | Duplicate case ID from providers | discovery logs | Ensure warning + deterministic listing |
+| `main.ui.case-filter-large-catalog` | debug tab/ui | 100+ cases with filters/tags | screenshot, UI perf metrics | Validate filter responsiveness |
+| `main.ui.run-log-cap-rotation` | debug tab/ui | Log lines exceed cap (5000) | run payload, log stats | Verify capped display correctness |
+| `main.sentry.strict-verify-timeout` | sentry | Send success but verify timeout | sentry payload, verify response | Assert strict-mode failure surface |
+| `main.sentry.invalid-dsn-routing` | sentry | Channel DSN missing/invalid | send result + error text | Ensure explicit route-level errors |
+| `main.artifact.non-image-binary` | debug tab/artifacts | Artifact is binary/non-previewable | artifact manifest entry | Render safe fallback preview |
+| `main.artifact.path-permission-denied` | debug tab/artifacts | Path exists but unreadable | file meta + error | Keep run inspectable with warnings |
+| `main.case-id-duplicate-guard` | catalog | Duplicate case ID from providers | discovery logs | Ensure warning + deterministic listing |
 
 ## Notes
 

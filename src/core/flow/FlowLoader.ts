@@ -1,11 +1,11 @@
 import * as yaml from 'js-yaml'
-import * as fs from 'fs'
-import * as path from 'path'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { FlowDefinition, WorkflowUIDescriptor } from './ExecutionContracts'
 
 export class FlowLoader {
   private cache = new Map<string, FlowDefinition>()
-  /** workflowId → { version → absolute dir path } */
+  /** workflowId ↁE{ version ↁEabsolute dir path } */
   private versionDirs = new Map<string, Map<string, string>>()
 
   private parseTimeout(value: unknown): number | undefined {

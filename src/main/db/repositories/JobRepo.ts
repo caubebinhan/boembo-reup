@@ -1,10 +1,10 @@
 import { db } from '../Database'
 import { BaseRepo } from './BaseRepo'
 import type { JobDocument } from '../models/Job'
-import * as crypto from 'crypto'
+import * as crypto from 'node:crypto'
 
 /**
- * Job Repository — engine job queue.
+ * Job Repository  Eengine job queue.
  *
  * Jobs need cross-campaign queries (findPending for engine tick),
  * so we keep index columns (status, campaign_id, scheduled_at)

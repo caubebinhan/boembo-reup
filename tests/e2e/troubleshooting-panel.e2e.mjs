@@ -101,6 +101,17 @@ test.before(async () => {
           if (channel === 'healthcheck:storage') return { ok: true, freeMB: 4096, path: runtime.storagePath }
           if (channel === 'healthcheck:services') return { ok: true, services: [] }
           if (channel === 'troubleshooting:list-cases') return fixtureCases
+          if (channel === 'troubleshooting:list-workflows') {
+            return [
+              {
+                workflowId: 'tiktok-repost',
+                workflowVersion: '1.0',
+                totalCases: fixtureCases.length,
+                runnableCases: fixtureCases.length,
+                plannedCases: 0,
+              },
+            ]
+          }
           if (channel === 'troubleshooting:list-runs') return fixtureRuns
           if (channel === 'troubleshooting:list-video-candidates') return []
           if (channel === 'troubleshooting:list-source-candidates') return []

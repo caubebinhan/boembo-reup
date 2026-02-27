@@ -10,7 +10,7 @@ import { PublishOptions, PublishResult, PublishErrorType } from './types'
 import { DebugHelper, PublishDebugRecorder } from './helpers/DebugHelper'
 import { OverlayHelper } from './helpers/OverlayHelper'
 import fs from 'fs-extra'
-import path from 'path'
+import path from 'node:path'
 
 // ── VideoPublisher: orchestrates the full TikTok upload flow ─────────────────
 

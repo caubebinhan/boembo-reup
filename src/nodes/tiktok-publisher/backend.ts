@@ -98,14 +98,16 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   // ── Dedup check ──
   const duplicate = findDuplicatePublishHistory(account.id, sourcePlatformId, fileFingerprint)
   if (duplicate) {
-    const matchedBy = duplicate.source_platform_id && sourcePlatformId && duplicate.source_platform_id === sourcePlatformId
-      ? 'source_platform_id'
-      : (duplicate.file_fingerprint && fileFingerprint && duplicate.file_fingerprint === fileFingerprint)
-        ? 'file_fingerprint'
-        : 'unknown'
+    let matchedBy = 'unknown'
+    if (duplicate.source_platform_id && sourcePlatformId && duplicate.source_platform_id === sourcePlatformId) {
+      matchedBy = 'source_platform_id'
+    } else if (duplicate.file_fingerprint && fileFingerprint && duplicate.file_fingerprint === fileFingerprint) {
+      matchedBy = 'file_fingerprint'
+    }
 
     setVideoStatus(ctx, video.platform_id, 'duplicate', duplicate.published_url)
 
+    const existingUrlSuffix = duplicate.published_url ? `. Existing URL: ${duplicate.published_url}` : ''
     ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:duplicate-detected', {
       videoId: video.platform_id, accountId: account.id, accountUsername: account.username,
       matchedBy, existingStatus: duplicate.status, existingVideoId: duplicate.published_video_id,
@@ -114,10 +116,11 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:publish-status', {
       videoId: video.platform_id, status: 'duplicate', videoUrl: duplicate.published_url,
       accountUsername: account.username, matchedBy, duplicateStatus: duplicate.status,
-      message: `Duplicate on @${account.username} (${matchedBy})${duplicate.published_url ? `. Existing URL: ${duplicate.published_url}` : ''}`,
+      message: `Duplicate on @${account.username} (${matchedBy})${existingUrlSuffix}`,
     })
 
-    const msg = `Duplicate detected on @${account.username} (${matchedBy}) — skipping upload${duplicate.published_url ? `, existing: ${duplicate.published_url}` : ''}`
+    const existingSuffix = duplicate.published_url ? `, existing: ${duplicate.published_url}` : ''
+    const msg = `Duplicate detected on @${account.username} (${matchedBy}) — skipping upload${existingSuffix}`
     ctx.logger.info(msg)
     return { action: 'continue', data: null, message: msg }
   }
@@ -275,14 +278,20 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     }
 
     const predictedReviewMs = allStats[statsKey]?.avgReviewMs
+    const statusLabel = status === 'verification_incomplete' ? 'Upload submitted (verification incomplete)' : 'Under content review'
+    const fallbackLabel = status === 'verification_incomplete' ? 'Upload submitted' : 'Under review'
+    let statusMessage: string
+    if (taskId) {
+      statusMessage = created
+        ? `${statusLabel}. Background verification scheduled (${maxRetries} retries, ~${Math.round(retryIntervalMs / 60000)} min intervals).`
+        : `Verification already scheduled (task ${taskId}).`
+    } else {
+      statusMessage = `${fallbackLabel} — async verify scheduling failed, manual recheck needed.`
+    }
     emitPublishStatus({
       status,
       videoUrl: result.videoUrl,
-      message: taskId
-        ? (created
-          ? `${status === 'verification_incomplete' ? 'Upload submitted (verification incomplete)' : 'Under content review'}. Background verification scheduled (${maxRetries} retries, ~${Math.round(retryIntervalMs / 60000)} min intervals).`
-          : `Verification already scheduled (task ${taskId}).`)
-        : `${status === 'verification_incomplete' ? 'Upload submitted' : 'Under review'} — async verify scheduling failed, manual recheck needed.`,
+      message: statusMessage,
       attempts: 0,
       maxRetries,
       predictedReviewMs,
@@ -297,7 +306,8 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     })
 
     if (result.warning) ctx.logger.info(`Publish warning: ${result.warning}`)
-    ctx.logger.info(`Published (${status}): ${result.videoUrl || 'unknown url'}${taskId ? ` — async verify task ${taskId} (${created ? 'created' : 'existing'})` : ''}`)
+    const verifyInfo = taskId ? ` — async verify task ${taskId} (${created ? 'created' : 'existing'})` : ''
+    ctx.logger.info(`Published (${status}): ${result.videoUrl || 'unknown url'}${verifyInfo}`)
 
     return {
       data: {

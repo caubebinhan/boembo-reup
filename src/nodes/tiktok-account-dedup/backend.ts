@@ -39,7 +39,8 @@ function markDuplicateAndSkip(
   matchedBy: string,
   extra?: Record<string, any>
 ): NodeExecutionResult {
-  const duplicateMessage = `Duplicate detected on @${account.username} (${matchedBy})${duplicate?.published_url ? `, existing: ${duplicate.published_url}` : ''}`
+  const existingSuffix = duplicate?.published_url ? `, existing: ${duplicate.published_url}` : ''
+  const duplicateMessage = `Duplicate detected on @${account.username} (${matchedBy})${existingSuffix}`
 
   try {
     ctx.store.updateVideo(video.platform_id, { status: 'duplicate', publish_url: duplicate?.published_url || undefined })
@@ -59,11 +60,12 @@ function markDuplicateAndSkip(
     sourcePlatformId: String(video.platform_id || '').trim() || undefined,
     ...extra,
   })
+  const existingUrlSuffix = duplicate?.published_url ? `. Existing URL: ${duplicate.published_url}` : ''
   emitPublishStatus(ctx, video.platform_id, {
     status: 'duplicate',
     videoUrl: duplicate?.published_url,
     accountUsername: account.username,
-    message: `Duplicate on @${account.username} (${matchedBy})${duplicate?.published_url ? `. Existing URL: ${duplicate.published_url}` : ''}`,
+    message: `Duplicate on @${account.username} (${matchedBy})${existingUrlSuffix}`,
     duplicateStatus: duplicate?.status,
     matchedBy,
     ...extra,
@@ -111,11 +113,12 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
   const exact = findExactDuplicatePublishHistory(account.id, sourcePlatformId, fileFingerprint)
   if (exact) {
-    const matchedBy = exact.source_platform_id && sourcePlatformId && exact.source_platform_id === sourcePlatformId
-      ? 'source_platform_id'
-      : (exact.file_fingerprint && fileFingerprint && exact.file_fingerprint === fileFingerprint)
-        ? 'file_fingerprint'
-        : 'exact_match'
+    let matchedBy = 'exact_match'
+    if (exact.source_platform_id && sourcePlatformId && exact.source_platform_id === sourcePlatformId) {
+      matchedBy = 'source_platform_id'
+    } else if (exact.file_fingerprint && fileFingerprint && exact.file_fingerprint === fileFingerprint) {
+      matchedBy = 'file_fingerprint'
+    }
     return markDuplicateAndSkip(ctx, enrichedVideo, account, exact, matchedBy, {
       fileFingerprint,
       captionHash,

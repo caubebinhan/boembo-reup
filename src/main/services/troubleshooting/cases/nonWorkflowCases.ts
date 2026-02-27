@@ -1,12 +1,12 @@
 import type { TroubleshootingCaseDefinition } from '../types'
 
-const DEBUG_PLATFORM = { workflowId: 'debug-platform', workflowVersion: '1.0' as const }
+const MAIN_SCOPE = { workflowId: 'main', workflowVersion: '1.0' as const }
 
 type PlannedCaseInput = Omit<TroubleshootingCaseDefinition, 'workflowId' | 'workflowVersion' | 'risk' | 'implemented'>
 
 function plannedCase(input: PlannedCaseInput): TroubleshootingCaseDefinition {
   return {
-    ...DEBUG_PLATFORM,
+    ...MAIN_SCOPE,
     risk: 'safe',
     implemented: false,
     ...input,

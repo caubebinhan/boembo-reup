@@ -155,7 +155,7 @@ function parseWorkflowCases() {
 function parseSyntheticCases() {
   const file = path.join(ROOT, 'src', 'main', 'services', 'troubleshooting', 'cases', 'nonWorkflowCases.ts')
   return parseCasesFromFile(file, {
-    workflowId: 'debug-platform',
+    workflowId: 'main',
     workflowVersion: '1.0',
     risk: 'safe',
     implemented: false,
