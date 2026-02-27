@@ -6,6 +6,7 @@ import { updateNodeProgress } from '../../store/nodeEventsSlice'
 interface PipelineVisualizerProps {
     campaignId: string
     workflowId: string
+    vertical?: boolean
 }
 
 interface FlowNodeInfo {
@@ -133,13 +134,29 @@ function NodeCard({
         <div className="relative group z-10" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
             {hovered && <NodeTooltip node={node} campaignId={campaignId} />}
 
+            {/* Spinning border animation when running */}
+            {status === 'running' && (
+                <div className="absolute inset-[-3px] rounded-[14px] z-0 pointer-events-none"
+                    style={{
+                        background: `conic-gradient(${meta.color} 0deg, ${meta.color}44 120deg, transparent 180deg)`,
+                        animation: 'node-spin 1.8s linear infinite',
+                        borderRadius: '14px',
+                    }}
+                />
+            )}
+            <style>{`
+                @keyframes node-spin {
+                    from { transform: rotate(0deg); }
+                    to   { transform: rotate(360deg); }
+                }
+            `}</style>
+
             <div
                 id={`vis-node-${node.instance_id}`}
                 onClick={() => onSelect(node)}
-                className={`rounded-xl border-2 transition-all duration-300 cursor-pointer overflow-hidden ${bgClass} shadow-sm hover:shadow-md`}
+                className={`relative rounded-xl border-2 transition-all duration-300 cursor-pointer overflow-hidden ${bgClass} shadow-sm hover:shadow-md z-10`}
                 style={{
                     borderColor,
-                    boxShadow: status === 'running' ? `0 0 12px ${meta.color}25` : undefined,
                     width: compact ? 110 : 140,
                     padding: compact ? '6px 10px' : '10px 12px',
                     transform: hovered ? 'translateY(-2px)' : 'none'
@@ -531,7 +548,7 @@ function InspectPanel({ node, campaignId, onClose, campaignParams, onParamsUpdat
 }
 
 // ── Main PipelineVisualizer ─────────────────────
-export function PipelineVisualizer({ campaignId, workflowId }: PipelineVisualizerProps) {
+export function PipelineVisualizer({ campaignId, workflowId, vertical = false }: PipelineVisualizerProps) {
     const [flowData, setFlowData] = useState<{ nodes: FlowNodeInfo[]; edges: FlowEdge[] } | null>(null)
     const [selectedNode, setSelectedNode] = useState<FlowNodeInfo | null>(null)
     const [campaignParams, setCampaignParams] = useState<any>({})
@@ -606,8 +623,8 @@ export function PipelineVisualizer({ campaignId, workflowId }: PipelineVisualize
     if (!flowData) return <div className="p-6 flex text-slate-400">Loading pipeline...</div>
 
     return (
-        <div className="flex bg-slate-50 rounded-xl border border-slate-200 overflow-hidden relative" style={{ minHeight: '280px' }}>
-            <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 relative">
+        <div className="flex bg-slate-50 rounded-xl border border-slate-200 overflow-hidden relative" style={{ minHeight: vertical ? '200px' : '280px' }}>
+            <div className={`flex-1 p-6 relative ${vertical ? 'overflow-y-auto overflow-x-hidden' : 'overflow-x-auto overflow-y-hidden'}`}>
                 <style>{`
                     @keyframes dash {
                         to { stroke-dashoffset: -10; }
@@ -618,11 +635,19 @@ export function PipelineVisualizer({ campaignId, workflowId }: PipelineVisualize
                     }
                 `}</style>
 
-                <div ref={containerRef} className="flex items-center gap-16 relative min-w-max h-full">
+                <div ref={containerRef}
+                    className={vertical
+                        ? 'flex flex-col gap-8 relative w-full'
+                        : 'flex items-center gap-16 relative min-w-max h-full'
+                    }
+                >
                     <SvgOverlay edges={flowData.edges} flowData={flowData} containerRef={containerRef} campaignId={campaignId} />
 
                     {layers.map((layer, l_idx) => (
-                        <div key={l_idx} className="flex flex-col gap-8 relative z-10">
+                        <div key={l_idx} className={vertical
+                            ? 'flex flex-row flex-wrap gap-4 relative z-10 justify-center'
+                            : 'flex flex-col gap-8 relative z-10'
+                        }>
                             {layer.map(node => {
                                 const isLoop = node.children && node.children.length > 0
                                 const childrenNodes = isLoop

@@ -7,3 +7,9 @@ out
 .test-db/
 .env*
 !.env.example
+tests/debug/artifacts/*
+!tests/debug/artifacts/.gitkeep
+tests/debug/footprints/*
+!tests/debug/footprints/.gitkeep
+tests/debug/runs/*
+!tests/debug/runs/.gitkeep

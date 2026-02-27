@@ -1,6 +1,6 @@
 import { expect } from 'vitest'
 import type { UnitCaseDefinition } from '../../types'
-import { mapArtifactsForView } from '../../../../troubleshootingPanel.helpers'
+import { mapArtifactsForView } from '../../../../../../src/renderer/src/components/troubleshootingPanel.helpers'
 
 export const dataUrlRendersImageCase: UnitCaseDefinition = {
   id: 'unit.troubleshooting.artifact-view.data-url-renders-image',

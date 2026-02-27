@@ -4,6 +4,7 @@ export interface TroubleshootingCaseDefinition {
   id: TroubleshootingCaseId
   title: string
   description: string
+  fingerprint?: string
   risk: 'safe' | 'real_publish'
   workflowId?: string
   workflowVersion?: string
@@ -30,6 +31,10 @@ export interface TroubleshootingRunRecord {
   tags?: string[]
   level?: 'basic' | 'intermediate' | 'advanced'
   caseMeta?: TroubleshootingCaseMeta
+  caseFingerprint?: string
+  runFingerprint?: string
+  artifactManifestPath?: string
+  footprintPath?: string
   logStats?: TroubleshootingRunLogStats
   logs: Array<{ ts: number; level: 'info' | 'warn' | 'error'; line: string }>
   result?: any
@@ -104,6 +109,7 @@ export interface TroubleshootingDiagnosticFootprint {
   }
   execution: {
     runId: string
+    runFingerprint?: string
     status: 'running' | 'passed' | 'failed'
     startedAt: number
     endedAt?: number
@@ -112,6 +118,10 @@ export interface TroubleshootingDiagnosticFootprint {
     logLinesStored: number
   }
   summary?: string
+  fingerprints?: {
+    case?: string
+    run?: string
+  }
   result?: {
     success?: boolean
     summary?: string
@@ -140,6 +150,7 @@ export interface TroubleshootingDiagnosticFootprint {
     nodeVersion?: string
     platform?: string
     arch?: string
+    runtimeFlavor?: string
   }
 }
 

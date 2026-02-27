@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import http from 'node:http'
+import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { chromium } from 'playwright'
@@ -18,6 +19,29 @@ let baseUrl
 const onlyCaseId = process.env.TEST_CASE_ID?.trim()
 const rawHeadless = String(process.env.E2E_HEADLESS ?? '1').toLowerCase()
 const headless = !['0', 'false', 'no', 'off'].includes(rawHeadless)
+const runtimeEnv = (() => {
+  const platform = process.platform
+  const arch = process.arch
+  const isWindows = platform === 'win32'
+  const isMacAppleSilicon = platform === 'darwin' && arch === 'arm64'
+  const isMacIntel = platform === 'darwin' && arch === 'x64'
+  const runtimeLabel = isWindows
+    ? 'windows'
+    : isMacAppleSilicon
+      ? 'macos-arm64'
+      : isMacIntel
+        ? 'macos-x64'
+        : `${platform}-${arch}`
+
+  const tempRoot = os.tmpdir()
+  return {
+    platform,
+    arch,
+    runtimeLabel,
+    dbPath: path.join(tempRoot, `boembo-e2e-${runtimeLabel}.db`),
+    storagePath: tempRoot,
+  }
+})()
 
 if (onlyCaseId && !e2eCaseIndex.has(onlyCaseId)) {
   test(`[missing-case] ${onlyCaseId}`, () => {
@@ -65,11 +89,17 @@ test.before(async () => {
   page = await browser.newPage()
 
   await page.addInitScript(
-    ({ fixtureCases, fixtureRuns }) => {
+    ({ fixtureCases, fixtureRuns, runtime }) => {
       const listeners = new Map()
       const api = {
         invoke: async (channel) => {
           if (channel === 'campaign:list') return []
+          if (channel === 'settings:db-info') return { dbPath: runtime.dbPath, runtime: { platform: runtime.platform, arch: runtime.arch } }
+          if (channel === 'settings:inspect-schema') {
+            return { healthy: true, tables: ['campaigns', 'jobs', 'execution_logs'], indexes: [] }
+          }
+          if (channel === 'healthcheck:storage') return { ok: true, freeMB: 4096, path: runtime.storagePath }
+          if (channel === 'healthcheck:services') return { ok: true, services: [] }
           if (channel === 'troubleshooting:list-cases') return fixtureCases
           if (channel === 'troubleshooting:list-runs') return fixtureRuns
           if (channel === 'troubleshooting:list-video-candidates') return []
@@ -113,6 +143,7 @@ test.before(async () => {
     {
       fixtureCases: TROUBLESHOOTING_PANEL_FIXTURE_CASES,
       fixtureRuns: TROUBLESHOOTING_PANEL_FIXTURE_RUNS,
+      runtime: runtimeEnv,
     }
   )
 

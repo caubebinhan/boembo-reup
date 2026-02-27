@@ -715,3 +715,27 @@ The `import '../workflows'` barrel in `index.ts` auto-imports workflow main-proc
 | macOS/Linux | `df -k` |
 
 Returns free space in MB, `-1` on error. Used by splash screen, pre-run health check, and storage IPC.
+
+---
+
+## Debug Case Hub
+
+Troubleshooting case management is centralized under `tests/debug/`:
+
+1. `tests/debug/CASE_INDEX.json` - machine-readable per-case index (id, status, fingerprint, todos)
+2. `tests/debug/CASEBOOK.md` - implementation queue and workflow breakdown
+3. `tests/debug/EXCEPTION_MATRIX.md` - proposed extra edge/exception scenarios
+4. `tests/debug/artifacts/` - archived artifact bundles per run
+5. `tests/debug/footprints/` - saved diagnostic footprint JSON per run
+
+Regenerate casebook/index:
+
+```bash
+npm run debug:casebook
+```
+
+Troubleshooting run records now include:
+
+- `caseFingerprint` + `runFingerprint`
+- `artifactManifestPath` (artifact bundle manifest)
+- `footprintPath` (saved footprint JSON path)

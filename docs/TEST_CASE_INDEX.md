@@ -2,9 +2,15 @@
 
 This project now keeps test cases in per-case files with explicit `id`, `group`, and `meta` so failed cases can be investigated one-by-one.
 
+Debug casebook hub:
+
+- `tests/debug/CASEBOOK.md`
+- `tests/debug/CASE_INDEX.json`
+- `tests/debug/EXCEPTION_MATRIX.md`
+
 ## Unit Cases
 
-Index entrypoint: `src/renderer/src/components/__tests__/cases/unit/index.ts`
+Index entrypoint: `tests/unit/debug/cases/unit/index.ts`
 Current count: **6**
 
 Case IDs:
@@ -25,7 +31,7 @@ npm run test:unit
 
 ## E2E Cases
 
-Index entrypoint: `e2e/cases/index.mjs`
+Index entrypoint: `tests/e2e/cases/index.mjs`
 Current count: **3**
 
 Case IDs:

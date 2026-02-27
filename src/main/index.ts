@@ -13,6 +13,7 @@ import { setupCampaignIPC } from './ipc/campaigns'
 import { setupSettingsIPC } from './ipc/settings'
 import { setupTroubleshootingIPC } from './ipc/troubleshooting'
 import { CrashRecoveryService } from './services/CrashRecovery'
+import { serviceHealthMonitor } from './services/ServiceHealthMonitor'
 import { flowLoader } from '../core/flow/FlowLoader'
 import { asyncTaskScheduler } from './services/AsyncTaskScheduler'
 // Importing the nodes barrel triggers self-registration of all nodes.
@@ -86,7 +87,6 @@ app.whenReady().then(() => {
   flowEngine.start()
 
   // Start runtime service health monitor (pings workflow URLs periodically)
-  const { serviceHealthMonitor } = require('./services/ServiceHealthMonitor')
   serviceHealthMonitor.start()
 
   // Initialize Async Task Scheduler (handlers self-register from their modules)

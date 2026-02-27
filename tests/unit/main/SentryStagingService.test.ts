@@ -7,7 +7,7 @@ import {
   loadSentryDsnConfig,
   sendSentryMessageToChannel,
   resolveSentryProductionDsn,
-} from '../SentryStagingService'
+} from '../../../src/main/services/SentryStagingService'
 
 const originalFetch = globalThis.fetch
 

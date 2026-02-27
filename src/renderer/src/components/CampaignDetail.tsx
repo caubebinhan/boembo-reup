@@ -50,6 +50,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
     const dispatch = useDispatch()
     const [campaign, setCampaign] = useState<any>(null)
     const [loading, setLoading] = useState(true)
+    const [statusMessage, setStatusMessage] = useState<string>('')
 
     const workflowId = campaign?.workflow_id || 'tiktok-repost'
     const { descriptor } = useFlowUIDescriptor(workflowId)
@@ -69,6 +70,25 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
             // @ts-ignore
             const data = await window.api.invoke('campaign:get', { id: campaignId })
             if (data) setCampaign(data)
+            // Fetch last log message for inline status display
+            try {
+                // @ts-ignore
+                const logs: any[] = await window.api.invoke('campaign:get-logs', { id: campaignId, limit: 30 }) || []
+                const status = data?.status
+                let msg = ''
+                if (status === 'active') {
+                    // Show the latest node:progress message for running campaigns
+                    const prog = logs.find(l => l.event === 'node:progress' && l.message)
+                    msg = prog?.message || ''
+                } else if (status === 'paused') {
+                    const ev = logs.find(l => l.event === 'campaign:paused' && l.message)
+                    msg = ev?.message || 'Campaign đang tạm dừng'
+                } else if (status === 'error') {
+                    const ev = logs.find(l => l.event === 'campaign:error' && l.message)
+                    msg = ev?.message || ''
+                }
+                setStatusMessage(msg)
+            } catch { }
         } catch (err) { console.error('[CampaignDetail] fetchCampaign error:', err) }
         finally { setLoading(false) }
     }, [campaignId])
@@ -139,6 +159,16 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                             <span className={`w-1.5 h-1.5 rounded-full ${ss.dot} ${campaign.status === 'active' ? 'animate-pulse' : ''}`} />
                             {campaign.status}
                         </span>
+                        {/* Inline status alert — shown next to the status badge */}
+                        {statusMessage && (
+                            <span className={`text-xs px-2.5 py-1 rounded-full border font-medium max-w-[300px] truncate ${campaign.status === 'error' ? 'bg-red-50 text-red-600 border-red-200' :
+                                campaign.status === 'paused' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                    campaign.status === 'needs_captcha' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                        'bg-slate-50 text-slate-500 border-slate-200'
+                                }`} title={statusMessage}>
+                                {campaign.status === 'error' ? '⚠ ' : campaign.status === 'paused' ? '⏸ ' : campaign.status === 'needs_captcha' ? '🔒 ' : ''}{statusMessage}
+                            </span>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">

@@ -10,7 +10,7 @@ export const troubleshootingPanelCaseGroup = {
     objective: 'Validate troubleshooting catalog grouping and artifact preview UX.',
     investigationHints: [
       'Use case id to run a single failing flow with TEST_CASE_ID.',
-      'Inspect fixture payload in e2e/cases/troubleshooting/fixtures.mjs.',
+      'Inspect fixture payload in tests/e2e/cases/troubleshooting/fixtures.mjs.',
     ],
   },
   cases: [

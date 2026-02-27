@@ -149,6 +149,14 @@ npm run test:e2e
 Case index and grouping rules:
 
 1. `docs/TEST_CASE_INDEX.md`
+2. `tests/debug/CASEBOOK.md`
+3. `tests/debug/EXCEPTION_MATRIX.md`
+
+Regenerate debug case index/todo:
+
+```bash
+npm run debug:casebook
+```
 
 ## 9) Debug workflow with Sentry (required pass criteria)
 

@@ -1,6 +1,6 @@
 import { expect } from 'vitest'
 import type { UnitCaseDefinition } from '../../types'
-import { classifyCaseSuite } from '../../../../troubleshootingPanel.helpers'
+import { classifyCaseSuite } from '../../../../../../src/renderer/src/components/troubleshootingPanel.helpers'
 
 export const staticAnalysisIsUnitCase: UnitCaseDefinition = {
   id: 'unit.troubleshooting.suite-classification.static-analysis-is-unit',

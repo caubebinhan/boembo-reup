@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type {
   TroubleshootingCaseArtifactSpec,
   TroubleshootingCaseDefinition,
@@ -7,6 +8,7 @@ import type {
   TroubleshootingRunResultLike,
   WorkflowTroubleshootingProvider,
 } from '../types'
+import { nonWorkflowTroubleshootingCases } from './nonWorkflowCases'
 
 type TroubleshootingProviderModule = { troubleshootingProvider?: WorkflowTroubleshootingProvider }
 
@@ -16,10 +18,31 @@ const providers: WorkflowTroubleshootingProvider[] = Object.entries(providerModu
   .map(([, mod]) => (mod as TroubleshootingProviderModule).troubleshootingProvider)
   .filter((p): p is WorkflowTroubleshootingProvider => !!p)
 
-console.log(`[Troubleshooting] Auto-discovered ${providers.length} troubleshooting provider(s)`)
+const syntheticProviders: WorkflowTroubleshootingProvider[] = [
+  {
+    workflowId: 'debug-platform',
+    workflowVersion: '1.0',
+    cases: nonWorkflowTroubleshootingCases,
+  },
+]
+
+console.log(
+  `[Troubleshooting] Auto-discovered ${providers.length} workflow provider(s) + ${syntheticProviders.length} synthetic provider(s)`
+)
 
 let duplicateChecked = false
 let normalizedProviders: WorkflowTroubleshootingProvider[] | null = null
+
+function buildCaseFingerprint(caseDef: TroubleshootingCaseDefinition): string {
+  const seed = [
+    caseDef.workflowId || 'unscoped',
+    caseDef.workflowVersion || 'unversioned',
+    caseDef.id,
+    caseDef.group || caseDef.category || 'general',
+    caseDef.risk || 'safe',
+  ].join('|')
+  return `case-${createHash('sha1').update(seed).digest('hex').slice(0, 16)}`
+}
 
 function buildDefaultArtifactsForCase(c: TroubleshootingCaseDefinition): TroubleshootingCaseArtifactSpec[] {
   const tags = new Set(c.tags || [])
@@ -208,16 +231,25 @@ function normalizeCase(caseDef: TroubleshootingCaseDefinition): TroubleshootingC
     ...caseDef,
     group,
     tags,
+    fingerprint: caseDef.fingerprint || buildCaseFingerprint({ ...caseDef, group }),
     meta: mergeMeta(buildDefaultMetaForCase({ ...caseDef, group }), caseDef.meta),
   }
 }
 
 function getProviders(): WorkflowTroubleshootingProvider[] {
   if (normalizedProviders) return normalizedProviders
-  normalizedProviders = providers.map((p) => ({
-    ...p,
-    cases: (p.cases || []).map(normalizeCase),
-  }))
+  normalizedProviders = [...providers, ...syntheticProviders].map((provider) => {
+    const workflowId = provider.workflowId
+    const workflowVersion = provider.workflowVersion
+    return {
+      ...provider,
+      cases: (provider.cases || []).map((rawCase) => normalizeCase({
+        ...rawCase,
+        workflowId: rawCase.workflowId || workflowId,
+        workflowVersion: rawCase.workflowVersion || workflowVersion,
+      })),
+    }
+  })
   return normalizedProviders
 }
 

@@ -11,6 +11,7 @@ type TroubleCase = {
   id: string
   title: string
   description: string
+  fingerprint?: string
   risk: TroubleCaseRisk
   workflowId?: string
   workflowVersion?: string
@@ -56,6 +57,10 @@ type TroubleRun = {
   tags?: string[]
   level?: TroubleCaseLevel
   caseMeta?: TroubleCase['meta']
+  caseFingerprint?: string
+  runFingerprint?: string
+  artifactManifestPath?: string
+  footprintPath?: string
   logStats?: { total: number; info: number; warn: number; error: number }
   logs: TroubleLogEntry[]
   result?: any
@@ -748,6 +753,9 @@ export function TroubleShottingPanel() {
                                     <span>Log checks: {logChecks}</span>
                                   </div>
                                   <p className="text-[11px] text-gray-500 mt-2 font-mono">{c.id}</p>
+                                  {c.fingerprint && (
+                                    <p className="text-[11px] text-gray-600 mt-1 font-mono">fp={c.fingerprint}</p>
+                                  )}
                                 </div>
                                 <button
                                   onClick={() => runCase(c.id)}
@@ -857,6 +865,12 @@ export function TroubleShottingPanel() {
                     <div>Started: {new Date(selectedRun.startedAt).toLocaleString('vi-VN')}</div>
                     {selectedRun.endedAt && <div>Ended: {new Date(selectedRun.endedAt).toLocaleString('vi-VN')}</div>}
                     <div>Case: <span className="font-mono">{selectedRun.caseId}</span></div>
+                    {selectedRun.caseFingerprint && (
+                      <div>Case FP: <span className="font-mono">{selectedRun.caseFingerprint}</span></div>
+                    )}
+                    {selectedRun.runFingerprint && (
+                      <div>Run FP: <span className="font-mono">{selectedRun.runFingerprint}</span></div>
+                    )}
                     {(selectedRun.workflowId || selectedRun.workflowVersion) && (
                       <div>
                         Workflow: <span className="font-mono">
@@ -878,7 +892,17 @@ export function TroubleShottingPanel() {
                     )}
                     {selectedRun.logStats && (
                       <div>
-                        Logs: total={selectedRun.logStats.total} · info={selectedRun.logStats.info} · warn={selectedRun.logStats.warn} · error={selectedRun.logStats.error}
+                        Logs: total={selectedRun.logStats.total} | info={selectedRun.logStats.info} | warn={selectedRun.logStats.warn} | error={selectedRun.logStats.error}
+                      </div>
+                    )}
+                    {(selectedRun.artifactManifestPath || selectedRun.footprintPath) && (
+                      <div className="space-y-1">
+                        {selectedRun.artifactManifestPath && (
+                          <div className="break-all">Artifact Manifest: <span className="font-mono">{selectedRun.artifactManifestPath}</span></div>
+                        )}
+                        {selectedRun.footprintPath && (
+                          <div className="break-all">Footprint File: <span className="font-mono">{selectedRun.footprintPath}</span></div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1034,6 +1058,11 @@ export function TroubleShottingPanel() {
                           </span>
                         )}
                       </div>
+                      {selectedRun.footprintPath && (
+                        <div className="text-[11px] text-gray-500 break-all">
+                          footprint_file={selectedRun.footprintPath}
+                        </div>
+                      )}
                       <pre className="text-[11px] text-gray-300 whitespace-pre-wrap break-words max-h-[220px] overflow-y-auto">
                         {selectedRunFootprintPreview}
                       </pre>

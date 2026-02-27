@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { PipelineRunner } from '../PipelineRunner'
-import { ContextManager } from '../ContextManager'
-import { PluginRegistry } from '../../registry/PluginRegistry'
-import { INode, NodeResult } from '../../types/INode'
-import { Context } from '../../types/Context'
+import { PipelineRunner } from '../../../src/core/engine/PipelineRunner'
+import { ContextManager } from '../../../src/core/engine/ContextManager'
+import { PluginRegistry } from '../../../src/core/registry/PluginRegistry'
+import { INode, NodeResult } from '../../../src/core/types/INode'
+import { Context } from '../../../src/core/types/Context'
 
 class MockNode1 implements INode {
   id = ''

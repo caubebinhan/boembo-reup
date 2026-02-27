@@ -6,7 +6,7 @@
  *   LEFT:   Video Timeline (primary focus)
  *   RIGHT:  Pipeline Visualizer + Sources + Logs (tabs)
  */
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { PipelineVisualizer } from '@renderer/detail/shared/PipelineVisualizer'
 import type { WorkflowDetailProps } from '@renderer/detail/WorkflowDetailRegistry'
 
@@ -402,74 +402,86 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
     const state = useTikTokRepostState(campaignId)
     const config = campaign?.params || {}
     const [rightTab, setRightTab] = useState<'pipeline' | 'sources' | 'logs'>('pipeline')
+    const [pipelineExpanded, setPipelineExpanded] = useState(false)
+    const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     const sources = config.sources || []
     const gapMinutes = config.intervalMinutes
     const phase = PHASE_UI[state.phase] || PHASE_UI.idle
     const percent = state.scannedCount > 0 ? Math.round((state.publishedCount / state.scannedCount) * 100) : 0
 
+    // Per-source video counts (match by author name = source name)
+    const videosBySource = state.videos.reduce((acc: Record<string, TikTokVideo[]>, v) => {
+        const author = v.author || 'unknown'
+        if (!acc[author]) acc[author] = []
+        acc[author].push(v)
+        return acc
+    }, {})
+
+    // Human-readable scan condition builder
+    const buildScanLabel = (s: any): string => {
+        const parts: string[] = []
+        if (s.minLikes) parts.push(`ít nhất ${Number(s.minLikes).toLocaleString()} likes`)
+        if (s.minViews) parts.push(`ít nhất ${Number(s.minViews).toLocaleString()} lượt xem`)
+        if (s.maxViews) parts.push(`tối đa ${Number(s.maxViews).toLocaleString()} lượt xem`)
+        if (s.withinDays) parts.push(`trong ${s.withinDays} ngày gần nhất`)
+        if (s.maxVideos) parts.push(`tối đa ${s.maxVideos} video`)
+        return parts.length > 0 ? parts.join(', ') : 'Tất cả video'
+    }
+
     return (
-        <div className="space-y-4 max-w-full">
+        <div className="flex flex-col h-full max-w-full gap-3">
 
-            {/* ── TOP BAR: Phase + Progress Message + Stats (inline) ──── */}
-            <div className="flex items-center gap-4 bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-3">
-                {/* Progress Ring — only if we have deterministic progress */}
-                {state.scannedCount > 0 && state.publishedCount > 0 && (
-                    <div className="relative flex items-center justify-center shrink-0">
-                        <MiniProgressRing percent={percent} color={phase.color} />
-                        <span className="absolute text-[8px] font-bold text-slate-600">{percent}%</span>
-                    </div>
-                )}
-
-                {/* Phase + Progress Message — inline on same line */}
-                <div className="flex items-center gap-2 border-r border-slate-200 pr-4 shrink-0">
-                    <span className={['scanning', 'downloading', 'publishing'].includes(state.phase) ? 'animate-bounce text-sm' : 'text-sm'}>
-                        {phase.icon}
-                    </span>
-                    <span className="font-semibold text-slate-700 text-sm">{phase.label}</span>
-                    {state.phaseMessage && (
-                        <>
-                            <span className="text-slate-300">·</span>
-                            <span className="text-xs text-slate-400 truncate max-w-[250px]" title={state.phaseMessage}>{state.phaseMessage}</span>
-                        </>
+            {/* ── PER-CHANNEL STATS STRIP ── */}
+            {sources.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                    {sources.map((s: any, i: number) => {
+                        const sv = videosBySource[s.name] || []
+                        const pub = sv.filter((v: TikTokVideo) => ['published', 'verification_incomplete'].includes(v.status)).length
+                        const q = sv.filter((v: TikTokVideo) => v.status === 'queued').length
+                        const fail = sv.filter((v: TikTokVideo) => v.status === 'failed').length
+                        const total = sv.length
+                        return (
+                            <div key={i} className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm text-xs">
+                                {s.avatar
+                                    ? <img src={s.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                                    : <span className="text-[11px] shrink-0">{s.type === 'channel' ? '📺' : '🔑'}</span>
+                                }
+                                <span className="font-semibold text-slate-700 max-w-[120px] truncate">{s.name}</span>
+                                <span className="text-slate-300">·</span>
+                                <span className="text-slate-400">{total} video</span>
+                                {pub > 0 && <span className="text-emerald-600 font-bold">✓{pub}</span>}
+                                {q > 0 && <span className="text-amber-600 font-bold">⏳{q}</span>}
+                                {fail > 0 && <span className="text-red-500 font-bold">✗{fail}</span>}
+                            </div>
+                        )
+                    })}
+                    {/* Progress ring — only when publishing is underway */}
+                    {percent > 0 && (
+                        <div className="relative flex items-center justify-center shrink-0 ml-1">
+                            <MiniProgressRing percent={percent} color={phase.color} />
+                            <span className="absolute text-[8px] font-bold text-slate-600">{percent}%</span>
+                        </div>
                     )}
                 </div>
+            )}
 
-                {/* Inline Stats Badges */}
-                <div className="flex items-center gap-3 flex-1 flex-wrap">
-                    {[
-                        { icon: '🔍', label: 'Scanned', value: state.scannedCount, color: '#7c3aed' },
-                        { icon: '📋', label: 'Queued', value: state.queuedCount, color: '#ca8a04' },
-                        { icon: '⬇️', label: 'Downloaded', value: state.downloadedCount, color: '#2563eb' },
-                        { icon: '📤', label: 'Published', value: state.publishedCount, color: '#059669' },
-                        ...(state.failedCount > 0 ? [{ icon: '💥', label: 'Failed', value: state.publishFailedCount, color: '#dc2626' }] : []),
-                        ...(state.captchaCount > 0 ? [{ icon: '⚠️', label: 'CAPTCHA', value: state.captchaCount, color: '#ea580c' }] : []),
-                    ].map(s => (
-                        <div key={s.label} className="flex items-center gap-1.5 text-xs">
-                            <span className="text-[10px]">{s.icon}</span>
-                            <span className="text-slate-400">{s.label}</span>
-                            <span className="font-bold" style={{ color: s.color }}>{s.value}</span>
-                        </div>
-                    ))}
-                </div>
+            {/* ── SPLIT LAYOUT: Timeline (left 50%) | Pipeline/Sources/Logs (right 50%) ── */}
+            <div className="flex gap-4 flex-1 min-h-0">
 
-                {/* Gap badge */}
-                {gapMinutes && <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">⏱ {gapMinutes}min gap</span>}
-            </div>
-
-            {/* ── SPLIT LAYOUT: Timeline (left) | Pipeline/Sources/Logs (right) ── */}
-            <div className="flex gap-4" style={{ minHeight: '500px' }}>
-
-                {/* LEFT: Video Timeline (primary) */}
-                <div className="flex-1 min-w-0 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                {/* LEFT: Video Timeline — exactly 50% width, independent scroll */}
+                <div className="w-1/2 shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                     <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-2">
                             <span className="text-sm">📋</span>
                             <span className="text-xs font-bold text-slate-400 tracking-wider uppercase">Video Timeline</span>
                             <span className="text-[10px] bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full border border-purple-200 font-bold">{state.videos.length}</span>
                         </div>
+                        {/* Gap badge moved here — next to video count */}
+                        {gapMinutes && <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full shrink-0">⏱ {gapMinutes}min gap</span>}
                     </div>
 
+                    {/* Independent scroll — only this panel scrolls, not the whole page */}
                     <div className="flex-1 overflow-y-auto px-3 py-2">
                         {state.videos.length === 0 ? (
                             <div className="text-slate-400 text-sm text-center py-16 flex flex-col items-center gap-2">
@@ -522,8 +534,8 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                     </div>
                 </div>
 
-                {/* RIGHT: Pipeline / Sources / Logs */}
-                <div className="w-[400px] shrink-0 flex flex-col gap-3">
+                {/* RIGHT: Pipeline / Sources / Logs — remaining 50% */}
+                <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
                     {/* Right-side Tabs */}
                     <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl shrink-0">
                         <SideTab active={rightTab === 'pipeline'} label="Pipeline" icon="⚙️" onClick={() => setRightTab('pipeline')} />
@@ -531,45 +543,136 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                         <SideTab active={rightTab === 'logs'} label="Logs" icon="📃" onClick={() => setRightTab('logs')} />
                     </div>
 
-                    <div className="flex-1 overflow-hidden">
+                    <div className="flex-1 overflow-hidden min-h-0">
                         {rightTab === 'pipeline' && (
-                            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 h-full overflow-auto animate-fade-in">
-                                <PipelineVisualizer campaignId={campaignId} workflowId={workflowId} />
+                            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 h-full overflow-auto animate-fade-in"
+                                onMouseEnter={() => {
+                                    if (leaveTimer.current) clearTimeout(leaveTimer.current)
+                                    setPipelineExpanded(true)
+                                }}
+                            >
+                                <PipelineVisualizer campaignId={campaignId} workflowId={workflowId} vertical />
+                            </div>
+                        )}
+
+                        {/* Pipeline expanded modal */}
+                        {pipelineExpanded && (
+                            <div
+                                className="fixed inset-0 z-50 flex items-center justify-center"
+                                style={{ backgroundColor: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(4px)' }}
+                                onMouseLeave={() => { leaveTimer.current = setTimeout(() => setPipelineExpanded(false), 120) }}
+                                onMouseEnter={() => { if (leaveTimer.current) clearTimeout(leaveTimer.current) }}
+                            >
+                                <div
+                                    className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
+                                    style={{
+                                        width: '80vw', height: '80vh',
+                                        animation: 'pipelineExpand 0.38s ease-out both',
+                                    }}
+                                    onMouseEnter={() => { if (leaveTimer.current) clearTimeout(leaveTimer.current) }}
+                                >
+                                    <style>{`
+                                        @keyframes pipelineExpand {
+                                            from { opacity: 0; transform: scale(0.88) translateY(12px); }
+                                            to   { opacity: 1; transform: scale(1) translateY(0); }
+                                        }
+                                    `}</style>
+                                    <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
+                                        <span className="text-sm font-bold text-slate-700">⚙️ Pipeline</span>
+                                        <button
+                                            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+                                            onClick={() => setPipelineExpanded(false)}
+                                        >✕</button>
+                                    </div>
+                                    <div className="flex-1 overflow-auto p-4">
+                                        <PipelineVisualizer campaignId={campaignId} workflowId={workflowId} vertical />
+                                    </div>
+                                </div>
                             </div>
                         )}
 
                         {rightTab === 'sources' && (
-                            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-4 h-full overflow-auto animate-fade-in">
-                                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-3">📡 Sources</p>
-                                {sources.length === 0 ? (
-                                    <p className="text-slate-400 text-sm text-center py-8">No sources configured</p>
-                                ) : (
-                                    <div className="flex flex-col gap-2">
-                                        {sources.map((s: any, i: number) => {
-                                            const filters: string[] = []
-                                            if (s.minLikes) filters.push(`≥${s.minLikes} likes`)
-                                            if (s.minViews) filters.push(`≥${s.minViews} views`)
-                                            if (s.maxViews) filters.push(`≤${s.maxViews} views`)
-                                            if (s.withinDays) filters.push(`${s.withinDays}d`)
-                                            return (
-                                                <div key={i} className="flex flex-col gap-1 p-3 rounded-xl bg-slate-50 border border-slate-200">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-sm">{s.type === 'channel' ? '📺' : '🔑'}</span>
-                                                        <span className="font-semibold text-sm text-slate-700">{s.name}</span>
-                                                        {s.autoSchedule === false && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200">Manual</span>}
-                                                    </div>
-                                                    {filters.length > 0 && (
-                                                        <div className="flex flex-wrap gap-1 mt-0.5">
-                                                            {filters.map((f, fi) => (
-                                                                <span key={fi} className="text-[9px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">{f}</span>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )
-                                        })}
+                            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm h-full overflow-auto animate-fade-in">
+                                {/* ── Aggregate stats ── */}
+                                <div className="px-4 pt-4 pb-3 border-b border-slate-100">
+                                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-3">📊 Thống kê tổng</p>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {[
+                                            { label: 'Scanned', value: state.scannedCount, color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
+                                            { label: 'Queued', value: state.queuedCount, color: '#ca8a04', bg: '#fefce8', border: '#fde047' },
+                                            { label: 'Published', value: state.publishedCount, color: '#059669', bg: '#ecfdf5', border: '#6ee7b7' },
+                                            { label: 'Failed', value: state.failedCount, color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
+                                        ].map(s => (
+                                            <div key={s.label} className="flex items-center justify-between rounded-lg px-3 py-2 border text-xs"
+                                                style={{ backgroundColor: s.bg, borderColor: s.border }}>
+                                                <span style={{ color: s.color }} className="font-medium">{s.label}</span>
+                                                <span style={{ color: s.color }} className="font-bold text-sm">{s.value}</span>
+                                            </div>
+                                        ))}
                                     </div>
-                                )}
+                                </div>
+
+                                {/* ── Per-source breakdown ── */}
+                                <div className="p-4">
+                                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-3">📡 Từng nguồn</p>
+                                    {sources.length === 0 ? (
+                                        <p className="text-slate-400 text-sm text-center py-8">No sources configured</p>
+                                    ) : (
+                                        <div className="flex flex-col gap-3">
+                                            {sources.map((s: any, i: number) => {
+                                                const sourceVideos = videosBySource[s.name] || []
+                                                const pubCount = sourceVideos.filter(v => ['published', 'verification_incomplete'].includes(v.status)).length
+                                                const qCount = sourceVideos.filter(v => v.status === 'queued').length
+                                                const failCount = sourceVideos.filter(v => v.status === 'failed').length
+                                                const scanLabel = buildScanLabel(s)
+
+                                                return (
+                                                    <div key={i} className="flex flex-col gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                                                        {/* Channel identity row */}
+                                                        <div className="flex items-center gap-2.5">
+                                                            {/* Avatar or icon */}
+                                                            <div className="w-9 h-9 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                                                                {s.avatar
+                                                                    ? <img src={s.avatar} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                                                                    : (s.name?.charAt(0)?.toUpperCase() || (s.type === 'channel' ? '📺' : '#'))
+                                                                }
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                    <span className="font-bold text-sm text-slate-800 truncate">{s.name || 'Unknown'}</span>
+                                                                    {s.type === 'keyword' && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 shrink-0">Keyword</span>}
+                                                                    {s.autoSchedule === false && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-600 border border-orange-200 shrink-0">Manual</span>}
+                                                                </div>
+                                                                <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5">
+                                                                    {s.followerCount != null && <span>👥 {Number(s.followerCount).toLocaleString()}</span>}
+                                                                    {s.likeCount != null && <span>❤️ {Number(s.likeCount).toLocaleString()}</span>}
+                                                                    {!s.followerCount && !s.likeCount && <span className="text-slate-300">{s.type === 'channel' ? '📺 Channel' : '🔑 Keyword'}</span>}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Scan conditions human-readable */}
+                                                        <p className="text-[10px] text-slate-500 bg-white rounded-lg px-2 py-1.5 border border-slate-200 leading-relaxed">
+                                                            🔎 {scanLabel}
+                                                        </p>
+
+                                                        {/* Per-source video stats */}
+                                                        {sourceVideos.length > 0 ? (
+                                                            <div className="flex items-center gap-2 flex-wrap text-[10px] pt-0.5">
+                                                                <span className="text-slate-500 font-medium">{sourceVideos.length} video</span>
+                                                                {pubCount > 0 && <span className="text-emerald-600 font-bold">✓ {pubCount} published</span>}
+                                                                {qCount > 0 && <span className="text-amber-600 font-bold">⏳ {qCount} queued</span>}
+                                                                {failCount > 0 && <span className="text-red-600 font-bold">✗ {failCount} failed</span>}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-[10px] text-slate-300">Chưa có video từ nguồn này</span>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 

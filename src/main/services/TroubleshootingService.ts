@@ -1,4 +1,6 @@
-import { existsSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { extname, resolve } from 'node:path'
 import { campaignRepo } from '../db/repositories/CampaignRepo'
 import { settingsRepo } from '../db/repositories/SettingsRepo'
 import { AppSettingsService } from './AppSettingsService'
@@ -37,6 +39,175 @@ const MAX_LINE_LENGTH = 1000
 const FOOTPRINT_LOG_TAIL = 60
 const FOOTPRINT_ERROR_TAIL = 20
 const FOOTPRINT_PREVIEW_LEN = 400
+const DEBUG_ROOT_DIR = resolve(process.cwd(), 'tests', 'debug')
+const DEBUG_ARTIFACT_DIR = resolve(DEBUG_ROOT_DIR, 'artifacts')
+const DEBUG_FOOTPRINT_DIR = resolve(DEBUG_ROOT_DIR, 'footprints')
+
+function detectRuntimeFlavor(): string {
+  if (process.platform === 'win32') return 'windows'
+  if (process.platform === 'darwin' && process.arch === 'arm64') return 'macos-apple-silicon'
+  if (process.platform === 'darwin' && process.arch === 'x64') return 'macos-intel'
+  return `${process.platform}-${process.arch}`
+}
+
+function toStableHash(value: string | Buffer): string {
+  return createHash('sha1').update(value).digest('hex')
+}
+
+function toCaseSlug(value: string | undefined): string {
+  const normalized = String(value || '').trim().replace(/[^a-zA-Z0-9._-]+/g, '_')
+  return normalized || 'unknown'
+}
+
+function toRunFingerprint(caseFingerprint: string | undefined, runId: string, startedAt: number): string {
+  const seed = `${caseFingerprint || 'case-missing'}|${runId}|${startedAt}`
+  return `run-${toStableHash(seed).slice(0, 16)}`
+}
+
+function isAbsolutePathString(value: string): boolean {
+  return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value)
+}
+
+function ensureDebugDirs() {
+  mkdirSync(DEBUG_ARTIFACT_DIR, { recursive: true })
+  mkdirSync(DEBUG_FOOTPRINT_DIR, { recursive: true })
+}
+
+function imageExtFromMime(mime: string): string {
+  if (mime.includes('png')) return '.png'
+  if (mime.includes('jpeg') || mime.includes('jpg')) return '.jpg'
+  if (mime.includes('webp')) return '.webp'
+  if (mime.includes('gif')) return '.gif'
+  if (mime.includes('svg')) return '.svg'
+  return '.img'
+}
+
+type ArchivedArtifactEntry = {
+  key: string
+  sourceType: 'path' | 'data-url' | 'json' | 'text'
+  sourcePath?: string
+  archivedPath: string
+  size: number
+  sha1: string
+}
+
+function archiveRunArtifacts(record: TroubleshootingRunRecord) {
+  const resultObj = record.result && typeof record.result === 'object' ? (record.result as any) : null
+  const artifactObj = resultObj?.artifacts && typeof resultObj.artifacts === 'object'
+    ? (resultObj.artifacts as Record<string, unknown>)
+    : null
+  if (!resultObj || !artifactObj || Object.keys(artifactObj).length === 0) return
+
+  ensureDebugDirs()
+  const runDir = resolve(DEBUG_ARTIFACT_DIR, toCaseSlug(record.caseId), toCaseSlug(record.id))
+  mkdirSync(runDir, { recursive: true })
+
+  const archivedArtifacts: Record<string, unknown> = { ...artifactObj }
+  const entries: ArchivedArtifactEntry[] = []
+
+  for (const [key, rawValue] of Object.entries(artifactObj)) {
+    if (rawValue === undefined || rawValue === null || rawValue === '') continue
+    const safeKey = toCaseSlug(key)
+
+    if (typeof rawValue === 'string' && isAbsolutePathString(rawValue) && existsSync(rawValue)) {
+      const fileExt = extname(rawValue) || '.txt'
+      const targetPath = resolve(runDir, `${safeKey}${fileExt}`)
+      copyFileSync(rawValue, targetPath)
+      const bytes = readFileSync(targetPath)
+      archivedArtifacts[key] = targetPath
+      entries.push({
+        key,
+        sourceType: 'path',
+        sourcePath: rawValue,
+        archivedPath: targetPath,
+        size: bytes.length,
+        sha1: toStableHash(bytes),
+      })
+      continue
+    }
+
+    if (typeof rawValue === 'string' && rawValue.startsWith('data:image/')) {
+      const match = rawValue.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/)
+      if (match) {
+        const bytes = Buffer.from(match[2], 'base64')
+        const targetPath = resolve(runDir, `${safeKey}${imageExtFromMime(match[1])}`)
+        writeFileSync(targetPath, bytes)
+        archivedArtifacts[key] = targetPath
+        entries.push({
+          key,
+          sourceType: 'data-url',
+          archivedPath: targetPath,
+          size: bytes.length,
+          sha1: toStableHash(bytes),
+        })
+        continue
+      }
+    }
+
+    if (typeof rawValue === 'object') {
+      const targetPath = resolve(runDir, `${safeKey}.json`)
+      const text = JSON.stringify(rawValue, null, 2)
+      writeFileSync(targetPath, text, 'utf8')
+      const bytes = Buffer.from(text, 'utf8')
+      archivedArtifacts[key] = targetPath
+      entries.push({
+        key,
+        sourceType: 'json',
+        archivedPath: targetPath,
+        size: bytes.length,
+        sha1: toStableHash(bytes),
+      })
+      continue
+    }
+
+    const text = String(rawValue)
+    const targetPath = resolve(runDir, `${safeKey}.txt`)
+    writeFileSync(targetPath, text, 'utf8')
+    const bytes = Buffer.from(text, 'utf8')
+    archivedArtifacts[key] = targetPath
+    entries.push({
+      key,
+      sourceType: 'text',
+      archivedPath: targetPath,
+      size: bytes.length,
+      sha1: toStableHash(bytes),
+    })
+  }
+
+  const manifestPath = resolve(runDir, 'artifact-manifest.json')
+  writeFileSync(manifestPath, JSON.stringify({
+    schemaVersion: 1,
+    generatedAt: Date.now(),
+    caseId: record.caseId,
+    caseFingerprint: record.caseFingerprint,
+    runId: record.id,
+    runFingerprint: record.runFingerprint,
+    entries,
+  }, null, 2), 'utf8')
+
+  record.artifactManifestPath = manifestPath
+  resultObj.artifacts = archivedArtifacts
+  resultObj.artifactBundle = {
+    rootDir: runDir,
+    manifestPath,
+    entryCount: entries.length,
+  }
+}
+
+function persistFootprint(record: TroubleshootingRunRecord) {
+  if (!record.diagnosticFootprint) return
+  ensureDebugDirs()
+  const outputDir = resolve(DEBUG_FOOTPRINT_DIR, toCaseSlug(record.caseId))
+  mkdirSync(outputDir, { recursive: true })
+  const outputPath = resolve(outputDir, `${toCaseSlug(record.id)}.json`)
+  writeFileSync(outputPath, JSON.stringify(record.diagnosticFootprint, null, 2), 'utf8')
+  record.footprintPath = outputPath
+
+  const resultObj = record.result && typeof record.result === 'object' ? (record.result as any) : null
+  if (resultObj) {
+    resultObj.footprintPath = outputPath
+  }
+}
 
 function loadRuns(): TroubleshootingRunRecord[] {
   const data = settingsRepo.get<TroubleshootingRunRecord[]>(RUNS_KEY, [])
@@ -180,6 +351,7 @@ function buildDiagnosticFootprint(run: TroubleshootingRunRecord): Troubleshootin
     },
     execution: {
       runId: run.id,
+      runFingerprint: run.runFingerprint,
       status: run.status,
       startedAt: run.startedAt,
       endedAt: run.endedAt,
@@ -188,6 +360,10 @@ function buildDiagnosticFootprint(run: TroubleshootingRunRecord): Troubleshootin
       logLinesStored: logs.length,
     },
     summary: run.summary,
+    fingerprints: {
+      case: run.caseFingerprint,
+      run: run.runFingerprint,
+    },
     result: resultObj ? {
       success: typeof resultObj.success === 'boolean' ? resultObj.success : undefined,
       summary: typeof resultObj.summary === 'string' ? resultObj.summary : run.summary,
@@ -218,6 +394,7 @@ function buildDiagnosticFootprint(run: TroubleshootingRunRecord): Troubleshootin
       nodeVersion: process.version,
       platform: process.platform,
       arch: process.arch,
+      runtimeFlavor: detectRuntimeFlavor(),
     },
   }
 }
@@ -338,7 +515,9 @@ export class TroubleshootingService {
         'troubleshooting.workflow_id': run.workflowId || 'unknown-workflow',
         'troubleshooting.workflow_version': run.workflowVersion || 'unknown-version',
         'troubleshooting.case_id': run.caseId,
+        'troubleshooting.case_fingerprint': run.caseFingerprint || 'none',
         'troubleshooting.run_id': run.id,
+        'troubleshooting.run_fingerprint': run.runFingerprint || 'none',
         'troubleshooting.correlation_id': correlationId,
         'troubleshooting.group': run.group,
         'troubleshooting.category': run.category,
@@ -347,9 +526,9 @@ export class TroubleshootingService {
       },
       fingerprint: [
         'troubleshooting',
+        run.caseFingerprint || run.caseId,
         run.workflowId || 'unknown-workflow',
         run.workflowVersion || 'unknown-version',
-        run.caseId,
       ],
       contexts: {
         troubleshooting_run: {
@@ -365,6 +544,10 @@ export class TroubleshootingService {
           tags: run.tags,
           startedAt: run.startedAt,
           endedAt: run.endedAt,
+          caseFingerprint: run.caseFingerprint,
+          runFingerprint: run.runFingerprint,
+          artifactManifestPath: run.artifactManifestPath,
+          footprintPath: run.footprintPath,
           logStats: run.logStats,
           caseMeta: run.caseMeta,
           result: run.result,
@@ -407,7 +590,10 @@ export class TroubleshootingService {
     if (def.implemented === false) throw new Error(`Case not implemented yet: ${caseId}`)
     if (this.running.has(caseId)) throw new Error(`Case is already running: ${caseId}`)
 
-    const runId = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const startedAt = Date.now()
+    const runId = `${startedAt}_${Math.random().toString(36).slice(2, 8)}`
+    const caseFingerprint = def.fingerprint || `case-${toStableHash(def.id).slice(0, 16)}`
+    const runFingerprint = toRunFingerprint(caseFingerprint, runId, startedAt)
     const record: TroubleshootingRunRecord = {
       id: runId,
       caseId,
@@ -419,9 +605,11 @@ export class TroubleshootingService {
       tags: def.tags,
       level: def.level,
       caseMeta: def.meta,
+      caseFingerprint,
+      runFingerprint,
       logStats: { total: 0, info: 0, warn: 0, error: 0 },
       status: 'running',
-      startedAt: Date.now(),
+      startedAt,
       logs: [],
     }
 
@@ -455,7 +643,9 @@ export class TroubleshootingService {
       record.endedAt = Date.now()
       record.summary = result.summary
       record.result = sanitizeResult(result)
+      archiveRunArtifacts(record)
       record.diagnosticFootprint = buildDiagnosticFootprint(record)
+      persistFootprint(record)
       this.upsertRun(record)
       hooks?.onUpdate?.(record)
       return record
@@ -466,7 +656,9 @@ export class TroubleshootingService {
       record.endedAt = Date.now()
       record.summary = `Runner crashed: ${message}`
       record.result = { success: false, error: message }
+      archiveRunArtifacts(record)
       record.diagnosticFootprint = buildDiagnosticFootprint(record)
+      persistFootprint(record)
       this.upsertRun(record)
       hooks?.onUpdate?.(record)
       return record

@@ -1,6 +1,6 @@
 import { expect } from 'vitest'
 import type { UnitCaseDefinition } from '../../types'
-import { groupCasesBySuiteAndGroup } from '../../../../troubleshootingPanel.helpers'
+import { groupCasesBySuiteAndGroup } from '../../../../../../src/renderer/src/components/troubleshootingPanel.helpers'
 
 export const suiteAndGroupOrderCase: UnitCaseDefinition = {
   id: 'unit.troubleshooting.grouping.suite-and-group-order',
