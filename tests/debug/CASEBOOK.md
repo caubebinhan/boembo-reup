@@ -5,16 +5,16 @@ Central backlog/index for all troubleshooting/debug scenarios.
 ## Summary
 
 - Total cases: **63**
-- Runnable: **10**
-- Planned: **53**
-- Generated at: 2026-02-27T04:29:44.965Z
+- Runnable: **17**
+- Planned: **46**
+- Generated at: 2026-02-27T06:28:42.620Z
 
 ## Workflow Breakdown
 
 | Scope | Total | Runnable | Planned |
 |---|---:|---:|---:|
 | debug-platform@1.0 | 11 | 0 | 11 |
-| tiktok-repost@1.0 | 51 | 10 | 41 |
+| tiktok-repost@1.0 | 51 | 17 | 34 |
 | upload-local@1.0 | 1 | 0 | 1 |
 
 ## Implementation Queue
@@ -127,30 +127,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 - TODO: Attach artifact outputs + diagnostic footprint for investigation.
 - TODO: Flip implemented=true after validation in Debug tab.
 
-### tiktok-repost-v1.campaign.create-smoke
-- Title: Campaign Create Smoke
-- Scope: tiktok-repost@1.0
-- Group: campaign | Category: campaign | Level: basic
-- Fingerprint: `case-09d071f4b4970dc7`
-- Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### tiktok-repost-v1.campaign.detail-ui-open-snapshot
-- Title: Campaign Detail UI Open Snapshot
-- Scope: tiktok-repost@1.0
-- Group: campaign | Category: campaign | Level: basic
-- Fingerprint: `case-f1b15b0c0e358355`
-- Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
 ### tiktok-repost-v1.campaign.trigger-pause-resume
 - Title: Campaign Trigger / Pause / Resume
 - Scope: tiktok-repost@1.0
@@ -168,18 +144,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 - Scope: tiktok-repost@1.0
 - Group: caption | Category: caption | Level: intermediate
 - Fingerprint: `case-8282830f8cbb6029`
-- Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### tiktok-repost-v1.caption.source-fallback
-- Title: Caption Fallback to Source
-- Scope: tiktok-repost@1.0
-- Group: caption | Category: caption | Level: basic
-- Fingerprint: `case-fad99f19a10a9ad0`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -229,18 +193,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 - Group: compat | Category: compat | Level: intermediate
 - Fingerprint: `case-04ffbde7ce246362`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### tiktok-repost-v1.debug-panel.workflow-filter-smoke
-- Title: Debug Panel Workflow/Version Filter Smoke
-- Scope: tiktok-repost@1.0
-- Group: smoke | Category: smoke | Level: basic
-- Fingerprint: `case-ebe3ccb88c34666e`
-- Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
 - TODO: Assert DB/UI/log/event checks from case meta.
@@ -403,30 +355,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 - TODO: Attach artifact outputs + diagnostic footprint for investigation.
 - TODO: Flip implemented=true after validation in Debug tab.
 
-### tiktok-repost-v1.scan.channel-smoke
-- Title: Channel Scan Smoke
-- Scope: tiktok-repost@1.0
-- Group: scan | Category: scan | Level: basic
-- Fingerprint: `case-26709ce605f974c4`
-- Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### tiktok-repost-v1.scan.empty-channel
-- Title: Channel Scan Empty Result
-- Scope: tiktok-repost@1.0
-- Group: scan | Category: scan | Level: basic
-- Fingerprint: `case-433cf5a1852ff691`
-- Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
 ### tiktok-repost-v1.scan.rescan-dedupe-existing-items
 - Title: Channel Re-scan Dedupe Existing Items
 - Scope: tiktok-repost@1.0
@@ -492,18 +420,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 - Scope: tiktok-repost@1.0
 - Group: transform | Category: transform | Level: advanced
 - Fingerprint: `case-f91eaf92ed21e786`
-- Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### tiktok-repost-v1.transform.chain-smoke
-- Title: Transform Chain Smoke
-- Scope: tiktok-repost@1.0
-- Group: transform | Category: transform | Level: basic
-- Fingerprint: `case-03fb3175b301a1d0`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -659,6 +575,12 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 - dashboard-verify (`case-e6d123d1b79a8c54`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts
 - tiktok-publish-e2e (`case-3fb8b15dd6580665`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts
+- tiktok-repost-v1.campaign.create-smoke (`case-09d071f4b4970dc7`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts
+- tiktok-repost-v1.campaign.detail-ui-open-snapshot (`case-f1b15b0c0e358355`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts
+- tiktok-repost-v1.caption.source-fallback (`case-fad99f19a10a9ad0`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts
+- tiktok-repost-v1.debug-panel.workflow-filter-smoke (`case-ebe3ccb88c34666e`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts
+- tiktok-repost-v1.scan.channel-smoke (`case-26709ce605f974c4`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts
+- tiktok-repost-v1.scan.empty-channel (`case-433cf5a1852ff691`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts
 - tiktok-repost-v1.scan.filter-thresholds-fixture (`case-c69b9634e600a607`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts
 - tiktok-repost-v1.scan.wizard-sources-edge-validation-gaps (`case-49de22b993dda311`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts
 - tiktok-repost-v1.scan.wizard-sources-main-validation (`case-f68f2ade997b2442`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts
@@ -666,6 +588,7 @@ Central backlog/index for all troubleshooting/debug scenarios.
 - tiktok-repost-v1.thumbnail.malformed-payload-fallback (`case-ffb2087a62396188`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts
 - tiktok-repost-v1.thumbnail.normalize-nested-object (`case-cc033ce8b273c3ba`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts
 - tiktok-repost-v1.thumbnail.normalize-string (`case-bf89f7f63d27e604`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts
+- tiktok-repost-v1.transform.chain-smoke (`case-03fb3175b301a1d0`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts
 - tiktok-studio-smoke (`case-b7929d4172c0f34b`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts
 
 ## Notes

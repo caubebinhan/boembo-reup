@@ -259,7 +259,8 @@ export class SentryOAuthService {
     const payload = await tryReadJson(response)
     if (!response.ok) {
       const detail = text(payload.detail || payload.error || payload.error_description)
-      throw new Error(`Sentry device authorization failed${detail ? `: ${detail}` : ''}`)
+      const detailSuffix = detail ? `: ${detail}` : ''
+      throw new Error(`Sentry device authorization failed${detailSuffix}`)
     }
 
     const deviceCode = text(payload.device_code)

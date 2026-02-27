@@ -1,5 +1,5 @@
 import Database, { Database as BetterSqlite3Database } from 'better-sqlite3'
-import { join, resolve } from 'path'
+import { join, resolve } from 'node:path'
 import { app } from 'electron'
 
 const DB_PATH = process.env.REPOST_IO_DB_PATH

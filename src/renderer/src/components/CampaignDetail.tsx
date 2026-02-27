@@ -68,12 +68,12 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
     const fetchCampaign = useCallback(async () => {
         try {
             // @ts-ignore
-            const data = await window.api.invoke('campaign:get', { id: campaignId })
+            const data = await (globalThis as any).api.invoke('campaign:get', { id: campaignId })
             if (data) setCampaign(data)
             // Fetch last log message for inline status display
             try {
                 // @ts-ignore
-                const logs: any[] = await window.api.invoke('campaign:get-logs', { id: campaignId, limit: 30 }) || []
+                const logs: any[] = await (globalThis as any).api.invoke('campaign:get-logs', { id: campaignId, limit: 30 }) || []
                 const status = data?.status
                 let msg = ''
                 if (status === 'active') {
@@ -160,15 +160,22 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                             {campaign.status}
                         </span>
                         {/* Inline status alert — shown next to the status badge */}
-                        {statusMessage && (
-                            <span className={`text-xs px-2.5 py-1 rounded-full border font-medium max-w-[300px] truncate ${campaign.status === 'error' ? 'bg-red-50 text-red-600 border-red-200' :
-                                campaign.status === 'paused' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                    campaign.status === 'needs_captcha' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                        'bg-slate-50 text-slate-500 border-slate-200'
-                                }`} title={statusMessage}>
-                                {campaign.status === 'error' ? '⚠ ' : campaign.status === 'paused' ? '⏸ ' : campaign.status === 'needs_captcha' ? '🔒 ' : ''}{statusMessage}
-                            </span>
-                        )}
+                        {statusMessage && (() => {
+                            const alertStyle =
+                                campaign.status === 'error' ? 'bg-red-50 text-red-600 border-red-200' :
+                                    campaign.status === 'paused' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                        campaign.status === 'needs_captcha' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                            'bg-slate-50 text-slate-500 border-slate-200'
+                            const alertIcon =
+                                campaign.status === 'error' ? '⚠ ' :
+                                    campaign.status === 'paused' ? '⏸ ' :
+                                        campaign.status === 'needs_captcha' ? '🔒 ' : ''
+                            return (
+                                <span className={`text-xs px-2.5 py-1 rounded-full border font-medium max-w-[300px] truncate ${alertStyle}`} title={statusMessage}>
+                                    {alertIcon}{statusMessage}
+                                </span>
+                            )
+                        })()}
                     </div>
 
                     <div className="flex items-center gap-2">

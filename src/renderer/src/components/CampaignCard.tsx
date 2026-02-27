@@ -93,7 +93,10 @@ function YamlDrivenCard({ campaign, onAction, workflowId }: CampaignCardProps & 
 
     return (
         <div
+            role="button"
+            tabIndex={0}
             onClick={() => onAction('campaign:view-details', { id: campaign.id })}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onAction('campaign:view-details', { id: campaign.id }) }}
             className="bg-white border border-slate-200 rounded-xl p-5 hover:border-purple-300 hover:shadow-lg transition-all cursor-pointer flex flex-col gap-3 relative overflow-hidden group shadow-sm"
         >
             <div className="flex justify-between items-start pt-1">

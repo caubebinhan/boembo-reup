@@ -442,9 +442,9 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                         const fail = sv.filter((v: TikTokVideo) => v.status === 'failed').length
                         const total = sv.length
                         return (
-                            <div key={i} className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm text-xs">
+                            <div key={s.name || `src-${i}`} className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm text-xs">
                                 {s.avatar
-                                    ? <img src={s.avatar} className="w-5 h-5 rounded-full object-cover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                                    ? <img src={s.avatar} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                                     : <span className="text-[11px] shrink-0">{s.type === 'channel' ? '📺' : '🔑'}</span>
                                 }
                                 <span className="font-semibold text-slate-700 max-w-[120px] truncate">{s.name}</span>
@@ -558,6 +558,9 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                         {/* Pipeline expanded modal */}
                         {pipelineExpanded && (
                             <div
+                                role="dialog"
+                                aria-modal="true"
+                                aria-label="Pipeline expanded view"
                                 className="fixed inset-0 z-50 flex items-center justify-center"
                                 style={{ backgroundColor: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(4px)' }}
                                 onMouseLeave={() => { leaveTimer.current = setTimeout(() => setPipelineExpanded(false), 120) }}
@@ -627,13 +630,13 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                                                 const scanLabel = buildScanLabel(s)
 
                                                 return (
-                                                    <div key={i} className="flex flex-col gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
+                                                    <div key={s.name || `src-${i}`} className="flex flex-col gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200">
                                                         {/* Channel identity row */}
                                                         <div className="flex items-center gap-2.5">
                                                             {/* Avatar or icon */}
                                                             <div className="w-9 h-9 rounded-full shrink-0 overflow-hidden bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
                                                                 {s.avatar
-                                                                    ? <img src={s.avatar} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                                                                    ? <img src={s.avatar} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
                                                                     : (s.name?.charAt(0)?.toUpperCase() || (s.type === 'channel' ? '📺' : '#'))
                                                                 }
                                                             </div>

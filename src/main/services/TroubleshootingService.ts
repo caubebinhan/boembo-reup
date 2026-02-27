@@ -55,7 +55,7 @@ function toStableHash(value: string | Buffer): string {
 }
 
 function toCaseSlug(value: string | undefined): string {
-  const normalized = String(value || '').trim().replace(/[^a-zA-Z0-9._-]+/g, '_')
+  const normalized = String(value || '').trim().replaceAll(/[^a-zA-Z0-9._-]+/g, '_')
   return normalized || 'unknown'
 }
 
@@ -92,7 +92,7 @@ type ArchivedArtifactEntry = {
 }
 
 function archiveRunArtifacts(record: TroubleshootingRunRecord) {
-  const resultObj = record.result && typeof record.result === 'object' ? (record.result as any) : null
+  const resultObj = record.result && typeof record.result === 'object' ? record.result : null
   const artifactObj = resultObj?.artifacts && typeof resultObj.artifacts === 'object'
     ? (resultObj.artifacts as Record<string, unknown>)
     : null
@@ -127,7 +127,7 @@ function archiveRunArtifacts(record: TroubleshootingRunRecord) {
     }
 
     if (typeof rawValue === 'string' && rawValue.startsWith('data:image/')) {
-      const match = rawValue.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/)
+      const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(rawValue)
       if (match) {
         const bytes = Buffer.from(match[2], 'base64')
         const targetPath = resolve(runDir, `${safeKey}${imageExtFromMime(match[1])}`)
@@ -203,7 +203,7 @@ function persistFootprint(record: TroubleshootingRunRecord) {
   writeFileSync(outputPath, JSON.stringify(record.diagnosticFootprint, null, 2), 'utf8')
   record.footprintPath = outputPath
 
-  const resultObj = record.result && typeof record.result === 'object' ? (record.result as any) : null
+  const resultObj = record.result && typeof record.result === 'object' ? record.result : null
   if (resultObj) {
     resultObj.footprintPath = outputPath
   }
@@ -560,15 +560,15 @@ export class TroubleshootingService {
         full_log_tail: fullLogTail,
       },
     }, sentryEnv)
+    const failDetail = sent.lastError ? ` (${sent.lastError})` : ''
     if (!sent.success || !sent.eventId) {
-      throw new Error(`Sentry staging send failed: ${sent.message}${sent.lastError ? ` (${sent.lastError})` : ''}`)
+      throw new Error(`Sentry staging send failed: ${sent.message}${failDetail}`)
     }
 
     const sentry = await verifySentryEventIngestion(sent.eventId, { channel: 'staging', env: sentryEnv })
+    const verifyDetail = sentry.issueSearchUrl ? ` (${sentry.issueSearchUrl})` : ''
     if (sentry.strictRequired && !sentry.verified) {
-      throw new Error(
-        `Sentry staging verification failed: ${sentry.message}${sentry.issueSearchUrl ? ` (${sentry.issueSearchUrl})` : ''}`
-      )
+      throw new Error(`Sentry staging verification failed: ${sentry.message}${verifyDetail}`)
     }
 
     return {

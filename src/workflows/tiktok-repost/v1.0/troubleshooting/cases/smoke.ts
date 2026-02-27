@@ -11,7 +11,7 @@ export const smokeCases: TroubleshootingCaseDefinition[] = [
     group: 'smoke',
     tags: ['debug-ui', 'workflow-filter', 'artifact:screenshot'],
     level: 'basic',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'workflowFilter', value: 'tiktok-repost' },

@@ -182,9 +182,10 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
                 </FormField>
 
                 <div className="mt-4 flex flex-col gap-1">
-                    <label className="text-sm font-medium text-slate-600">Campaign Start Time</label>
+                    <label htmlFor="campaign-start-time" className="text-sm font-medium text-slate-600">Campaign Start Time</label>
                     <p className="text-xs text-slate-400">Campaign sẽ không chạy trước thời gian này. Để trống = chạy ngay.</p>
                     <input
+                        id="campaign-start-time"
                         type="datetime-local"
                         className="mt-1 bg-white border border-slate-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 rounded-xl p-2.5 outline-none text-slate-700 text-sm w-full max-w-xs transition"
                         value={stepData.firstRunAt || ''}

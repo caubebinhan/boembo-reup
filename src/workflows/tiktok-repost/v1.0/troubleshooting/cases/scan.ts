@@ -82,7 +82,7 @@ export const scanCases: TroubleshootingCaseDefinition[] = [
     group: 'scan',
     tags: ['scan', 'source', 'db', 'artifact:html', 'artifact:screenshot'],
     level: 'basic',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'sourceChannel', description: 'Configured source channel/URL fixture' },
@@ -110,7 +110,7 @@ export const scanCases: TroubleshootingCaseDefinition[] = [
     group: 'scan',
     tags: ['scan', 'empty-result', 'edge'],
     level: 'basic',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureResponse', value: 'empty-array' },

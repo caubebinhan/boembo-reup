@@ -139,7 +139,7 @@ export function normalizeSentryEventId(raw: unknown): string | null {
   const normalized = String(raw || '')
     .trim()
     .toLowerCase()
-    .replace(/[^a-f0-9]/g, '')
+    .replaceAll(/[^a-f0-9]/g, '')
   return normalized.length === 32 ? normalized : null
 }
 
@@ -232,7 +232,7 @@ export async function sendSentryMessageToChannel(
     }
   }
 
-  const eventId = randomUUID().replace(/-/g, '')
+  const eventId = randomUUID().replaceAll('-', '')
   const payload = {
     event_id: eventId,
     level: input.level || 'error',
@@ -380,7 +380,8 @@ export async function verifySentryEventIngestion(
         lastError = 'Event not visible yet (404).'
       } else {
         const body = await response.text().catch(() => '')
-        lastError = `Sentry API ${response.status}${body ? `: ${body.slice(0, 200)}` : ''}`
+        const bodySuffix = body ? `: ${body.slice(0, 200)}` : ''
+        lastError = `Sentry API ${response.status}${bodySuffix}`
         if (response.status === 401 || response.status === 403) break
       }
     } catch (err: any) {

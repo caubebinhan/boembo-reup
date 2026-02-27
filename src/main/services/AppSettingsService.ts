@@ -1,5 +1,5 @@
-import path from 'path'
-import os from 'os'
+import path from 'node:path'
+import os from 'node:os'
 import { settingsRepo } from '../db/repositories/SettingsRepo'
 
 export interface AutomationBrowserSettings {
@@ -118,15 +118,18 @@ export class AppSettingsService {
       projects.find(p => !/staging/i.test(p.slug)) ||
       projects[0]
 
-    if (!out.SENTRY_STAGING_AUTH_TOKEN && connected.accessToken) out.SENTRY_STAGING_AUTH_TOKEN = connected.accessToken
-    if (!out.SENTRY_STAGING_ORG && connected.orgSlug) out.SENTRY_STAGING_ORG = connected.orgSlug
-    if (!out.SENTRY_STAGING_PROJECT && stageProject?.slug) out.SENTRY_STAGING_PROJECT = stageProject.slug
-    if (!out.SENTRY_STAGING_DSN && stageProject?.dsnPublic) out.SENTRY_STAGING_DSN = stageProject.dsnPublic
-    if (!out.SENTRY_STAGING_BASE_URL && connected.baseUrl) out.SENTRY_STAGING_BASE_URL = connected.baseUrl
+    const setIfMissing = (key: string, value: string | undefined) => {
+      if (!out[key] && value) out[key] = value
+    }
 
-    if (!out.SENTRY_PRODUCTION_DSN && prodProject?.dsnPublic) out.SENTRY_PRODUCTION_DSN = prodProject.dsnPublic
-    if (!out.VITE_SENTRY_DSN_PRODUCTION && prodProject?.dsnPublic) out.VITE_SENTRY_DSN_PRODUCTION = prodProject.dsnPublic
-    if (!out.VITE_SENTRY_DSN && prodProject?.dsnPublic) out.VITE_SENTRY_DSN = prodProject.dsnPublic
+    setIfMissing('SENTRY_STAGING_AUTH_TOKEN', connected.accessToken)
+    setIfMissing('SENTRY_STAGING_ORG', connected.orgSlug)
+    setIfMissing('SENTRY_STAGING_PROJECT', stageProject?.slug)
+    setIfMissing('SENTRY_STAGING_DSN', stageProject?.dsnPublic)
+    setIfMissing('SENTRY_STAGING_BASE_URL', connected.baseUrl)
+    setIfMissing('SENTRY_PRODUCTION_DSN', prodProject?.dsnPublic)
+    setIfMissing('VITE_SENTRY_DSN_PRODUCTION', prodProject?.dsnPublic)
+    setIfMissing('VITE_SENTRY_DSN', prodProject?.dsnPublic)
 
     return out
   }

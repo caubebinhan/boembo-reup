@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": 1772166584962,
+  "generatedAt": 1772173722614,
   "total": 63,
   "entries": [
     {
@@ -260,20 +260,18 @@
       "group": "campaign",
       "risk": "safe",
       "level": "basic",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-09d071f4b4970dc7",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.campaign.detail-ui-open-snapshot",
@@ -283,20 +281,18 @@
       "group": "campaign",
       "risk": "safe",
       "level": "basic",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-f1b15b0c0e358355",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.campaign.trigger-pause-resume",
@@ -352,20 +348,18 @@
       "group": "caption",
       "risk": "safe",
       "level": "basic",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-fad99f19a10a9ad0",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.caption.unicode-hashtag-preserve",
@@ -467,20 +461,18 @@
       "group": "smoke",
       "risk": "safe",
       "level": "basic",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-ebe3ccb88c34666e",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.loop.resume-last-processed-index",
@@ -789,20 +781,18 @@
       "group": "scan",
       "risk": "safe",
       "level": "basic",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-26709ce605f974c4",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.scan.empty-channel",
@@ -812,20 +802,18 @@
       "group": "scan",
       "risk": "safe",
       "level": "basic",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-433cf5a1852ff691",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.scan.filter-thresholds-fixture",
@@ -1120,20 +1108,18 @@
       "group": "transform",
       "risk": "safe",
       "level": "basic",
-      "implemented": false,
+      "implemented": true,
       "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts",
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "suite": "debug",
       "fingerprint": "case-03fb3175b301a1d0",
       "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
+        "Keep runner branch stable and keep output summary deterministic.",
+        "Keep artifact payload compatible with Debug tab preview.",
+        "Keep fingerprint stable unless case identity changes."
       ],
-      "status": "planned"
+      "status": "runnable"
     },
     {
       "id": "tiktok-repost-v1.transform.condition-skip-item",

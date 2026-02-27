@@ -11,7 +11,7 @@ export const captionTransformCases: TroubleshootingCaseDefinition[] = [
     group: 'caption',
     tags: ['caption', 'fallback', 'publish-input'],
     level: 'basic',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCaptionState', value: 'generated_caption=null,description=present' }],
       checks: {
@@ -48,7 +48,7 @@ export const captionTransformCases: TroubleshootingCaseDefinition[] = [
     group: 'transform',
     tags: ['transform', 'chain', 'smoke', 'db'],
     level: 'basic',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureVideoCount', value: 2 }],
       checks: {

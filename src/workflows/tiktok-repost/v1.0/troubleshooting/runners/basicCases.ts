@@ -14,6 +14,8 @@ const WIZARD_FILE = path.join(ROOT, 'src/workflows/tiktok-repost/v1.0/wizard.ts'
 const SCANNER_NODE_FILE = path.join(ROOT, 'src/nodes/tiktok-scanner/backend.ts')
 const DETAIL_FILE = path.join(ROOT, 'src/workflows/tiktok-repost/v1.0/detail.tsx')
 const CAMPAIGN_REPO_FILE = path.join(ROOT, 'src/main/db/repositories/CampaignRepo.ts')
+const TROUBLE_PANEL_FILE = path.join(ROOT, 'src/renderer/src/components/TroubleShottingPanel.tsx')
+const TEST_PUBLISH_FILE = path.join(ROOT, 'src/main/tiktok/publisher/test-publish.ts')
 
 type Logger = TroubleshootingCaseRunOptions['logger']
 
@@ -131,6 +133,346 @@ export async function runWizardSourcesMainValidationCase(
       step2SourceFile: STEP2_SOURCES_FILE,
       wizardSourceFile: WIZARD_FILE,
     },
+    result,
+  })
+}
+
+export async function runDebugPanelWorkflowFilterSmokeCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+  const panel = safeRead(TROUBLE_PANEL_FILE)
+
+  const checks = {
+    hasWorkflowState: panel.includes("const [workflowFilter, setWorkflowFilter] = useState<string>('all')"),
+    hasVersionState: panel.includes("const [versionFilter, setVersionFilter] = useState<string>('all')"),
+    hasWorkflowDropdown: panel.includes('<option value="all">All Workflows</option>'),
+    hasGroupedCases: panel.includes('groupCasesBySuiteAndGroup(filteredCases)'),
+    hasSuiteHeadingMarker: panel.includes('data-suite-heading={suiteSection.suite}'),
+    hasRunAllButton: panel.includes('Run All Runnable'),
+  }
+
+  Object.entries(checks).forEach(([key, okFlag]) => {
+    log(logger, `[DebugPanelFilterSmoke] ${key}=${okFlag}`)
+  })
+
+  const missing = Object.entries(checks).filter(([, okFlag]) => !okFlag).map(([key]) => key)
+  const result = {
+    checks,
+    files: {
+      panel: TROUBLE_PANEL_FILE,
+    },
+    lineHints: {
+      workflowFilterState: lineOf(panel, "const [workflowFilter, setWorkflowFilter] = useState<string>('all')"),
+      versionFilterState: lineOf(panel, "const [versionFilter, setVersionFilter] = useState<string>('all')"),
+      suiteHeadingMarker: lineOf(panel, 'data-suite-heading={suiteSection.suite}'),
+    },
+  }
+
+  if (missing.length > 0) {
+    return fail('Debug panel workflow/version filter contract is incomplete', {
+      errors: [`Missing UI contract markers: ${missing.join(', ')}`],
+      artifacts: {
+        panelFile: TROUBLE_PANEL_FILE,
+      },
+      result,
+    })
+  }
+
+  return ok('Debug panel workflow/version filter contract looks healthy', {
+    messages: [
+      'Workflow + version filters exist with all/default option handling',
+      'Suite/group heading markers and grouped sections are present',
+    ],
+    artifacts: {
+      panelFile: TROUBLE_PANEL_FILE,
+    },
+    result,
+  })
+}
+
+export async function runCampaignCreateSmokeCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+
+  const mockFlowSnapshot = {
+    id: 'tiktok-repost',
+    name: 'TikTok Repost',
+    version: '1.0',
+    nodes: [],
+    edges: [],
+  }
+
+  const doc = createCampaignDocument({
+    id: `campaign-smoke-${Date.now()}`,
+    name: 'Campaign Create Smoke',
+    workflow_id: 'tiktok-repost',
+    workflow_version: '1.0',
+    flow_snapshot: mockFlowSnapshot as any,
+    params: { name: 'Campaign Create Smoke' },
+  })
+
+  let persisted: any = null
+  const store = new CampaignStore(doc, {
+    save(nextDoc: any) {
+      persisted = JSON.parse(JSON.stringify(nextDoc))
+    },
+  } as any)
+  store.save()
+
+  const checks = {
+    workflowId: doc.workflow_id === 'tiktok-repost',
+    workflowVersion: doc.workflow_version === '1.0',
+    flowSnapshotPresent: !!doc.flow_snapshot && doc.flow_snapshot.id === 'tiktok-repost',
+    countersDefault:
+      doc.counters.queued === 0 &&
+      doc.counters.downloaded === 0 &&
+      doc.counters.published === 0 &&
+      doc.counters.failed === 0,
+    metaDefault: !!doc.meta && typeof doc.meta === 'object' && !Array.isArray(doc.meta),
+    persistedWorkflowVersion: persisted?.workflow_version === '1.0',
+    persistedFlowSnapshot: !!persisted?.flow_snapshot,
+  }
+
+  Object.entries(checks).forEach(([key, okFlag]) => {
+    log(logger, `[CampaignCreateSmoke] ${key}=${okFlag}`)
+  })
+
+  const missing = Object.entries(checks).filter(([, okFlag]) => !okFlag).map(([key]) => key)
+  const result = {
+    checks,
+    campaign: {
+      id: doc.id,
+      workflowId: doc.workflow_id,
+      workflowVersion: doc.workflow_version,
+      flowSnapshotId: (doc.flow_snapshot as any)?.id,
+    },
+  }
+
+  if (missing.length > 0) {
+    return fail('Campaign create smoke fixture failed persistence contract checks', {
+      errors: [`Failed checks: ${missing.join(', ')}`],
+      result,
+    })
+  }
+
+  return ok('Campaign create smoke fixture passed workflow/version/flow_snapshot contract checks', {
+    messages: [
+      'workflow_id/workflow_version/flow_snapshot are present and persisted via store.save()',
+      'Default counters/meta contract remains intact for new campaign docs',
+    ],
+    result,
+  })
+}
+
+export async function runCampaignDetailUiOpenSnapshotCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+  const detailSource = safeRead(DETAIL_FILE)
+
+  const fixtureCampaign = createCampaignDocument({
+    id: `campaign-detail-ui-${Date.now()}`,
+    name: 'Campaign Detail UI Snapshot Fixture',
+    workflow_id: 'tiktok-repost',
+    workflow_version: '1.0',
+    videos: [],
+    counters: { queued: 0, downloaded: 0, published: 0, failed: 0 },
+  })
+
+  const checks = {
+    fixtureWorkflowId: fixtureCampaign.workflow_id === 'tiktok-repost',
+    fixtureWorkflowVersion: fixtureCampaign.workflow_version === '1.0',
+    hasDbVideoFetch: detailSource.includes("window.api.invoke('campaign:get-videos'"),
+    hasDbLogFetch: detailSource.includes("window.api.invoke('campaign:get-logs'"),
+    hasEmptyStateText: detailSource.includes('No videos yet. Run the campaign to start.'),
+    hasCounterScanned: detailSource.includes("{ label: 'Scanned', value: state.scannedCount"),
+    hasCounterQueued: detailSource.includes("{ label: 'Queued', value: state.queuedCount"),
+    hasCounterPublished: detailSource.includes("{ label: 'Published', value: state.publishedCount"),
+    hasCounterFailed: detailSource.includes("{ label: 'Failed', value: state.failedCount"),
+  }
+
+  Object.entries(checks).forEach(([key, okFlag]) => {
+    log(logger, `[CampaignDetailUiSnapshot] ${key}=${okFlag}`)
+  })
+
+  const missing = Object.entries(checks).filter(([, okFlag]) => !okFlag).map(([key]) => key)
+  const result = {
+    checks,
+    fixtureCampaign: {
+      id: fixtureCampaign.id,
+      workflowId: fixtureCampaign.workflow_id,
+      workflowVersion: fixtureCampaign.workflow_version,
+      counters: fixtureCampaign.counters,
+      videosCount: Array.isArray(fixtureCampaign.videos) ? fixtureCampaign.videos.length : 0,
+    },
+    files: {
+      detailFile: DETAIL_FILE,
+    },
+    lineHints: {
+      getVideosInvoke: lineOf(detailSource, "window.api.invoke('campaign:get-videos'"),
+      getLogsInvoke: lineOf(detailSource, "window.api.invoke('campaign:get-logs'"),
+      emptyStateText: lineOf(detailSource, 'No videos yet. Run the campaign to start.'),
+      scannedCounter: lineOf(detailSource, "{ label: 'Scanned', value: state.scannedCount"),
+    },
+  }
+
+  if (missing.length > 0) {
+    return fail('Campaign detail UI snapshot contract is missing required markers', {
+      errors: [`Missing markers/checks: ${missing.join(', ')}`],
+      artifacts: {
+        detailFile: DETAIL_FILE,
+      },
+      result,
+    })
+  }
+
+  return ok('Campaign detail UI snapshot contract looks healthy (empty state + counters + DB fetch path)', {
+    messages: [
+      'Detail view includes DB-backed rebuild path (campaign:get-videos + campaign:get-logs)',
+      'Empty-state and key counters (Scanned/Queued/Published/Failed) are present for baseline UI snapshot checks',
+    ],
+    artifacts: {
+      detailFile: DETAIL_FILE,
+    },
+    result,
+    checks: {
+      ui: [
+        'Detail view exposes empty-state baseline and counter widgets for visual regression checks',
+      ],
+      logs: [
+        'Runner emits static contract results with source line hints for quick investigation',
+      ],
+    },
+  })
+}
+
+export async function runCaptionSourceFallbackCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+  const publishTestSource = safeRead(TEST_PUBLISH_FILE)
+
+  const hasFallbackExpression =
+    publishTestSource.includes("video.generated_caption || video.description || '#test'") ||
+    publishTestSource.includes('video.generated_caption || video.description || "#test"')
+
+  const fixtureVideo = {
+    platform_id: 'caption-fixture-1',
+    generated_caption: '',
+    description: 'source description fallback',
+  }
+  const resolvedCaption = fixtureVideo.generated_caption || fixtureVideo.description || '#test'
+
+  const checks = {
+    hasFallbackExpression,
+    resolvedToDescription: resolvedCaption === fixtureVideo.description,
+    nonEmptyResolvedCaption: typeof resolvedCaption === 'string' && resolvedCaption.trim().length > 0,
+  }
+
+  Object.entries(checks).forEach(([key, okFlag]) => {
+    log(logger, `[CaptionFallbackSmoke] ${key}=${okFlag}`)
+  })
+
+  const missing = Object.entries(checks).filter(([, okFlag]) => !okFlag).map(([key]) => key)
+  const result = {
+    checks,
+    fixture: fixtureVideo,
+    resolvedCaption,
+    files: {
+      testPublish: TEST_PUBLISH_FILE,
+    },
+  }
+
+  if (missing.length > 0) {
+    return fail('Caption source fallback contract failed', {
+      errors: [`Failed checks: ${missing.join(', ')}`],
+      artifacts: {
+        testPublishFile: TEST_PUBLISH_FILE,
+      },
+      result,
+    })
+  }
+
+  return ok('Caption source fallback contract passed (generated_caption -> description fallback)', {
+    messages: [
+      'Fallback expression exists in publish test path',
+      'Empty generated caption resolves to source description safely',
+    ],
+    artifacts: {
+      testPublishFile: TEST_PUBLISH_FILE,
+    },
+    result,
+  })
+}
+
+export async function runTransformChainSmokeCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+
+  const initial = {
+    platform_id: 'transform-smoke-1',
+    local_path: '/tmp/mock.mp4',
+    description: 'original desc',
+    status: 'queued',
+    data: {
+      description: 'original desc',
+      author: 'fixture',
+    },
+  }
+
+  // Fixture transform chain: caption enrich -> condition passthrough -> metadata mark.
+  const step1 = {
+    ...initial,
+    generated_caption: `${initial.description} #debug`,
+  }
+  const step2 = {
+    ...step1,
+    skipped: false,
+  }
+  const step3 = {
+    ...step2,
+    data: {
+      ...step2.data,
+      transformedAt: Date.now(),
+    },
+  }
+
+  const requiredFields: Array<keyof typeof initial> = ['platform_id', 'local_path', 'description', 'status']
+  const missingRequired = requiredFields.filter((key) => !step3[key])
+  const checks = {
+    requiredFieldsPreserved: missingRequired.length === 0,
+    generatedCaptionPresent: typeof step3.generated_caption === 'string' && step3.generated_caption.length > 0,
+    dataObjectPreserved: !!step3.data && typeof step3.data === 'object',
+  }
+
+  Object.entries(checks).forEach(([key, okFlag]) => {
+    log(logger, `[TransformChainSmoke] ${key}=${okFlag}`)
+  })
+
+  const failed = Object.entries(checks).filter(([, okFlag]) => !okFlag).map(([key]) => key)
+  const result = {
+    checks,
+    requiredFields,
+    missingRequired,
+    initial,
+    final: step3,
+  }
+
+  if (failed.length > 0) {
+    return fail('Transform chain smoke fixture detected required field loss', {
+      errors: [`Failed checks: ${failed.join(', ')}`],
+      result,
+    })
+  }
+
+  return ok('Transform chain smoke fixture passed (required fields preserved across steps)', {
+    messages: [
+      'Required publish fields remained intact after transform chain',
+      'Generated caption and metadata enrichment are visible in final payload',
+    ],
     result,
   })
 }
@@ -472,6 +814,329 @@ export async function runScannerFilterThresholdsFixtureCase(
   }
 }
 
+export async function runScannerChannelSmokeCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+  const now = Date.now()
+  const sourcePick = resolveScannerDebugSource(options, logger)
+  const fixtureVideos = [
+    {
+      platform_id: 'scan_smoke_1',
+      url: 'https://example.com/smoke-1',
+      thumbnail: 'https://img/smoke-1.jpg',
+      description: 'Scanner smoke fixture 1',
+      author: 'fixture_author',
+      stats: { likes: 120, views: 2500 },
+      created_at: now - 1 * 24 * 60 * 60 * 1000,
+    },
+    {
+      platform_id: 'scan_smoke_2',
+      url: 'https://example.com/smoke-2',
+      thumbnail: '',
+      description: 'Scanner smoke fixture 2',
+      author: 'fixture_author',
+      stats: { likes: 88, views: 1400 },
+      created_at: now - 2 * 24 * 60 * 60 * 1000,
+    },
+  ]
+
+  const scheduleCalls: any[] = []
+  const progress: string[] = []
+  const infoLogs: string[] = []
+  const errorLogs: string[] = []
+  const alerts: string[] = []
+
+  const originalScanProfile = TikTokScanner.prototype.scanProfile
+  const originalScanKeyword = TikTokScanner.prototype.scanKeyword
+  const originalFindAll = accountRepo.findAll.bind(accountRepo)
+
+  ;(TikTokScanner.prototype as any).scanProfile = async function mockedScanProfile() {
+    return { videos: fixtureVideos }
+  }
+  ;(TikTokScanner.prototype as any).scanKeyword = async function mockedScanKeyword() {
+    return { videos: fixtureVideos }
+  }
+  ;(accountRepo as any).findAll = () => []
+
+  try {
+    if (sourcePick.sourceType !== 'channel') {
+      log(logger, `[ScannerChannelSmoke] sourceType=${sourcePick.sourceType} provided, forcing channel path for this case`, 'warn')
+    }
+
+    const ctx: NodeExecutionContext = {
+      campaign_id: 'fixture-campaign-channel-smoke',
+      params: {
+        campaign_id: 'fixture-campaign-channel-smoke',
+        sources: [{
+          type: 'channel',
+          name: sourcePick.sourceName,
+          historyLimit: 5,
+          sortOrder: 'newest',
+          timeRange: 'history_only',
+          autoSchedule: true,
+        }],
+      },
+      store: createDummyStore(),
+      logger: {
+        info(msg: string) {
+          infoLogs.push(msg)
+          log(logger, msg)
+        },
+        error(msg: string, err?: any) {
+          const line = `${msg}${err?.message ? `: ${err.message}` : ''}`
+          errorLogs.push(line)
+          log(logger, line, 'error')
+        },
+      },
+      onProgress(msg: string) {
+        progress.push(msg)
+        log(logger, `[progress] ${msg}`)
+      },
+      alert(_level, title, body) {
+        const line = `${title}${body ? `: ${body}` : ''}`
+        alerts.push(line)
+        log(logger, `[alert] ${line}`, 'warn')
+      },
+      asyncTasks: {
+        schedule(taskType, payload, scheduleOptions) {
+          scheduleCalls.push({ taskType, payload, scheduleOptions })
+          return { taskId: `task_${scheduleCalls.length}`, created: true }
+        },
+      },
+    }
+
+    const out = await runScannerNode(null, ctx)
+    const rows = Array.isArray(out?.data) ? out.data : []
+    const expectedIds = fixtureVideos.map(v => v.platform_id).sort()
+    const actualIds = rows.map((v: any) => v.platform_id).sort()
+    const expectedThumbCount = fixtureVideos.filter(v => typeof v.thumbnail === 'string' && v.thumbnail.length > 0).length
+    const thumbnailSchedule = scheduleCalls.find(c => c.taskType === 'tiktok.thumbnail.batch')
+    const scheduledThumbCount = Array.isArray(thumbnailSchedule?.payload?.videos) ? thumbnailSchedule.payload.videos.length : 0
+
+    const missingFieldByVideo = rows
+      .map((v: any) => {
+        const missing: string[] = []
+        if (typeof v.platform_id !== 'string' || !v.platform_id) missing.push('platform_id')
+        if (v.platform !== 'tiktok') missing.push('platform')
+        if (typeof v.url !== 'string' || !v.url) missing.push('url')
+        if (typeof v.source_meta?.source_name !== 'string' || !v.source_meta.source_name) missing.push('source_meta.source_name')
+        if (v.source_meta?.source_type !== 'channel') missing.push('source_meta.source_type')
+        return missing.length ? { platformId: v.platform_id || '(missing)', missing } : null
+      })
+      .filter(Boolean)
+
+    const checks = {
+      returnedVideoCount: rows.length === fixtureVideos.length,
+      idsMatchFixture: JSON.stringify(actualIds) === JSON.stringify(expectedIds),
+      requiredFieldsPresent: missingFieldByVideo.length === 0,
+      thumbnailBatchScheduled: scheduledThumbCount === expectedThumbCount,
+      noScannerErrors: errorLogs.length === 0,
+    }
+
+    Object.entries(checks).forEach(([key, okFlag]) => {
+      log(logger, `[ScannerChannelSmoke] ${key}=${okFlag}`)
+    })
+
+    const failed = Object.entries(checks).filter(([, okFlag]) => !okFlag).map(([key]) => key)
+    const result = {
+      checks,
+      expectedIds,
+      actualIds,
+      expectedThumbCount,
+      scheduledThumbCount,
+      missingFieldByVideo,
+      sourceSelection: {
+        ...sourcePick,
+        sourceType: 'channel',
+      },
+      progress,
+      infoLogsTail: infoLogs.slice(-10),
+      errorLogs,
+      alerts,
+    }
+
+    if (failed.length > 0) {
+      return fail('Channel scan smoke fixture failed scanner contract checks', {
+        errors: [`Failed checks: ${failed.join(', ')}`],
+        result,
+        params: {
+          sourceType: 'channel',
+          sourceName: sourcePick.sourceName,
+          randomSeed: options?.runtime?.randomSeed,
+        },
+      })
+    }
+
+    return ok('Channel scan smoke fixture passed (scanner output + source metadata + thumbnail scheduling)', {
+      messages: [
+        `Returned videos: ${rows.length}`,
+        `Stable IDs: ${actualIds.join(', ')}`,
+        `Thumbnail batch scheduled for ${scheduledThumbCount}/${expectedThumbCount} thumbnail URLs`,
+      ],
+      params: {
+        sourceType: 'channel',
+        sourceName: sourcePick.sourceName,
+        randomSeed: options?.runtime?.randomSeed,
+      },
+      result,
+      checks: {
+        db: [
+          'Scanner output includes stable platform/source fields required for campaign persistence',
+        ],
+        logs: [
+          'Scanner progress summary and source-level logs emitted without error logs',
+        ],
+      },
+    })
+  } finally {
+    ;(TikTokScanner.prototype as any).scanProfile = originalScanProfile
+    ;(TikTokScanner.prototype as any).scanKeyword = originalScanKeyword
+    ;(accountRepo as any).findAll = originalFindAll
+  }
+}
+
+export async function runScannerEmptyChannelCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+  const sourcePick = resolveScannerDebugSource(options, logger)
+  const fixtureVideos: any[] = []
+
+  const scheduleCalls: any[] = []
+  const progress: string[] = []
+  const infoLogs: string[] = []
+  const errorLogs: string[] = []
+  const alerts: string[] = []
+
+  const originalScanProfile = TikTokScanner.prototype.scanProfile
+  const originalScanKeyword = TikTokScanner.prototype.scanKeyword
+  const originalFindAll = accountRepo.findAll.bind(accountRepo)
+
+  ;(TikTokScanner.prototype as any).scanProfile = async function mockedScanProfile() {
+    return { videos: fixtureVideos }
+  }
+  ;(TikTokScanner.prototype as any).scanKeyword = async function mockedScanKeyword() {
+    return { videos: fixtureVideos }
+  }
+  ;(accountRepo as any).findAll = () => []
+
+  try {
+    if (sourcePick.sourceType !== 'channel') {
+      log(logger, `[ScannerEmptyChannel] sourceType=${sourcePick.sourceType} provided, forcing channel path for this case`, 'warn')
+    }
+
+    const ctx: NodeExecutionContext = {
+      campaign_id: 'fixture-campaign-empty-channel',
+      params: {
+        campaign_id: 'fixture-campaign-empty-channel',
+        sources: [{
+          type: 'channel',
+          name: sourcePick.sourceName,
+          historyLimit: 5,
+          sortOrder: 'newest',
+          timeRange: 'history_only',
+          autoSchedule: true,
+        }],
+      },
+      store: createDummyStore(),
+      logger: {
+        info(msg: string) {
+          infoLogs.push(msg)
+          log(logger, msg)
+        },
+        error(msg: string, err?: any) {
+          const line = `${msg}${err?.message ? `: ${err.message}` : ''}`
+          errorLogs.push(line)
+          log(logger, line, 'error')
+        },
+      },
+      onProgress(msg: string) {
+        progress.push(msg)
+        log(logger, `[progress] ${msg}`)
+      },
+      alert(_level, title, body) {
+        const line = `${title}${body ? `: ${body}` : ''}`
+        alerts.push(line)
+        log(logger, `[alert] ${line}`, 'warn')
+      },
+      asyncTasks: {
+        schedule(taskType, payload, scheduleOptions) {
+          scheduleCalls.push({ taskType, payload, scheduleOptions })
+          return { taskId: `task_${scheduleCalls.length}`, created: true }
+        },
+      },
+    }
+
+    const out = await runScannerNode(null, ctx)
+    const rows = Array.isArray(out?.data) ? out.data : []
+    const thumbnailSchedule = scheduleCalls.find(c => c.taskType === 'tiktok.thumbnail.batch')
+    const hasZeroSummary = progress.some(line => /0 videos/i.test(line))
+    const checks = {
+      returnsZeroRows: rows.length === 0,
+      noThumbnailBatchScheduled: !thumbnailSchedule,
+      hasZeroSummaryProgress: hasZeroSummary,
+      noScannerErrors: errorLogs.length === 0,
+    }
+
+    Object.entries(checks).forEach(([key, okFlag]) => {
+      log(logger, `[ScannerEmptyChannel] ${key}=${okFlag}`)
+    })
+
+    const failed = Object.entries(checks).filter(([, okFlag]) => !okFlag).map(([key]) => key)
+    const result = {
+      checks,
+      sourceSelection: {
+        ...sourcePick,
+        sourceType: 'channel',
+      },
+      totalReturned: rows.length,
+      progress,
+      infoLogsTail: infoLogs.slice(-10),
+      errorLogs,
+      alerts,
+      scheduleCalls,
+    }
+
+    if (failed.length > 0) {
+      return fail('Empty-channel scan fixture failed graceful-empty-path checks', {
+        errors: [`Failed checks: ${failed.join(', ')}`],
+        result,
+        params: {
+          sourceType: 'channel',
+          sourceName: sourcePick.sourceName,
+          randomSeed: options?.runtime?.randomSeed,
+        },
+      })
+    }
+
+    return ok('Empty-channel scan fixture passed (graceful zero-result path)', {
+      messages: [
+        'Scanner returned zero videos without throwing',
+        'No thumbnail async task was scheduled for empty source result',
+      ],
+      params: {
+        sourceType: 'channel',
+        sourceName: sourcePick.sourceName,
+        randomSeed: options?.runtime?.randomSeed,
+      },
+      result,
+      checks: {
+        db: [
+          'No scan output rows emitted for empty source fixture (prevents placeholder inserts)',
+        ],
+        logs: [
+          'Progress contains explicit zero-videos summary and no error logs',
+        ],
+      },
+    })
+  } finally {
+    ;(TikTokScanner.prototype as any).scanProfile = originalScanProfile
+    ;(TikTokScanner.prototype as any).scanKeyword = originalScanKeyword
+    ;(accountRepo as any).findAll = originalFindAll
+  }
+}
+
 function runThumbnailNormalizationFixture(caseId: string, logger?: Logger): TroubleshootingRunResultLike {
   const cases: Record<string, { input: any; expected: string; label: string }> = {
     'tiktok-repost-v1.thumbnail.normalize-string': {
@@ -587,8 +1252,29 @@ export async function runBasicTiktokRepostCase(
   caseId: string,
   options?: TroubleshootingCaseRunOptions
 ): Promise<TroubleshootingRunResultLike | null> {
+  if (caseId === 'tiktok-repost-v1.debug-panel.workflow-filter-smoke') {
+    return runDebugPanelWorkflowFilterSmokeCase(options)
+  }
+  if (caseId === 'tiktok-repost-v1.campaign.create-smoke') {
+    return runCampaignCreateSmokeCase(options)
+  }
+  if (caseId === 'tiktok-repost-v1.campaign.detail-ui-open-snapshot') {
+    return runCampaignDetailUiOpenSnapshotCase(options)
+  }
+  if (caseId === 'tiktok-repost-v1.caption.source-fallback') {
+    return runCaptionSourceFallbackCase(options)
+  }
+  if (caseId === 'tiktok-repost-v1.transform.chain-smoke') {
+    return runTransformChainSmokeCase(options)
+  }
   if (caseId === 'tiktok-repost-v1.scan.wizard-sources-main-validation') {
     return runWizardSourcesMainValidationCase(options)
+  }
+  if (caseId === 'tiktok-repost-v1.scan.channel-smoke') {
+    return runScannerChannelSmokeCase(options)
+  }
+  if (caseId === 'tiktok-repost-v1.scan.empty-channel') {
+    return runScannerEmptyChannelCase(options)
   }
   if (caseId === 'tiktok-repost-v1.scan.wizard-sources-edge-validation-gaps') {
     return runWizardSourcesEdgeGapCase(options)

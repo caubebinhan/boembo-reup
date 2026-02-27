@@ -1,5 +1,5 @@
 import { ipcMain, dialog, net, shell } from 'electron'
-import path from 'path'
+import path from 'node:path'
 import { AppSettingsService, AutomationBrowserSettings } from '../services/AppSettingsService'
 import { BrowserProfileScannerService } from '../services/BrowserProfileScannerService'
 import { browserService } from '../services/BrowserService'
@@ -131,8 +131,7 @@ export function setupSettingsIPC() {
     // Collect unique service URLs from all workflow definitions
     const serviceMap = new Map<string, { name: string; url: string; workflows: string[] }>()
     for (const flow of flows) {
-      if (!flow.health_checks?.length) continue
-      for (const hc of flow.health_checks) {
+      for (const hc of flow.health_checks || []) {
         const existing = serviceMap.get(hc.url)
         if (existing) {
           if (!existing.workflows.includes(flow.name)) existing.workflows.push(flow.name)
@@ -143,20 +142,24 @@ export function setupSettingsIPC() {
     }
 
     // Test each unique service
-    const results: Array<{ name: string; url: string; workflows: string[]; ok: boolean; ms: number; error?: string }> = []
-    for (const [, service] of serviceMap) {
-      const start = Date.now()
-      try {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 5000)
-        await net.fetch(service.url, { method: 'HEAD', signal: controller.signal as any })
-        clearTimeout(timeout)
-        results.push({ ...service, ok: true, ms: Date.now() - start })
-      } catch (err: any) {
-        results.push({ ...service, ok: false, ms: Date.now() - start, error: err?.message || 'Unreachable' })
-      }
-    }
+    const results = await Promise.all(
+      [...serviceMap.values()].map(service => pingServiceEndpoint(service))
+    )
 
     return { services: results, totalWorkflows: flows.length }
   })
+}
+
+async function pingServiceEndpoint(service: { name: string; url: string; workflows: string[] }) {
+  const { net } = require('electron')
+  const start = Date.now()
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 5000)
+    await net.fetch(service.url, { method: 'HEAD', signal: controller.signal as any })
+    clearTimeout(timeout)
+    return { ...service, ok: true, ms: Date.now() - start }
+  } catch (err: any) {
+    return { ...service, ok: false, ms: Date.now() - start, error: err?.message || 'Unreachable' }
+  }
 }

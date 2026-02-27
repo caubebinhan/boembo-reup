@@ -11,7 +11,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'create', 'db', 'flow-snapshot'],
     level: 'basic',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'workflowId', value: 'tiktok-repost' },
@@ -41,7 +41,7 @@ export const campaignCases: TroubleshootingCaseDefinition[] = [
     group: 'campaign',
     tags: ['campaign', 'ui', 'detail', 'artifact:screenshot'],
     level: 'basic',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureCampaign', value: 'newly-created tiktok-repost@1.0 campaign' },

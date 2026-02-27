@@ -58,7 +58,7 @@ const TABS: { id: SettingsTab; label: string; icon: string }[] = [
 ]
 
 export function SettingsPanel() {
-  const api = (window as any).api
+  const api = (globalThis as any).api
   const [tab, setTab] = useState<SettingsTab>('browser')
 
   return (
@@ -70,11 +70,10 @@ export function SettingsPanel() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
-              tab === t.id
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${tab === t.id
                 ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
                 : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
-            }`}
+              }`}
           >
             <span className="text-base">{t.icon}</span>
             {t.label}
@@ -174,7 +173,7 @@ function BrowserSection({ api }: { api: any }) {
     const pending = sentryStatus?.pending
     if (!pending?.sessionId) return
     const intervalMs = Math.max(2000, (pending.intervalSec || 5) * 1000)
-    const timer = window.setInterval(async () => {
+    const timer = (globalThis as any).setInterval(async () => {
       try {
         const polled = await api.invoke('settings:sentry-oauth-poll', { sessionId: pending.sessionId })
         if (polled?.status === 'pending') {
@@ -194,7 +193,7 @@ function BrowserSection({ api }: { api: any }) {
         setSentryMessage(`Connect polling failed: ${err?.message || String(err)}`)
       }
     }, intervalMs)
-    return () => window.clearInterval(timer)
+    return () => (globalThis as any).clearInterval(timer)
   }, [api, sentryPolling, sentryStatus?.pending?.sessionId, sentryStatus?.pending?.intervalSec])
 
   const selectedBrowser = useMemo(
@@ -345,9 +344,8 @@ function BrowserSection({ api }: { api: any }) {
               const active = profile.directory === selectedProfileDirectory
               return (
                 <button key={profile.id} onClick={() => setSelectedProfileDirectory(profile.directory)}
-                  className={`w-full text-left rounded-lg border px-3 py-2 transition ${
-                    active ? 'border-cyan-500 bg-cyan-500/10' : 'border-gray-800 bg-gray-950 hover:border-gray-700'
-                  }`}>
+                  className={`w-full text-left rounded-lg border px-3 py-2 transition ${active ? 'border-cyan-500 bg-cyan-500/10' : 'border-gray-800 bg-gray-950 hover:border-gray-700'
+                    }`}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium">{profile.displayName}</div>
@@ -380,11 +378,10 @@ function BrowserSection({ api }: { api: any }) {
               One-time OAuth connect. App will auto-load org/project/DSN for debug send.
             </p>
           </div>
-          <span className={`text-xs px-2 py-1 rounded border ${
-            sentryStatus?.connected
+          <span className={`text-xs px-2 py-1 rounded border ${sentryStatus?.connected
               ? 'text-green-300 border-green-500/40 bg-green-500/10'
               : 'text-gray-300 border-gray-700 bg-gray-800/30'
-          }`}>
+            }`}>
             {sentryStatus?.connected ? 'Connected' : 'Not Connected'}
           </span>
         </div>
@@ -426,8 +423,9 @@ function BrowserSection({ api }: { api: any }) {
         {sentryProjects.length > 0 && (
           <div className="grid gap-3 md:grid-cols-2">
             <div>
-              <label className="block text-[11px] uppercase tracking-wider text-gray-500 mb-2">Production Project</label>
+              <label htmlFor="sentry-prod-select" className="block text-[11px] uppercase tracking-wider text-gray-500 mb-2">Production Project</label>
               <select
+                id="sentry-prod-select"
                 value={selectedProdSlug}
                 onChange={(e) => setSelectedProdSlug(e.target.value)}
                 className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-sm outline-none focus:border-cyan-500"
@@ -438,8 +436,9 @@ function BrowserSection({ api }: { api: any }) {
               </select>
             </div>
             <div>
-              <label className="block text-[11px] uppercase tracking-wider text-gray-500 mb-2">Staging Project</label>
+              <label htmlFor="sentry-stage-select" className="block text-[11px] uppercase tracking-wider text-gray-500 mb-2">Staging Project</label>
               <select
+                id="sentry-stage-select"
                 value={selectedStageSlug}
                 onChange={(e) => setSelectedStageSlug(e.target.value)}
                 className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-sm outline-none focus:border-cyan-500"
@@ -680,7 +679,7 @@ function StorageSection({ api }: { api: any }) {
                 checkedAt: {schemaReport.checkedAt ? new Date(schemaReport.checkedAt).toLocaleString('vi-VN') : '-'}
               </p>
               <button
-                onClick={() => navigator.clipboard?.writeText(JSON.stringify(schemaReport, null, 2)).catch(() => {})}
+                onClick={() => navigator.clipboard?.writeText(JSON.stringify(schemaReport, null, 2)).catch(() => { })}
                 className="px-2 py-1 rounded border border-gray-700 text-[10px] text-gray-200 hover:border-gray-500"
               >
                 Copy Schema Report

@@ -4,9 +4,9 @@ import { RootState } from '../../store/store'
 import { updateNodeProgress } from '../../store/nodeEventsSlice'
 
 interface PipelineVisualizerProps {
-    campaignId: string
-    workflowId: string
-    vertical?: boolean
+    readonly campaignId: string
+    readonly workflowId: string
+    readonly vertical?: boolean
 }
 
 interface FlowNodeInfo {
@@ -643,8 +643,9 @@ export function PipelineVisualizer({ campaignId, workflowId, vertical = false }:
                 >
                     <SvgOverlay edges={flowData.edges} flowData={flowData} containerRef={containerRef} campaignId={campaignId} />
 
-                    {layers.map((layer, l_idx) => (
-                        <div key={l_idx} className={vertical
+                    {layers.map((layer, l_idx) => {
+                        const firstNodeId = layer[0]?.instance_id ?? `layer-${l_idx}`
+                        return (<div key={firstNodeId} className={vertical
                             ? 'flex flex-row flex-wrap gap-4 relative z-10 justify-center'
                             : 'flex flex-col gap-8 relative z-10'
                         }>
@@ -668,8 +669,8 @@ export function PipelineVisualizer({ campaignId, workflowId, vertical = false }:
                                     />
                                 )
                             })}
-                        </div>
-                    ))}
+                        </div>)
+                    })}
                 </div>
             </div>
 

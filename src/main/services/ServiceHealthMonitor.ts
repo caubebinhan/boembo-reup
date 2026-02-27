@@ -29,7 +29,7 @@ const FAILURE_THRESHOLD = 2             // pause after 2 consecutive failures
 
 class ServiceHealthMonitor {
   private intervalId: NodeJS.Timeout | null = null
-  private services = new Map<string, ServiceStatus>()
+  private readonly services = new Map<string, ServiceStatus>()
   private isRunning = false
 
   /** Start periodic health checks */

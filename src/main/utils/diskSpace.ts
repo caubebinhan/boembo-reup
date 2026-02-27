@@ -1,6 +1,6 @@
-import { execSync } from 'child_process'
-import * as path from 'path'
-import * as os from 'os'
+import { execSync } from 'node:child_process'
+import * as path from 'node:path'
+import * as os from 'node:os'
 
 /**
  * Cross-platform free disk space check.
@@ -29,8 +29,8 @@ function getFreeDiskSpaceWindows(targetPath: string): number {
       `powershell -NoProfile -Command "(Get-PSDrive ${drive}).Free"`,
       { encoding: 'utf8', timeout: 5000 }
     )
-    const freeBytes = parseInt(output.trim(), 10)
-    if (isFinite(freeBytes) && freeBytes > 0) {
+    const freeBytes = Number.parseInt(output.trim(), 10)
+    if (Number.isFinite(freeBytes) && freeBytes > 0) {
       return Math.round(freeBytes / (1024 * 1024))
     }
   } catch {
@@ -42,7 +42,7 @@ function getFreeDiskSpaceWindows(targetPath: string): number {
       )
       const match = output.match(/FreeSpace=(\d+)/)
       if (match) {
-        return Math.round(parseInt(match[1], 10) / (1024 * 1024))
+        return Math.round(Number.parseInt(match[1], 10) / (1024 * 1024))
       }
     } catch {}
   }
@@ -62,8 +62,8 @@ function getFreeDiskSpacePosix(targetPath: string): number {
     // Parse the data line — columns are space-separated
     const cols = lines[1].split(/\s+/)
     // Available is usually column index 3 (macOS) — in KB
-    const availKB = parseInt(cols[3], 10)
-    if (isFinite(availKB) && availKB > 0) {
+    const availKB = Number.parseInt(cols[3], 10)
+    if (Number.isFinite(availKB) && availKB > 0) {
       return Math.round(availKB / 1024) // KB → MB
     }
   } catch {}
