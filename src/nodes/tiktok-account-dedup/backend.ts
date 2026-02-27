@@ -1,5 +1,6 @@
 ﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { ExecutionLogger } from '@core/engine/ExecutionLogger'
+import { failGracefully } from '@core/nodes/NodeHelpers'
 import { attachPublishAccountTarget, selectPublishAccount } from '@main/tiktok/publisher/PublishAccountResolver'
 import {
   compareMediaSignatures,
@@ -79,19 +80,32 @@ function shouldCompareAv(ctx: NodeExecutionContext): boolean {
   return true
 }
 
+const INSTANCE_ID = 'account_dedup_1'
+
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const video = input
-  if (!video?.platform_id) throw new Error('No video platform_id for account dedup')
-  if (!video?.local_path) throw new Error('No local video file for account dedup')
+  if (!video?.platform_id) {
+    return failGracefully(ctx, INSTANCE_ID, 'unknown', 'missing_input', 'No video platform_id for account dedup')
+  }
+  if (!video?.local_path) {
+    return failGracefully(ctx, INSTANCE_ID, video.platform_id, 'missing_input', 'No local video file for account dedup')
+  }
 
-  const selection = selectPublishAccount(video, ctx)
-  const account = selection.account
+  let account: any
+  let enrichedVideo: any
+  try {
+    const selection = selectPublishAccount(video, ctx)
+    account = selection.account
+    enrichedVideo = attachPublishAccountTarget(video, selection)
+  } catch (err: any) {
+    return failGracefully(ctx, INSTANCE_ID, video.platform_id, 'no_account',
+      `No publish account available for dedup: ${err?.message || err}`)
+  }
   const caption = video.generated_caption || video.description || ''
   const sourcePlatformId = String(video.platform_id || '').trim() || undefined
   const captionHash = hashCaption(caption)
   const captionShort = captionPreview(caption)
   const fileFingerprint = await computeQuickFileFingerprint(video.local_path).catch(() => undefined)
-  const enrichedVideo = attachPublishAccountTarget(video, selection)
 
   ctx.logger.info(`Account dedup on @${account.username}`)
 

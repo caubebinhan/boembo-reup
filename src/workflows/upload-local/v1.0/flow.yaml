@@ -10,6 +10,13 @@ icon: 📁
 color: "#8b5cf6"
 version: "1.0"
 
+# ── HEALTH CHECKS ────────────────────────
+health_checks:
+  - name: TikTok
+    url: https://www.tiktok.com
+  - name: TikTok Studio
+    url: https://www.tiktok.com/tiktokstudio
+
 # ── NODES ────────────────────────────────
 nodes:
   - node_id: core.file_source

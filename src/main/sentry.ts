@@ -1,3 +1,6 @@
+import { resolveSentryProductionDsn } from './services/SentryStagingService'
+import { AppSettingsService } from './services/AppSettingsService'
+
 type ScopeLike = {
   setTag: (key: string, value: string) => void
   setExtra: (key: string, value: any) => void
@@ -15,6 +18,7 @@ type SentryMainLike = {
 }
 
 let cachedSentryMain: SentryMainLike | null | undefined
+let sentryInitialized = false
 
 function resolveSentryMain(): SentryMainLike | null {
   if (cachedSentryMain !== undefined) return cachedSentryMain
@@ -66,8 +70,18 @@ export const SentryMain = {
 }
 
 export function initSentry() {
+  if (sentryInitialized) return false
+  const runtimeEnv = AppSettingsService.getSentryRuntimeEnv(process.env)
+  const dsn = resolveSentryProductionDsn(runtimeEnv)
+  if (!dsn) return false
+  const environment = String(
+    runtimeEnv.SENTRY_ENVIRONMENT ||
+    (runtimeEnv.NODE_ENV === 'development' ? 'development' : 'production')
+  )
   SentryMain.init({
-    dsn: process.env.VITE_SENTRY_DSN || '',
-    environment: process.env.NODE_ENV === 'development' ? 'dev' : 'production',
+    dsn,
+    environment,
   })
+  sentryInitialized = true
+  return true
 }

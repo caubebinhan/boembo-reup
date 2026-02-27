@@ -1,23 +1,30 @@
 import { useEffect, useMemo, useState } from 'react'
+import {
+  groupCasesBySuiteAndGroup,
+  mapArtifactsForView,
+  type TroubleArtifactType,
+  type TroubleCaseLevel,
+  type TroubleCaseRisk,
+} from './troubleshootingPanel.helpers'
 
 type TroubleCase = {
   id: string
   title: string
   description: string
-  risk: 'safe' | 'real_publish'
+  risk: TroubleCaseRisk
   workflowId?: string
   workflowVersion?: string
   category?: string
   group?: string
   tags?: string[]
-  level?: 'basic' | 'intermediate' | 'advanced'
+  level?: TroubleCaseLevel
   implemented?: boolean
   meta?: {
     parameters?: Array<{ key: string; value?: string | number | boolean; description?: string; required?: boolean }>
     checks?: { db?: string[]; ui?: string[]; logs?: string[]; events?: string[]; files?: string[] }
     artifacts?: Array<{
       key: string
-      type: 'html' | 'screenshot' | 'session-log' | 'json' | 'db-snapshot' | 'text' | 'video' | 'other'
+      type: TroubleArtifactType
       description?: string
       when?: 'always' | 'on-fail' | 'on-warn' | 'on-captcha' | 'on-auth-redirect' | 'on-selector-drift' | 'on-under-review' | 'manual'
       required?: boolean
@@ -47,7 +54,7 @@ type TroubleRun = {
   category?: string
   group?: string
   tags?: string[]
-  level?: 'basic' | 'intermediate' | 'advanced'
+  level?: TroubleCaseLevel
   caseMeta?: TroubleCase['meta']
   logStats?: { total: number; info: number; warn: number; error: number }
   logs: TroubleLogEntry[]
@@ -97,6 +104,20 @@ type TroubleSourceCandidate = {
   campaignUpdatedAt?: number
 }
 
+type TroubleSentryFeedback = {
+  eventId?: string | null
+  eventUrl?: string
+  eventApiUrl?: string
+  issueSearchUrl?: string
+  verified?: boolean
+  verificationEnabled?: boolean
+  strictRequired?: boolean
+  message?: string
+  lastError?: string
+  attempts?: number
+  elapsedMs?: number
+}
+
 const levelColor: Record<string, string> = {
   info: 'text-gray-300',
   warn: 'text-amber-300',
@@ -118,6 +139,7 @@ export function TroubleShottingPanel() {
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [messageTone, setMessageTone] = useState<'error' | 'info'>('error')
+  const [sentryFeedback, setSentryFeedback] = useState<TroubleSentryFeedback | null>(null)
   const [workflowFilter, setWorkflowFilter] = useState<string>('all')
   const [versionFilter, setVersionFilter] = useState<string>('all')
   const [fullLogOpen, setFullLogOpen] = useState(false)
@@ -192,24 +214,7 @@ export function TroubleShottingPanel() {
   }, [cases, workflowFilter, versionFilter])
 
   const groupedCases = useMemo(() => {
-    const groups = new Map<string, TroubleCase[]>()
-    for (const c of filteredCases) {
-      const key = c.group || c.category || 'other'
-      if (!groups.has(key)) groups.set(key, [])
-      groups.get(key)?.push(c)
-    }
-    return [...groups.entries()]
-      .map(([group, items]) => ({
-        group,
-        items: [...items].sort((a, b) => {
-          const levelRank = { basic: 1, intermediate: 2, advanced: 3 } as const
-          const la = a.level ? levelRank[a.level] : 9
-          const lb = b.level ? levelRank[b.level] : 9
-          if (la !== lb) return la - lb
-          return a.title.localeCompare(b.title)
-        }),
-      }))
-      .sort((a, b) => a.group.localeCompare(b.group))
+    return groupCasesBySuiteAndGroup(filteredCases)
   }, [filteredCases])
 
   const filteredRuns = useMemo(() => {
@@ -226,11 +231,7 @@ export function TroubleShottingPanel() {
   )
 
   const selectedRunArtifacts = useMemo(() => {
-    const artifacts = selectedRun?.result?.artifacts
-    if (!artifacts || typeof artifacts !== 'object') return [] as Array<{ key: string; value: any }>
-    return Object.entries(artifacts)
-      .filter(([, value]) => value !== undefined && value !== null && value !== '')
-      .map(([key, value]) => ({ key, value }))
+    return mapArtifactsForView(selectedRun?.result?.artifacts, selectedRun?.caseMeta?.artifacts)
   }, [selectedRun])
 
   const selectedRunFootprintPreview = useMemo(() => {
@@ -343,6 +344,7 @@ export function TroubleShottingPanel() {
   const runCase = async (caseId: string) => {
     setBusy(prev => ({ ...prev, [caseId]: true }))
     setMessage('')
+    setSentryFeedback(null)
     try {
       const caseDef = cases.find(c => c.id === caseId)
       const isTiktokRepostCase = caseDef?.workflowId === 'tiktok-repost'
@@ -385,13 +387,37 @@ export function TroubleShottingPanel() {
     if (!selectedRun?.id) return
     setSendingSentry(true)
     setMessage('')
+    setSentryFeedback(null)
     try {
-      await api.invoke('troubleshooting:send-run-to-sentry', { runId: selectedRun.id })
+      const sent = await api.invoke('troubleshooting:send-run-to-sentry', { runId: selectedRun.id })
+      const sentry = sent?.sentry || {}
+      setSentryFeedback({
+        eventId: sent?.eventId,
+        eventUrl: sentry.eventUrl,
+        eventApiUrl: sentry.eventApiUrl,
+        issueSearchUrl: sentry.issueSearchUrl,
+        verified: sentry.verified,
+        verificationEnabled: sentry.verificationEnabled,
+        strictRequired: sentry.strictRequired,
+        message: sentry.message,
+        lastError: sentry.lastError,
+        attempts: sentry.attempts,
+        elapsedMs: sentry.elapsedMs,
+      })
       setMessageTone('info')
-      setMessage(`Sent run ${selectedRun.caseId} to Sentry.`)
+      if (sentry.verificationEnabled) {
+        setMessage(
+          sentry.verified
+            ? `Sent + verified on Sentry staging for ${selectedRun.caseId}.`
+            : `Sent but not verified yet for ${selectedRun.caseId}.`
+        )
+      } else {
+        setMessage(`Sent run ${selectedRun.caseId} to Sentry (verification disabled).`)
+      }
     } catch (err: any) {
       setMessageTone('error')
       setMessage(`Send to Sentry failed: ${err?.message || String(err)}`)
+      setSentryFeedback(null)
     } finally {
       setSendingSentry(false)
     }
@@ -402,6 +428,7 @@ export function TroubleShottingPanel() {
       await api.invoke('troubleshooting:clear-runs')
       setRuns([])
       setSelectedRunId(null)
+      setSentryFeedback(null)
     } catch (err: any) {
       setMessageTone('error')
       setMessage(`Clear failed: ${err?.message || String(err)}`)
@@ -548,6 +575,57 @@ export function TroubleShottingPanel() {
               : 'border-red-500/30 bg-red-500/10 text-red-300'
           }`}>
             {message}
+            {sentryFeedback && (
+              <div className="mt-2 space-y-1 text-xs">
+                {sentryFeedback.message && (
+                  <div className="text-gray-300">{sentryFeedback.message}</div>
+                )}
+                {!!sentryFeedback.eventId && (
+                  <div>
+                    eventId: <span className="font-mono text-gray-200">{sentryFeedback.eventId}</span>
+                  </div>
+                )}
+                {(typeof sentryFeedback.attempts === 'number' || typeof sentryFeedback.elapsedMs === 'number') && (
+                  <div className="text-gray-300">
+                    attempts={sentryFeedback.attempts ?? 0}
+                    {typeof sentryFeedback.elapsedMs === 'number' ? `, elapsed=${sentryFeedback.elapsedMs}ms` : ''}
+                  </div>
+                )}
+                {sentryFeedback.lastError && (
+                  <div className="text-amber-300">lastError: {sentryFeedback.lastError}</div>
+                )}
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  {sentryFeedback.eventUrl && (
+                    <a
+                      href={sentryFeedback.eventUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline text-cyan-200 hover:text-cyan-100"
+                    >
+                      Open Sentry Event
+                    </a>
+                  )}
+                  {sentryFeedback.issueSearchUrl && (
+                    <a
+                      href={sentryFeedback.issueSearchUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline text-cyan-200 hover:text-cyan-100"
+                    >
+                      Open Sentry Issue Search
+                    </a>
+                  )}
+                  {sentryFeedback.eventApiUrl && (
+                    <button
+                      onClick={() => navigator.clipboard?.writeText(sentryFeedback.eventApiUrl || '').catch(() => {})}
+                      className="px-2 py-0.5 rounded border border-gray-700 text-[10px] text-gray-200 hover:border-gray-500"
+                    >
+                      Copy Event API URL
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -589,88 +667,101 @@ export function TroubleShottingPanel() {
                 <span className="font-mono text-gray-300">{versionFilter === 'all' ? 'all versions' : `v${versionFilter}`}</span>
               </div>
               <div className="space-y-4">
-                {groupedCases.map(section => (
-                  <div key={section.group} className="space-y-2">
-                    <div className="flex items-center justify-between">
+                {groupedCases.map(suiteSection => (
+                  <div key={suiteSection.suite} className="space-y-3">
+                    <div
+                      className="flex items-center justify-between rounded-lg border border-gray-800 bg-black/20 px-3 py-2"
+                      data-suite-heading={suiteSection.suite}
+                    >
                       <p className="text-xs uppercase tracking-wider text-gray-400">
-                        Group: <span className="text-gray-200">{section.group}</span>
+                        Suite: <span className="text-gray-200">{suiteSection.label}</span>
                       </p>
-                      <span className="text-[11px] text-gray-500">{section.items.length} case(s)</span>
+                      <span className="text-[11px] text-gray-500">{suiteSection.count} case(s)</span>
                     </div>
-                    {section.items.map(c => {
-                      const isRunning = !!busy[c.id] || runs.some(r => r.caseId === c.id && r.status === 'running')
-                      const dbChecks = c.meta?.checks?.db?.length || 0
-                      const uiChecks = c.meta?.checks?.ui?.length || 0
-                      const logChecks = c.meta?.checks?.logs?.length || 0
-                      return (
-                        <div key={c.id} className="rounded-lg border border-gray-800 bg-gray-950/60 p-3">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-semibold">{c.title}</p>
-                                <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border ${
-                                  c.risk === 'real_publish'
-                                    ? 'text-red-300 border-red-500/30 bg-red-500/10'
-                                    : 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
-                                }`}>
-                                  {c.risk === 'real_publish' ? 'Real Publish' : 'Safe'}
-                                </span>
-                                <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border ${
-                                  c.implemented === false
-                                    ? 'text-slate-300 border-slate-500/30 bg-slate-500/10'
-                                    : 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10'
-                                }`}>
-                                  {c.implemented === false ? 'Planned' : 'Runnable'}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-400 mt-1">{c.description}</p>
-                              <div className="flex flex-wrap items-center gap-2 mt-2">
-                                {(c.workflowId || c.workflowVersion) && (
-                                  <span className="text-[10px] px-2 py-0.5 rounded border border-gray-700 text-gray-300 bg-gray-900/70 font-mono">
-                                    {c.workflowId || 'unscoped'}{c.workflowVersion ? `@v${c.workflowVersion}` : ''}
-                                  </span>
-                                )}
-                                {c.category && (
-                                  <span className="text-[10px] px-2 py-0.5 rounded border border-gray-700 text-gray-300 bg-gray-900/70">
-                                    {c.category}
-                                  </span>
-                                )}
-                                {c.level && (
-                                  <span className={`text-[10px] px-2 py-0.5 rounded border ${
-                                    c.level === 'basic'
-                                      ? 'border-emerald-500/30 text-emerald-300 bg-emerald-500/10'
-                                      : c.level === 'intermediate'
-                                        ? 'border-amber-500/30 text-amber-300 bg-amber-500/10'
-                                        : 'border-fuchsia-500/30 text-fuchsia-300 bg-fuchsia-500/10'
-                                  }`}>
-                                    {c.level}
-                                  </span>
-                                )}
-                                {(c.tags || []).slice(0, 6).map(tag => (
-                                  <span key={`${c.id}-${tag}`} className="text-[10px] px-2 py-0.5 rounded border border-gray-800 text-gray-400 bg-gray-950">
-                                    #{tag}
-                                  </span>
-                                ))}
-                              </div>
-                              <div className="text-[11px] text-gray-500 mt-2 flex flex-wrap gap-3">
-                                <span>Params: {c.meta?.parameters?.length || 0}</span>
-                                <span>DB checks: {dbChecks}</span>
-                                <span>UI checks: {uiChecks}</span>
-                                <span>Log checks: {logChecks}</span>
-                              </div>
-                              <p className="text-[11px] text-gray-500 mt-2 font-mono">{c.id}</p>
-                            </div>
-                            <button
-                              onClick={() => runCase(c.id)}
-                              disabled={isRunning || c.implemented === false}
-                              className="px-3 py-1.5 rounded-lg text-sm border border-cyan-600/40 text-cyan-300 hover:bg-cyan-500/10 transition disabled:opacity-50"
-                            >
-                              {c.implemented === false ? 'Planned' : (isRunning ? 'Running...' : 'Run')}
-                            </button>
-                          </div>
+                    {suiteSection.groups.map(section => (
+                      <div key={`${suiteSection.suite}-${section.group}`} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs uppercase tracking-wider text-gray-500">
+                            Group: <span className="text-gray-200">{section.group}</span>
+                          </p>
+                          <span className="text-[11px] text-gray-500">{section.items.length} case(s)</span>
                         </div>
-                      )
-                    })}
+                        {section.items.map(c => {
+                          const isRunning = !!busy[c.id] || runs.some(r => r.caseId === c.id && r.status === 'running')
+                          const dbChecks = c.meta?.checks?.db?.length || 0
+                          const uiChecks = c.meta?.checks?.ui?.length || 0
+                          const logChecks = c.meta?.checks?.logs?.length || 0
+                          return (
+                            <div key={c.id} className="rounded-lg border border-gray-800 bg-gray-950/60 p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-sm font-semibold">{c.title}</p>
+                                    <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border ${
+                                      c.risk === 'real_publish'
+                                        ? 'text-red-300 border-red-500/30 bg-red-500/10'
+                                        : 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+                                    }`}>
+                                      {c.risk === 'real_publish' ? 'Real Publish' : 'Safe'}
+                                    </span>
+                                    <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded border ${
+                                      c.implemented === false
+                                        ? 'text-slate-300 border-slate-500/30 bg-slate-500/10'
+                                        : 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10'
+                                    }`}>
+                                      {c.implemented === false ? 'Planned' : 'Runnable'}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-gray-400 mt-1">{c.description}</p>
+                                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                                    {(c.workflowId || c.workflowVersion) && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded border border-gray-700 text-gray-300 bg-gray-900/70 font-mono">
+                                        {c.workflowId || 'unscoped'}{c.workflowVersion ? `@v${c.workflowVersion}` : ''}
+                                      </span>
+                                    )}
+                                    {c.category && (
+                                      <span className="text-[10px] px-2 py-0.5 rounded border border-gray-700 text-gray-300 bg-gray-900/70">
+                                        {c.category}
+                                      </span>
+                                    )}
+                                    {c.level && (
+                                      <span className={`text-[10px] px-2 py-0.5 rounded border ${
+                                        c.level === 'basic'
+                                          ? 'border-emerald-500/30 text-emerald-300 bg-emerald-500/10'
+                                          : c.level === 'intermediate'
+                                            ? 'border-amber-500/30 text-amber-300 bg-amber-500/10'
+                                            : 'border-fuchsia-500/30 text-fuchsia-300 bg-fuchsia-500/10'
+                                      }`}>
+                                        {c.level}
+                                      </span>
+                                    )}
+                                    {(c.tags || []).slice(0, 6).map(tag => (
+                                      <span key={`${c.id}-${tag}`} className="text-[10px] px-2 py-0.5 rounded border border-gray-800 text-gray-400 bg-gray-950">
+                                        #{tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                  <div className="text-[11px] text-gray-500 mt-2 flex flex-wrap gap-3">
+                                    <span>Params: {c.meta?.parameters?.length || 0}</span>
+                                    <span>DB checks: {dbChecks}</span>
+                                    <span>UI checks: {uiChecks}</span>
+                                    <span>Log checks: {logChecks}</span>
+                                  </div>
+                                  <p className="text-[11px] text-gray-500 mt-2 font-mono">{c.id}</p>
+                                </div>
+                                <button
+                                  onClick={() => runCase(c.id)}
+                                  disabled={isRunning || c.implemented === false}
+                                  className="px-3 py-1.5 rounded-lg text-sm border border-cyan-600/40 text-cyan-300 hover:bg-cyan-500/10 transition disabled:opacity-50"
+                                >
+                                  {c.implemented === false ? 'Planned' : (isRunning ? 'Running...' : 'Run')}
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
                   </div>
                 ))}
                 {filteredCases.length === 0 && (
@@ -883,9 +974,7 @@ export function TroubleShottingPanel() {
                   <p className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">Artifacts</p>
                   {selectedRunArtifacts.length > 0 ? (
                     <div className="space-y-2">
-                      {selectedRunArtifacts.map(({ key, value }) => {
-                        const textValue = typeof value === 'string' ? value : JSON.stringify(value)
-                        const preview = textValue.length > 260 ? `${textValue.slice(0, 260)}...` : textValue
+                      {selectedRunArtifacts.map(({ key, textValue, preview, mode, imageSrc }) => {
                         return (
                           <div key={`${selectedRun.id}-artifact-${key}`} className="rounded border border-gray-800 bg-black/20 p-2">
                             <div className="flex items-center justify-between gap-2">
@@ -897,7 +986,21 @@ export function TroubleShottingPanel() {
                                 Copy
                               </button>
                             </div>
-                            <pre className="text-[11px] text-gray-400 whitespace-pre-wrap break-words mt-1">{preview}</pre>
+                            {mode === 'image' && imageSrc ? (
+                              <div className="mt-2 rounded border border-gray-800 bg-black/30 overflow-hidden">
+                                <img
+                                  src={imageSrc}
+                                  alt={`Screenshot artifact: ${key}`}
+                                  data-artifact-kind="image"
+                                  className="w-full max-h-[260px] object-contain bg-black"
+                                />
+                              </div>
+                            ) : (
+                              <pre className="text-[11px] text-gray-400 whitespace-pre-wrap break-words mt-1">{preview}</pre>
+                            )}
+                            {mode === 'image' && (
+                              <p className="text-[11px] text-gray-500 break-all mt-2">{preview}</p>
+                            )}
                           </div>
                         )
                       })}

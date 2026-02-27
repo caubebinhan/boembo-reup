@@ -21,14 +21,9 @@ export function CampaignList({ onOpenWizard, onAction }: CampaignListProps) {
 
     useEffect(() => {
         fetchCampaigns()
-
-        // Auto-poll each 3s
         const timer = setInterval(fetchCampaigns, 3000)
-
-        // Listen for 'campaigns-updated' event
         // @ts-ignore
         const off = window.api.on('campaigns-updated', fetchCampaigns)
-
         return () => {
             clearInterval(timer)
             if (typeof off === 'function') off()
@@ -37,23 +32,21 @@ export function CampaignList({ onOpenWizard, onAction }: CampaignListProps) {
 
     const handleCampaignAction = (event: string, payload: any) => {
         console.log('Campaign action:', event, payload)
-        // Delegate to parent for navigation events
         if (event === 'campaign:view-details') {
             onAction(event, payload)
             return
         }
-        // Send to IPC for other events
         // @ts-ignore
         window.api.invoke(event, payload).then(fetchCampaigns)
     }
 
     return (
-        <div className="flex-1 overflow-y-auto bg-gray-900 p-6 h-full text-white">
+        <div className="flex-1 overflow-y-auto bg-slate-50 p-6 h-full text-slate-800">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">All Campaigns ({campaigns.length})</h1>
+                <h1 className="text-2xl font-bold text-slate-800">All Campaigns ({campaigns.length})</h1>
                 <button
                     onClick={onOpenWizard}
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium transition"
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl font-medium transition shadow-lg shadow-purple-200 cursor-pointer"
                 >
                     + New
                 </button>
@@ -61,7 +54,7 @@ export function CampaignList({ onOpenWizard, onAction }: CampaignListProps) {
 
             <div className="flex flex-col gap-3">
                 {campaigns.length === 0 ? (
-                    <div className="text-center py-10 text-gray-500 bg-gray-800 rounded-lg border border-gray-700">
+                    <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm">
                         <p>No campaigns yet. Click + New to get started.</p>
                     </div>
                 ) : (
@@ -77,4 +70,3 @@ export function CampaignList({ onOpenWizard, onAction }: CampaignListProps) {
         </div>
     )
 }
-

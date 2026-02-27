@@ -15,6 +15,7 @@ src/
    nodes/
        NodeDefinition.ts # Core types: NodeManifest, NodeConfigSchema, NodeExecutionContext
        NodeRegistry.ts  # Global node registry (auto-populated)
+       NodeHelpers.ts   # Shared error handling: failGracefully, failBatchGracefully, setVideoStatus, isNetworkError, isDiskError
  nodes/                   # Node implementations (auto-discovered via import.meta.glob)
    _shared/
      timeWindow.ts    # Shared time-window utilities (normalizeTimeRanges, nextValidSlot)
@@ -43,7 +44,9 @@ src/
      pipelineSlice.ts
      nodeEventsSlice.ts
      interactionSlice.ts
-   components/wizard/   # Shared wizard step components
+   components/
+     SplashScreen.tsx   # App startup: branding + sequential health checks (DB, schema, storage, workflow services)
+     wizard/            # Shared wizard step components
    detail/shared/
        PipelineVisualizer.tsx # Campaign pipeline visualization + InspectPanel
  preload/
@@ -51,12 +54,15 @@ src/
  main/                    # Electron main process
      index.ts             # App entry: initDb, CrashRecovery, FlowLoader, FlowEngine, IPC setup
      services/
-       CrashRecovery.ts      # On-startup: reset stuck jobs, delegate to per-workflow handlers
-       PublishAccountService.ts # TikTok account management via BrowserWindow login
-       BrowserService.ts      # Playwright browser pooling
+       CrashRecovery.ts           # On-startup: reset stuck jobs, delegate to per-workflow handlers
+       ServiceHealthMonitor.ts    # Background service: periodic workflow URL pings, auto-pause on outage
+       PublishAccountService.ts   # TikTok account management via BrowserWindow login
+       BrowserService.ts          # Playwright browser pooling
        BrowserProfileScannerService.ts # Scan existing browser profiles
-       AppSettingsService.ts   # Key-value settings in app_settings table
+       AppSettingsService.ts      # Key-value settings in app_settings table
        TroubleshootingService.ts
+     utils/
+       diskSpace.ts               # Cross-platform disk space check (Windows PowerShell/wmic + macOS/Linux df)
      ipc/                 # IPC handlers (campaigns, scanner, wizard, settings, troubleshooting)
      tiktok/              # TikTok-specific modules (publisher, scanner)
      db/                  # SQLite database
@@ -142,6 +148,7 @@ interface FlowDefinition {
   nodes: FlowNodeDefinition[]
   edges: FlowEdgeDefinition[]
   ui?: WorkflowUIDescriptor
+  health_checks?: Array<{ name: string; url: string }>  // Service endpoints checked at startup + pre-run
 }
 
 interface FlowNodeDefinition {
@@ -314,6 +321,10 @@ Use `normalizeTimeRanges(ctx.params)` from `nodes/_shared/timeWindow.ts`.
 | `video:show-in-explorer` | renderer -> main | `workflows/tiktok-repost/v1.0/ipc.ts` | Open file in system explorer |
 | `account:list` | renderer -> main | `ipc/settings.ts` | List publish accounts |
 | `account:add` | renderer -> main | `ipc/settings.ts` | Add TikTok account via login |
+| `healthcheck:network` | renderer -> main | `ipc/settings.ts` | Ping TikTok (splash screen) |
+| `healthcheck:storage` | renderer -> main | `ipc/settings.ts` | Check free disk space (cross-platform) |
+| `healthcheck:services` | renderer -> main | `ipc/settings.ts` | Check all workflow-declared service URLs |
+| `shell:open-path` | renderer -> main | `ipc/settings.ts` | Open path in system file explorer |
 | `nodes:catalog` | renderer -> main | `ipc/campaigns.ts`? | (defined in IPC_CHANNELS, not yet implemented) |
 
 > Workflow-specific request/response channels can also be registered from `src/workflows/*/v*/ipc.ts` via the workflow auto-discovery barrel.
@@ -332,6 +343,8 @@ Use `normalizeTimeRanges(ctx.params)` from `nodes/_shared/timeWindow.ts`.
 | `campaign:created` | `campaigns.ts` | campaign object | Campaign list refresh |
 | `campaigns-updated` | Various | - | Global campaign list refresh |
 | `campaign:params-updated` | `campaigns.ts` | `{ id, params }` | Visualizer settings refresh |
+| `campaign:healthcheck-failed` | `FlowEngine` | `{ campaign_id, errors[], message }` | Toast + campaign card alert |
+| `service:health` | `ServiceHealthMonitor` | `{ event, service, ok, error, message }` | Service status changes |
 | `scanner:import` | `scanner.ts` | source data | Wizard step 2 |
 
 ---
@@ -481,6 +494,13 @@ icon:
 color: "#8b5cf6"
 version: "1.0"
 
+# Service endpoints this workflow depends on — checked at startup + before campaign run
+health_checks:
+  - name: TikTok
+    url: https://www.tiktok.com
+  - name: TikTok Studio
+    url: https://www.tiktok.com/tiktokstudio
+
 nodes:
   - node_id: tiktok.scanner
     instance_id: scanner_1
@@ -599,6 +619,16 @@ interface JobSummary {
 
 ## Error Handling
 
+### Shared Error Helpers (`@core/nodes/NodeHelpers`)
+
+| Helper | Use Case | Behavior |
+|---|---|---|
+| `failGracefully(ctx, instanceId, platformId, errorType, msg)` | Per-video node errors | Sets video status to 'failed', emits event, returns `{ action: 'continue', data: null }` |
+| `failBatchGracefully(ctx, instanceId, errorType, msg)` | Source/batch node errors | Emits event, returns `{ action: 'continue', data: [] }` |
+| `setVideoStatus(ctx, platformId, status)` | DRY status updater | Updates video doc + increments counter |
+| `isNetworkError(msg)` | Detect connectivity issues | Matches ENOTFOUND, ECONNREFUSED, net::err_*, etc. |
+| `isDiskError(msg)` | Detect storage issues | Matches ENOSPC, EROFS, EACCES, disk full, etc. |
+
 ### Per-Node `on_error` (in flow.yaml)
 - `skip` *(default)*: Skip current item and continue loop (applies to loop child nodes in current `FlowEngine`)
 - `stop_campaign`: Set campaign status to `'error'`, halt loop execution
@@ -613,6 +643,25 @@ interface JobSummary {
   - `pause_campaign`: set campaign status to `paused`, emit `campaign:paused`, stop loop
   - `stop_campaign`: set campaign status to `error`, emit `campaign:error`, stop loop
 - `emit` behavior: emits a structured `node:event` via `ExecutionLogger.emitNodeEvent(...)` with `event = emit`
+
+### Automatic Error Detection (FlowEngine)
+
+FlowEngine detects critical errors in both `executeJob` and `executeLoop` catch blocks:
+
+| Error Type | Detection | Action | Emit |
+|---|---|---|---|
+| **Network error** | `isNetworkError(msg)` | `campaign.status = 'paused'` | `campaign:network-error` + `campaign:healthcheck-failed` |
+| **Disk error** | `isDiskError(msg)` | `campaign.status = 'error'` (fatal) | `campaign:disk-error` + `campaign:healthcheck-failed` |
+
+> Network errors pause campaigns (recoverable). Disk errors fail campaigns (fatal — requires user intervention).
+
+### Pre-Run Health Check
+
+`FlowEngine.preRunHealthCheck(campaignId)` runs automatically before `triggerCampaign` and `resumeCampaign`:
+1. **Storage check**: `getFreeDiskSpaceMB()` — blocks if < 100 MB free
+2. **Workflow services**: Pings all URLs from `flow.yaml` `health_checks` — blocks if any unreachable
+
+If any check fails → campaign status set to `'error'`, `campaign:healthcheck-failed` emitted to renderer for toast.
 
 ### Publisher-Specific Events
 The publisher emits structured `node:event` logs/UI events (e.g. `captcha:detected`, `violation:detected`) and returns structured `data` statuses:
@@ -632,12 +681,37 @@ The publisher emits structured `node:event` logs/UI events (e.g. `captcha:detect
 app.whenReady() -> 
   1. initDb()                           # Create SQLite tables (IF NOT EXISTS)
   2. CrashRecoveryService.recoverPendingTasks()  # Fix stuck jobs, delegate to workflow handlers
-  3. flowLoader.loadAll(workflowsDir)    # Scan src/workflows/*/v*/flow.yaml (cache latest per workflow, keep versions discoverable)
+  3. flowLoader.loadAll(workflowsDir)    # Scan + parse flow.yaml (incl. health_checks)
   4. flowEngine.start()                  # Begin 5s polling loop
-  5. setup*IPC()                         # Register all IPC handlers
-  6. createWindow()                      # Launch Electron BrowserWindow
+  5. serviceHealthMonitor.start()        # Background URL pinger (60s interval)
+  6. setup*IPC()                         # Register all IPC handlers
+  7. createWindow()                      # Launch Electron BrowserWindow
+  8. SplashScreen                        # Sequential health checks before app shows
 ```
 
 The `import '../workflows'` barrel in `index.ts` auto-imports workflow main-process modules from versioned folders (`*/v*/recovery.ts`, `ipc.ts`, `services.ts`, `events.ts`) which register themselves (e.g. `CrashRecoveryService.registerRecovery(workflowId, { recover })`).
 
 > **Note:** Node auto-discovery happens at import time (`import '../nodes'` in `index.ts`), which uses `import.meta.glob('./**/index.ts', { eager: true })` to find and register all 16 nodes.
+
+---
+
+## Service Health Monitor
+
+`ServiceHealthMonitor` (`src/main/services/ServiceHealthMonitor.ts`) runs as a background singleton:
+
+| Feature | Detail |
+|---|---|
+| **Interval** | Pings all workflow-declared URLs every 60s |
+| **Threshold** | 2 consecutive failures → auto-pause affected campaigns |
+| **Scope** | Only affects campaigns whose workflow declares the failing service |
+| **Recovery** | Emits `service:recovered` event but does **not** auto-resume — user must resume manually |
+| **Cross-platform** | Uses `electron.net.fetch` for pings, `diskSpace.ts` for storage |
+
+### Cross-Platform Disk Space (`src/main/utils/diskSpace.ts`)
+
+| Platform | Method |
+|---|---|
+| Windows | PowerShell `Get-PSDrive` (primary), `wmic` (fallback) |
+| macOS/Linux | `df -k` |
+
+Returns free space in MB, `-1` on error. Used by splash screen, pre-run health check, and storage IPC.

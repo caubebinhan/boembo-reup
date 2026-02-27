@@ -36,85 +36,100 @@ export function Step1_Details({ data, updateData }: Step1Props) {
         return applyCaptionTemplate(data.captionTemplate || '', EXAMPLE_ORIGINAL)
     }, [data.captionTemplate])
 
+    const TAGS = [
+        { tag: '[Original Desc]', icon: '📄', label: 'Original Desc' },
+        { tag: '[No Hashtags]', icon: '🚫', label: 'No Hashtags' },
+        { tag: '[Time (HH:mm)]', icon: '🕐', label: 'Time' },
+        { tag: '[Date (YYYY-MM-DD)]', icon: '📅', label: 'Date' },
+        { tag: '[Author]', icon: '👤', label: 'Author' },
+        { tag: '[Tags]', icon: '🏷', label: 'Tags' },
+    ]
+
     return (
-        <div className="flex flex-col gap-8 text-white max-w-3xl mx-auto pb-10">
+        <div className="flex flex-col gap-8 text-slate-800 max-w-3xl mx-auto pb-10">
 
             {/* SECTION 1: Caption Template */}
             <div className="flex flex-col gap-2">
                 <div>
-                    <h3 className="font-semibold text-lg">📋 Caption Template</h3>
-                    <p className="text-sm text-gray-400">Tuỳ chỉnh caption cho video khi publish. Để trống = giữ nguyên caption gốc.</p>
+                    <h3 className="font-semibold text-lg text-slate-800">📋 Caption Template</h3>
+                    <p className="text-sm text-slate-400">Tuỳ chỉnh caption cho video khi publish. Để trống = giữ nguyên caption gốc.</p>
                 </div>
 
                 <div className="flex flex-wrap gap-2 mb-1 mt-2">
-                    {['[Original Desc]', '[No Hashtags]', '[Time (HH:mm)]', '[Date (YYYY-MM-DD)]', '[Author]', '[Tags]'].map(tag => (
+                    {TAGS.map(({ tag, icon, label }) => (
                         <button
                             key={tag}
                             onClick={() => insertTag(` ${tag} `)}
-                            className="bg-gray-800 hover:bg-gray-700 text-xs px-3 py-1.5 rounded text-gray-300 transition border border-gray-700"
+                            className="bg-white hover:bg-purple-50 text-xs px-3 py-1.5 rounded-lg text-slate-600 transition border border-slate-200 hover:border-purple-300 hover:text-purple-700 flex items-center gap-1.5 shadow-sm cursor-pointer"
                         >
-                            {tag}
+                            <span>{icon}</span> {label}
                         </button>
                     ))}
                 </div>
 
                 <textarea
-                    className="bg-gray-800 border-2 border-gray-700 focus:border-purple-600 rounded-lg p-3 outline-none min-h-[80px] resize-y font-mono text-sm"
+                    className="bg-white border-2 border-slate-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 rounded-xl p-3 outline-none min-h-[80px] resize-y font-mono text-sm text-slate-700 transition"
                     placeholder="[Original Desc] #fyp #viral"
                     value={data.captionTemplate || ''}
                     onChange={(e) => updateData({ captionTemplate: e.target.value })}
                 />
 
                 {/* Live preview */}
-                <div className="bg-[#0f172a] border border-gray-700 rounded-lg p-3 mt-1">
-                    <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-2">Caption Preview</p>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <p className="text-[10px] text-gray-500 mb-1">📄 Original</p>
-                            <p className="text-xs text-gray-400 leading-relaxed">{EXAMPLE_ORIGINAL}</p>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-1">
+                    <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-3">Caption Preview</p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white rounded-lg p-3 border border-slate-200">
+                            <p className="text-[10px] text-slate-400 mb-1.5 font-semibold">📄 Original</p>
+                            <p className="text-xs text-slate-500 leading-relaxed">{EXAMPLE_ORIGINAL}</p>
                         </div>
-                        <div>
-                            <p className="text-[10px] text-purple-400 mb-1">✨ Sẽ đăng</p>
-                            <p className="text-xs text-white leading-relaxed">{captionPreview}</p>
+                        <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                            <p className="text-[10px] text-purple-600 mb-1.5 font-semibold">✨ Sẽ đăng</p>
+                            <p className="text-xs text-slate-800 leading-relaxed font-medium">{captionPreview}</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <hr className="border-gray-800 my-2" />
+            <hr className="border-slate-200 my-1" />
 
             {/* SECTION 2: Missed Job Handling */}
-            <div className="bg-[#1e293b] border border-gray-700 rounded-xl p-6 flex flex-col gap-4">
-                <h3 className="font-bold text-lg flex items-center gap-2">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 flex flex-col gap-4 shadow-sm">
+                <h3 className="font-bold text-lg flex items-center gap-2 text-slate-800">
                     <span>🔄</span> Xử lý video bị missed
                 </h3>
-                <p className="text-sm text-gray-500 -mt-2">Khi app bị tắt/crash, video đã lên lịch nhưng chưa publish sẽ được xử lý theo cách này.</p>
+                <p className="text-sm text-slate-400 -mt-2">Khi app bị tắt/crash, video đã lên lịch nhưng chưa publish sẽ được xử lý theo cách này.</p>
 
                 <div className="grid grid-cols-2 gap-4">
                     <div
                         onClick={() => updateData({ missedJobHandling: 'auto' })}
-                        className={`p-4 rounded-lg cursor-pointer border-2 transition ${(data.missedJobHandling || 'auto') === 'auto'
-                            ? 'border-purple-600 bg-purple-600/10'
-                            : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                        className={`p-4 rounded-xl cursor-pointer border-2 transition hover:shadow-md ${(data.missedJobHandling || 'auto') === 'auto'
+                            ? 'border-purple-400 bg-purple-50 shadow-sm'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
                             }`}
                     >
-                        <div className="flex items-center gap-2 font-semibold mb-1">
-                            <span className="text-purple-400">●</span> Tự động lên lịch lại
+                        <div className="flex items-center gap-2 font-semibold mb-1 text-slate-700">
+                            <span className="w-4 h-4 rounded-full border-2 flex items-center justify-center" style={{ borderColor: (data.missedJobHandling || 'auto') === 'auto' ? '#7c3aed' : '#cbd5e1' }}>
+                                {(data.missedJobHandling || 'auto') === 'auto' && <span className="w-2 h-2 rounded-full bg-purple-600" />}
+                            </span>
+                            Tự động lên lịch lại
                         </div>
-                        <p className="text-xs text-gray-400 leading-snug">Tự reschedule video bị missed khi app restart. Không cần can thiệp.</p>
+                        <p className="text-xs text-slate-400 leading-snug ml-6">Tự reschedule video bị missed khi app restart. Không cần can thiệp.</p>
                     </div>
 
                     <div
                         onClick={() => updateData({ missedJobHandling: 'manual' })}
-                        className={`p-4 rounded-lg cursor-pointer border-2 transition ${data.missedJobHandling === 'manual'
-                            ? 'border-purple-600 bg-purple-600/10'
-                            : 'border-gray-700 bg-gray-800 hover:border-gray-600'
+                        className={`p-4 rounded-xl cursor-pointer border-2 transition hover:shadow-md ${data.missedJobHandling === 'manual'
+                            ? 'border-purple-400 bg-purple-50 shadow-sm'
+                            : 'border-slate-200 bg-white hover:border-slate-300'
                             }`}
                     >
-                        <div className="flex items-center gap-2 font-semibold mb-1">
-                            <span className="text-gray-500">○</span> Tạm dừng chờ duyệt
+                        <div className="flex items-center gap-2 font-semibold mb-1 text-slate-700">
+                            <span className="w-4 h-4 rounded-full border-2 flex items-center justify-center" style={{ borderColor: data.missedJobHandling === 'manual' ? '#7c3aed' : '#cbd5e1' }}>
+                                {data.missedJobHandling === 'manual' && <span className="w-2 h-2 rounded-full bg-purple-600" />}
+                            </span>
+                            Tạm dừng chờ duyệt
                         </div>
-                        <p className="text-xs text-gray-400 leading-snug">Tạm dừng campaign khi phát hiện video bị missed. Bạn tự kiểm tra và resume.</p>
+                        <p className="text-xs text-slate-400 leading-snug ml-6">Tạm dừng campaign khi phát hiện video bị missed. Bạn tự kiểm tra và resume.</p>
                     </div>
                 </div>
             </div>

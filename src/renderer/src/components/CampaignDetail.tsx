@@ -17,13 +17,13 @@ class DetailErrorBoundary extends Component<{ children: ReactNode; workflowId: s
     render() {
         if (this.state.hasError) {
             return (
-                <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-6 text-center">
-                    <p className="text-red-400 font-semibold mb-2">⚠ Detail View Error</p>
-                    <p className="text-red-400/70 text-sm mb-3">{this.state.error?.message || 'Unknown error'}</p>
-                    <p className="text-gray-600 text-xs">Workflow: {this.props.workflowId}</p>
+                <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+                    <p className="text-red-600 font-semibold mb-2">⚠ Detail View Error</p>
+                    <p className="text-red-500 text-sm mb-3">{this.state.error?.message || 'Unknown error'}</p>
+                    <p className="text-slate-400 text-xs">Workflow: {this.props.workflowId}</p>
                     <button
                         onClick={() => this.setState({ hasError: false, error: undefined })}
-                        className="mt-3 px-4 py-1.5 text-sm rounded-lg bg-red-900/30 text-red-400 hover:bg-red-900/50 transition"
+                        className="mt-3 px-4 py-1.5 text-sm rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition cursor-pointer"
                     >Retry</button>
                 </div>
             )
@@ -35,6 +35,15 @@ class DetailErrorBoundary extends Component<{ children: ReactNode; workflowId: s
 interface CampaignDetailProps {
     campaignId: string
     onBack: () => void
+}
+
+const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
+    idle: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
+    active: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+    paused: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
+    finished: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
+    needs_captcha: { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' },
+    error: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
 }
 
 export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
@@ -82,8 +91,11 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
 
     if (loading || !campaign) {
         return (
-            <div className="flex-1 flex items-center justify-center bg-gray-900">
-                <div className="text-gray-500 animate-pulse">Loading campaign...</div>
+            <div className="flex-1 flex items-center justify-center bg-slate-50">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-3 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+                    <span className="text-slate-400 text-sm">Loading campaign...</span>
+                </div>
             </div>
         )
     }
@@ -94,11 +106,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
     const detailPage = descriptor?.detail_page || {}
     const headerStats = detailPage?.header_stats || []
     const headerActions = detailPage?.header_actions || []
-
-    const statusColors: Record<string, string> = {
-        idle: '#6b7280', active: '#10b981', paused: '#eab308',
-        finished: '#3b82f6', needs_captcha: '#f97316', error: '#ef4444'
-    }
+    const ss = STATUS_STYLE[campaign.status] || STATUS_STYLE.idle
 
     const handleAction = async (event: string, payload: any) => {
         console.log(`[CampaignDetail] Action: ${event}`, payload)
@@ -113,24 +121,24 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
     const WorkflowDetail = getWorkflowDetailComponent(workflowId, campaign?.workflow_version)
 
     return (
-        <div className="flex-1 flex flex-col h-screen bg-gray-900 text-white overflow-hidden">
+        <div className="flex-1 flex flex-col h-screen bg-slate-50 text-slate-900 overflow-hidden">
             {/* HEADER */}
-            <div className="border-b border-gray-800 bg-gray-900/95 backdrop-blur-sm z-10">
+            <div className="border-b border-slate-200 bg-white/80 backdrop-blur-xl z-10 shadow-sm">
                 <div className="px-6 pt-4 pb-3 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <button onClick={onBack} className="text-gray-400 hover:text-white transition p-1.5 rounded-lg hover:bg-gray-800">
+                        <button onClick={onBack} className="text-slate-400 hover:text-slate-700 transition p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer">
                             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                                 <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         </button>
                         <div>
-                            <h2 className="text-xl font-bold text-white">{campaign.name}</h2>
-                            <p className="text-xs text-gray-500 mt-0.5">{workflowId} • {new Date(campaign.created_at).toLocaleDateString()}</p>
+                            <h2 className="text-xl font-bold text-slate-900">{campaign.name}</h2>
+                            <p className="text-xs text-slate-400 mt-0.5">{workflowId} • {new Date(campaign.created_at).toLocaleDateString()}</p>
                         </div>
-                        <span className="text-xs px-2.5 py-1 rounded-full font-medium" style={{
-                            backgroundColor: `${statusColors[campaign.status] || '#6b7280'}20`,
-                            color: statusColors[campaign.status] || '#6b7280'
-                        }}>{campaign.status}</span>
+                        <span className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-semibold ${ss.bg} ${ss.text}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${ss.dot} ${campaign.status === 'active' ? 'animate-pulse' : ''}`} />
+                            {campaign.status}
+                        </span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -143,16 +151,16 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                             const isLoading = act.loading_if ? evaluateExpression(act.loading_if, evalCtx, false) : false
 
                             const styles: Record<string, string> = {
-                                primary: 'text-white bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/20',
-                                secondary: 'text-gray-300 border border-gray-700 hover:bg-gray-800',
-                                danger: 'text-red-400 border border-red-900/30 hover:bg-red-900/20',
+                                primary: 'text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200',
+                                secondary: 'text-slate-600 border border-slate-300 hover:bg-slate-50',
+                                danger: 'text-red-600 border border-red-200 hover:bg-red-50',
                             }
 
                             return (
                                 <button
                                     key={act.key}
                                     onClick={() => handleAction(act.action.event, evaluateExpression(act.action.payload_expr, evalCtx, {}))}
-                                    className={`px-4 py-2 text-sm rounded-lg font-medium transition flex items-center gap-1.5 ${styles[act.style] || 'text-gray-400 hover:text-white'}`}
+                                    className={`px-4 py-2 text-sm rounded-xl font-medium transition flex items-center gap-1.5 cursor-pointer ${styles[act.style] || 'text-slate-500 hover:text-slate-700'}`}
                                     disabled={isLoading}
                                 >
                                     <span>{isLoading ? '⏳' : act.icon}</span>
@@ -165,19 +173,19 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                         {['idle', 'finished', 'error'].includes(campaign.status) && (
                             <button
                                 onClick={() => handleAction('campaign:trigger', { id: campaign.id })}
-                                className="px-4 py-2 text-sm rounded-lg font-medium transition text-white bg-green-600 hover:bg-green-700 shadow-lg shadow-green-600/20 flex items-center gap-1.5"
+                                className="px-4 py-2 text-sm rounded-xl font-medium transition text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 flex items-center gap-1.5 cursor-pointer"
                             >🚀 Run</button>
                         )}
                         {campaign.status === 'active' && (
                             <button
                                 onClick={() => handleAction('campaign:pause', { id: campaign.id })}
-                                className="px-4 py-2 text-sm rounded-lg font-medium transition text-amber-300 border border-amber-700 hover:bg-amber-900/30 flex items-center gap-1.5"
+                                className="px-4 py-2 text-sm rounded-xl font-medium transition text-amber-700 border border-amber-300 bg-amber-50 hover:bg-amber-100 flex items-center gap-1.5 cursor-pointer"
                             >⏸ Pause</button>
                         )}
                         {campaign.status === 'paused' && (
                             <button
                                 onClick={() => handleAction('campaign:resume', { id: campaign.id })}
-                                className="px-4 py-2 text-sm rounded-lg font-medium transition text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20 flex items-center gap-1.5"
+                                className="px-4 py-2 text-sm rounded-xl font-medium transition text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 flex items-center gap-1.5 cursor-pointer"
                             >▶ Resume</button>
                         )}
                     </div>
@@ -189,8 +197,8 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                         {headerStats.map((stat: any) => (
                             <div key={stat.key} className="flex items-center gap-2">
                                 <span className="text-sm">{stat.icon}</span>
-                                <span className="text-xs text-gray-500">{stat.label}</span>
-                                <span className="text-sm font-bold text-white">{stat.value_expr ? evaluateExpression(stat.value_expr, evalCtx, 0) : 0}</span>
+                                <span className="text-xs text-slate-400">{stat.label}</span>
+                                <span className="text-sm font-bold text-slate-800">{stat.value_expr ? evaluateExpression(stat.value_expr, evalCtx, 0) : 0}</span>
                             </div>
                         ))}
                     </div>
@@ -203,15 +211,16 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                     {WorkflowDetail ? (
                         <Suspense fallback={
                             <div className="flex items-center justify-center py-12">
-                                <div className="text-gray-500 animate-pulse flex items-center gap-2">
-                                    <span className="animate-spin">⏳</span> Loading detail view...
+                                <div className="flex items-center gap-3 text-slate-400">
+                                    <div className="w-5 h-5 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+                                    Loading detail view...
                                 </div>
                             </div>
                         }>
                             <WorkflowDetail campaignId={campaignId} campaign={campaign} workflowId={workflowId} />
                         </Suspense>
                     ) : (
-                        <div className="text-gray-600 text-sm text-center py-12">
+                        <div className="text-slate-400 text-sm text-center py-12">
                             No detail view registered for workflow "{workflowId}"
                         </div>
                     )}

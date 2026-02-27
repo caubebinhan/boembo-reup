@@ -145,6 +145,11 @@ export class FlowLoader {
 
     const ui = raw.ui ? this.parseUI(raw.ui) : undefined
 
+    // Parse health_checks from YAML
+    const health_checks = Array.isArray(raw.health_checks)
+      ? raw.health_checks.filter((h: any) => h?.name && h?.url).map((h: any) => ({ name: h.name, url: h.url }))
+      : undefined
+
     return {
       id: raw.id,
       name: raw.name,
@@ -155,6 +160,7 @@ export class FlowLoader {
       nodes,
       edges,
       ui,
+      health_checks,
     }
   }
 

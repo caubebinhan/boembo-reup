@@ -31,5 +31,46 @@ body {
 /* Hide scrollbar until hover for cleaner UI */
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: #374151 transparent;
+  scrollbar-color: #cbd5e1 transparent;
 }
+
+/* ── Redesign Animations ──────────────────────────── */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(124,58,237,0.3); }
+  50% { box-shadow: 0 0 20px rgba(124,58,237,0.6); }
+}
+@keyframes ring-fill {
+  from { stroke-dashoffset: 283; }
+}
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slide-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scale-check {
+  0%   { transform: scale(0); }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+@keyframes count-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+.animate-glow-pulse { animation: glow-pulse 2s ease-in-out infinite; }
+.animate-slide-in   { animation: slide-in-right 0.3s ease-out; }
+.animate-slide-up   { animation: slide-in-up 0.25s ease-out; }
+.animate-shimmer    { animation: shimmer 2s linear infinite; background-size: 200% 100%; }
+.animate-fade-in    { animation: fade-in 0.3s ease-out; }
+.animate-scale-check { animation: scale-check 0.4s ease-out; }
+.animate-count      { animation: count-pulse 0.6s ease-out; }

@@ -1,14 +1,38 @@
 import Database, { Database as BetterSqlite3Database } from 'better-sqlite3'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { app } from 'electron'
 
-const DB_PATH = join(app.getPath('userData'), 'repost_io.db')
+const DB_PATH = process.env.REPOST_IO_DB_PATH
+  ? resolve(process.env.REPOST_IO_DB_PATH)
+  : join(app.getPath('userData'), 'repost_io.db')
+
+const REQUIRED_TABLES = [
+  'campaigns',
+  'jobs',
+  'execution_logs',
+  'publish_accounts',
+  'publish_history',
+  'app_settings',
+  'async_tasks',
+]
+
+const REQUIRED_INDEXES = [
+  'idx_jobs_pending',
+  'idx_jobs_campaign',
+  'idx_ph_account_source',
+  'idx_ph_account_fingerprint',
+  'idx_ph_account_status',
+  'idx_at_due',
+  'idx_at_type',
+  'idx_at_campaign',
+  'idx_at_concurrency',
+  'idx_at_owner',
+  'idx_at_dedupe_active',
+]
 
 export const db: BetterSqlite3Database = new Database(DB_PATH)
 
-export function initDb() {
-  db.pragma('journal_mode = WAL')
-
+function createSchema() {
   db.exec(`
     -- Document-store tables: id + data_json
     -- No relational columns except indexed fields for cross-document queries
@@ -100,6 +124,75 @@ export function initDb() {
       ON async_tasks(dedupe_key)
       WHERE status IN ('pending', 'claimed', 'running');
   `)
+}
 
+export function getDbPath() {
+  return DB_PATH
+}
+
+export function initDb() {
+  db.pragma('journal_mode = WAL')
+  createSchema()
   console.log('[DB] Schema initialized (document-store)')
+}
+
+export function cleanDbSchema() {
+  db.exec(`
+    DROP TABLE IF EXISTS async_tasks;
+    DROP TABLE IF EXISTS app_settings;
+    DROP TABLE IF EXISTS publish_history;
+    DROP TABLE IF EXISTS publish_accounts;
+    DROP TABLE IF EXISTS execution_logs;
+    DROP TABLE IF EXISTS jobs;
+    DROP TABLE IF EXISTS campaigns;
+  `)
+
+  createSchema()
+
+  return {
+    success: true,
+    dbPath: DB_PATH,
+    message: 'DB schema cleaned and recreated',
+  }
+}
+
+export function inspectDbSchema() {
+  const tableRows = db
+    .prepare("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .all() as Array<{ name: string; sql: string | null }>
+  const indexRows = db
+    .prepare("SELECT name, sql FROM sqlite_master WHERE type='index' ORDER BY name")
+    .all() as Array<{ name: string; sql: string | null }>
+
+  const tables = tableRows.map(r => r.name)
+  const indexes = indexRows.map(r => r.name)
+
+  const missingTables = REQUIRED_TABLES.filter(name => !tables.includes(name))
+  const missingIndexes = REQUIRED_INDEXES.filter(name => !indexes.includes(name))
+
+  const tableStats = REQUIRED_TABLES.map((name) => {
+    const exists = tables.includes(name)
+    let rowCount: number | null = null
+    if (exists) {
+      try {
+        const row = db.prepare(`SELECT COUNT(1) as n FROM ${name}`).get() as { n?: number } | undefined
+        rowCount = row?.n ?? 0
+      } catch {
+        rowCount = null
+      }
+    }
+    return { name, exists, rowCount }
+  })
+
+  return {
+    dbPath: DB_PATH,
+    healthy: missingTables.length === 0 && missingIndexes.length === 0,
+    checkedAt: Date.now(),
+    tables,
+    indexes,
+    missingTables,
+    missingIndexes,
+    tableStats,
+    tableDefinitions: tableRows.map(r => ({ name: r.name, sql: r.sql || '' })),
+  }
 }

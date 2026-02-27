@@ -12,6 +12,43 @@ type AutomationBrowserSettings = {
   userDataDir?: string; profileDirectory?: string; profilePath?: string; locale?: string
 }
 
+type SentryProject = {
+  id: string
+  slug: string
+  name?: string
+  platform?: string
+}
+
+type SentryConnection = {
+  connectedAt: number
+  baseUrl: string
+  orgSlug: string
+  tokenScope?: string
+  tokenExpiresAt?: number
+  selectedProductionProjectSlug?: string
+  selectedStagingProjectSlug?: string
+  projects: SentryProject[]
+}
+
+type SentryPending = {
+  sessionId: string
+  userCode: string
+  verificationUri: string
+  verificationUriComplete: string
+  intervalSec: number
+  expiresAt: number
+  nextPollAt: number
+}
+
+type SentryStatus = {
+  configured: boolean
+  connected: boolean
+  baseUrl: string
+  clientIdHint: string
+  pending?: SentryPending
+  connection?: SentryConnection
+}
+
 type SettingsTab = 'browser' | 'storage' | 'notifications'
 
 const TABS: { id: SettingsTab; label: string; icon: string }[] = [
@@ -67,17 +104,52 @@ function BrowserSection({ api }: { api: any }) {
   const [selectedProfileDirectory, setSelectedProfileDirectory] = useState('')
   const [locale, setLocale] = useState('en-US')
   const [message, setMessage] = useState('')
+  const [sentryStatus, setSentryStatus] = useState<SentryStatus | null>(null)
+  const [sentryBusy, setSentryBusy] = useState(false)
+  const [sentryPolling, setSentryPolling] = useState(false)
+  const [sentryMessage, setSentryMessage] = useState('')
+  const [selectedProdSlug, setSelectedProdSlug] = useState('')
+  const [selectedStageSlug, setSelectedStageSlug] = useState('')
+
+  const defaultProd = (projects: SentryProject[]) =>
+    projects.find(p => p.slug.toLowerCase() === 'bombo-repost')?.slug ||
+    projects.find(p => !/staging/i.test(p.slug))?.slug ||
+    projects[0]?.slug ||
+    ''
+
+  const defaultStage = (projects: SentryProject[]) =>
+    projects.find(p => p.slug.toLowerCase() === 'boembo-repost-staging')?.slug ||
+    projects.find(p => /staging/i.test(p.slug))?.slug ||
+    projects[0]?.slug ||
+    ''
+
+  const applySentryStatus = (status: SentryStatus | null) => {
+    setSentryStatus(status)
+    const projects = status?.connection?.projects || []
+    const nextProd = status?.connection?.selectedProductionProjectSlug || defaultProd(projects)
+    const nextStage = status?.connection?.selectedStagingProjectSlug || defaultStage(projects)
+    setSelectedProdSlug(nextProd)
+    setSelectedStageSlug(nextStage)
+  }
+
+  const refreshSentryStatus = async () => {
+    const status = await api.invoke('settings:sentry-oauth-status')
+    applySentryStatus(status || null)
+    return status as SentryStatus | null
+  }
 
   const load = async () => {
     setLoading(true); setMessage('')
     try {
-      const [scanData, current] = await Promise.all([
+      const [scanData, current, sentry] = await Promise.all([
         api.invoke('browser:scan-local'),
         api.invoke('settings:get-automation-browser'),
+        api.invoke('settings:sentry-oauth-status'),
       ])
       setScan(scanData || { platform: 'unknown', browsers: [] })
       const settings: AutomationBrowserSettings = current || {}
       setLocale(settings.locale || 'en-US')
+      applySentryStatus((sentry as SentryStatus) || null)
 
       const matchedBrowser = (scanData?.browsers || []).find((b: LocalBrowserInstall) =>
         (settings.browserId && b.id === settings.browserId) ||
@@ -96,6 +168,34 @@ function BrowserSection({ api }: { api: any }) {
   }
 
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    if (!sentryPolling) return
+    const pending = sentryStatus?.pending
+    if (!pending?.sessionId) return
+    const intervalMs = Math.max(2000, (pending.intervalSec || 5) * 1000)
+    const timer = window.setInterval(async () => {
+      try {
+        const polled = await api.invoke('settings:sentry-oauth-poll', { sessionId: pending.sessionId })
+        if (polled?.status === 'pending') {
+          setSentryStatus(prev => prev ? { ...prev, pending: polled.pending } : prev)
+          return
+        }
+        setSentryPolling(false)
+        if (polled?.status === 'connected') {
+          setSentryMessage('Sentry connected. Org/projects loaded from account.')
+          await refreshSentryStatus()
+        } else {
+          setSentryMessage(`Connect result: ${polled?.message || 'Unknown status'}`)
+          await refreshSentryStatus()
+        }
+      } catch (err: any) {
+        setSentryPolling(false)
+        setSentryMessage(`Connect polling failed: ${err?.message || String(err)}`)
+      }
+    }, intervalMs)
+    return () => window.clearInterval(timer)
+  }, [api, sentryPolling, sentryStatus?.pending?.sessionId, sentryStatus?.pending?.intervalSec])
 
   const selectedBrowser = useMemo(
     () => scan.browsers.find(b => b.id === selectedBrowserId) || null,
@@ -119,6 +219,80 @@ function BrowserSection({ api }: { api: any }) {
     } catch { setMessage('Failed to save settings.') }
     finally { setSaving(false) }
   }
+
+  const startSentryConnect = async () => {
+    setSentryBusy(true)
+    setSentryMessage('')
+    try {
+      const started = await api.invoke('settings:sentry-oauth-start')
+      if (started?.status === 'pending') {
+        setSentryMessage('Opened browser for Sentry authorization. Waiting for approval...')
+        setSentryPolling(true)
+      }
+      await refreshSentryStatus()
+    } catch (err: any) {
+      setSentryPolling(false)
+      setSentryMessage(`Connect Sentry failed: ${err?.message || String(err)}`)
+    } finally {
+      setSentryBusy(false)
+    }
+  }
+
+  const pollSentryOnce = async () => {
+    const pending = sentryStatus?.pending
+    if (!pending?.sessionId) return
+    setSentryBusy(true)
+    try {
+      const polled = await api.invoke('settings:sentry-oauth-poll', { sessionId: pending.sessionId })
+      if (polled?.status === 'connected') {
+        setSentryPolling(false)
+        setSentryMessage('Sentry connected. Project list synced.')
+      } else {
+        setSentryMessage(polled?.message || 'Authorization still pending.')
+      }
+      await refreshSentryStatus()
+    } catch (err: any) {
+      setSentryMessage(`Check authorization failed: ${err?.message || String(err)}`)
+    } finally {
+      setSentryBusy(false)
+    }
+  }
+
+  const disconnectSentry = async () => {
+    setSentryBusy(true)
+    setSentryPolling(false)
+    setSentryMessage('')
+    try {
+      await api.invoke('settings:sentry-oauth-disconnect')
+      setSentryMessage('Sentry disconnected.')
+      await refreshSentryStatus()
+    } catch (err: any) {
+      setSentryMessage(`Disconnect failed: ${err?.message || String(err)}`)
+    } finally {
+      setSentryBusy(false)
+    }
+  }
+
+  const saveSentryProjectSelection = async () => {
+    setSentryBusy(true)
+    setSentryMessage('')
+    try {
+      await api.invoke('settings:sentry-oauth-select-projects', {
+        productionProjectSlug: selectedProdSlug,
+        stagingProjectSlug: selectedStageSlug,
+      })
+      setSentryMessage('Sentry project mapping saved.')
+      await refreshSentryStatus()
+    } catch (err: any) {
+      setSentryMessage(`Save mapping failed: ${err?.message || String(err)}`)
+    } finally {
+      setSentryBusy(false)
+    }
+  }
+
+  const sentryConnection = sentryStatus?.connection
+  const sentryProjects = sentryConnection?.projects || []
+  const pending = sentryStatus?.pending
 
   return (
     <div className="space-y-5">
@@ -197,6 +371,145 @@ function BrowserSection({ api }: { api: any }) {
           {saving ? 'Saving...' : 'Save Browser Settings'}
         </button>
       </div>
+
+      <div className="rounded-xl border border-indigo-900/40 bg-indigo-950/20 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[11px] uppercase tracking-wider text-indigo-300">Sentry Connect</p>
+            <p className="text-sm text-gray-300 mt-1">
+              One-time OAuth connect. App will auto-load org/project/DSN for debug send.
+            </p>
+          </div>
+          <span className={`text-xs px-2 py-1 rounded border ${
+            sentryStatus?.connected
+              ? 'text-green-300 border-green-500/40 bg-green-500/10'
+              : 'text-gray-300 border-gray-700 bg-gray-800/30'
+          }`}>
+            {sentryStatus?.connected ? 'Connected' : 'Not Connected'}
+          </span>
+        </div>
+
+        {!sentryStatus?.configured && (
+          <p className="text-amber-300 text-sm">
+            Missing `SENTRY_OAUTH_CLIENT_ID`. Set it in runtime env before using Connect Sentry.
+          </p>
+        )}
+
+        {!!sentryConnection && (
+          <div className="text-xs text-gray-300 space-y-1">
+            <p>org: <span className="font-mono text-cyan-300">{sentryConnection.orgSlug}</span></p>
+            <p>tokenScope: <span className="font-mono text-gray-200">{sentryConnection.tokenScope || '-'}</span></p>
+            <p>
+              connectedAt:{' '}
+              <span className="font-mono text-gray-200">
+                {new Date(sentryConnection.connectedAt).toLocaleString('vi-VN')}
+              </span>
+            </p>
+          </div>
+        )}
+
+        {!!pending && (
+          <div className="rounded-lg border border-indigo-800/50 bg-black/20 p-3 space-y-2 text-sm text-gray-300">
+            <p>
+              Authorization pending. userCode:{' '}
+              <span className="font-mono text-indigo-200">{pending.userCode}</span>
+            </p>
+            <p className="text-xs break-all">
+              Verify URL: <span className="font-mono text-gray-200">{pending.verificationUriComplete || pending.verificationUri}</span>
+            </p>
+            <p className="text-xs">
+              expiresAt: {new Date(pending.expiresAt).toLocaleString('vi-VN')}
+            </p>
+          </div>
+        )}
+
+        {sentryProjects.length > 0 && (
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="block text-[11px] uppercase tracking-wider text-gray-500 mb-2">Production Project</label>
+              <select
+                value={selectedProdSlug}
+                onChange={(e) => setSelectedProdSlug(e.target.value)}
+                className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-sm outline-none focus:border-cyan-500"
+              >
+                {sentryProjects.map(p => (
+                  <option key={`prod-${p.id}`} value={p.slug}>{p.slug}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] uppercase tracking-wider text-gray-500 mb-2">Staging Project</label>
+              <select
+                value={selectedStageSlug}
+                onChange={(e) => setSelectedStageSlug(e.target.value)}
+                className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-sm outline-none focus:border-cyan-500"
+              >
+                {sentryProjects.map(p => (
+                  <option key={`stage-${p.id}`} value={p.slug}>{p.slug}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={startSentryConnect}
+            disabled={!sentryStatus?.configured || sentryBusy}
+            className="px-3 py-2 rounded-lg border border-indigo-500/40 text-indigo-200 text-sm hover:bg-indigo-500/10 transition disabled:opacity-50"
+          >
+            {sentryBusy ? 'Working...' : 'Connect Sentry'}
+          </button>
+          {!!pending && (
+            <button
+              onClick={pollSentryOnce}
+              disabled={sentryBusy}
+              className="px-3 py-2 rounded-lg border border-cyan-500/40 text-cyan-200 text-sm hover:bg-cyan-500/10 transition disabled:opacity-50"
+            >
+              Check Authorization
+            </button>
+          )}
+          {sentryPolling && (
+            <button
+              onClick={() => setSentryPolling(false)}
+              className="px-3 py-2 rounded-lg border border-gray-600 text-gray-200 text-sm hover:bg-gray-700/20 transition"
+            >
+              Stop Auto Poll
+            </button>
+          )}
+          {!!sentryConnection && (
+            <button
+              onClick={disconnectSentry}
+              disabled={sentryBusy}
+              className="px-3 py-2 rounded-lg border border-red-500/40 text-red-300 text-sm hover:bg-red-500/10 transition disabled:opacity-50"
+            >
+              Disconnect
+            </button>
+          )}
+          <button
+            onClick={async () => { await refreshSentryStatus() }}
+            disabled={sentryBusy}
+            className="px-3 py-2 rounded-lg border border-gray-600 text-gray-200 text-sm hover:bg-gray-700/20 transition disabled:opacity-50"
+          >
+            Refresh Status
+          </button>
+          {sentryProjects.length > 0 && (
+            <button
+              onClick={saveSentryProjectSelection}
+              disabled={sentryBusy}
+              className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm transition disabled:opacity-50"
+            >
+              Save Project Mapping
+            </button>
+          )}
+        </div>
+
+        {sentryMessage && (
+          <p className={`text-sm ${sentryMessage.toLowerCase().includes('failed') ? 'text-red-400' : 'text-green-400'}`}>
+            {sentryMessage}
+          </p>
+        )}
+      </div>
     </div>
   )
 }
@@ -208,12 +521,20 @@ function StorageSection({ api }: { api: any }) {
   const [defaultPath, setDefaultPath] = useState('')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [dbPath, setDbPath] = useState('')
+  const [cleaningSchema, setCleaningSchema] = useState(false)
+  const [checkingSchema, setCheckingSchema] = useState(false)
+  const [schemaMessage, setSchemaMessage] = useState('')
+  const [schemaReport, setSchemaReport] = useState<any | null>(null)
 
   useEffect(() => {
     api.invoke('settings:get-media-path').then((data: any) => {
       setMediaPath(data.path || '')
       setDefaultPath(data.defaultPath || '')
     }).catch(console.error)
+    api.invoke('settings:db-info').then((data: any) => {
+      setDbPath(data?.dbPath || '')
+    }).catch(() => setDbPath(''))
   }, [])
 
   const browse = async () => {
@@ -231,6 +552,49 @@ function StorageSection({ api }: { api: any }) {
   }
 
   const reset = () => setMediaPath(defaultPath)
+
+  const cleanSchema = async () => {
+    const ok = window.confirm(
+      'Clean DB schema will delete all campaigns/jobs/logs/settings and recreate the schema. Continue?'
+    )
+    if (!ok) return
+
+    setCleaningSchema(true)
+    setSchemaMessage('')
+    try {
+      await api.invoke('settings:clean-schema')
+      setSchemaMessage('Schema cleaned. Database has been recreated.')
+      const media = await api.invoke('settings:get-media-path')
+      setMediaPath(media?.path || '')
+      setDefaultPath(media?.defaultPath || '')
+      const report = await api.invoke('settings:inspect-schema')
+      setSchemaReport(report)
+    } catch (err: any) {
+      setSchemaMessage(`Clean schema failed: ${err?.message || String(err)}`)
+    } finally {
+      setCleaningSchema(false)
+    }
+  }
+
+  const checkSchema = async () => {
+    setCheckingSchema(true)
+    setSchemaMessage('')
+    try {
+      const report = await api.invoke('settings:inspect-schema')
+      setSchemaReport(report)
+      const missingTableCount = Array.isArray(report?.missingTables) ? report.missingTables.length : 0
+      const missingIndexCount = Array.isArray(report?.missingIndexes) ? report.missingIndexes.length : 0
+      if (report?.healthy) {
+        setSchemaMessage(`Schema OK. tables=${report.tables?.length || 0}, indexes=${report.indexes?.length || 0}`)
+      } else {
+        setSchemaMessage(`Schema drift detected: missingTables=${missingTableCount}, missingIndexes=${missingIndexCount}`)
+      }
+    } catch (err: any) {
+      setSchemaMessage(`Check schema failed: ${err?.message || String(err)}`)
+    } finally {
+      setCheckingSchema(false)
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -270,6 +634,78 @@ function StorageSection({ api }: { api: any }) {
           {saving ? 'Saving...' : 'Save Storage Path'}
         </button>
       </div>
+
+      <div className="rounded-xl border border-red-900/40 bg-red-950/20 p-4 space-y-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-wider text-red-300">Danger Zone</p>
+          <p className="text-sm text-gray-300 mt-1">
+            Clean DB schema: drop all tables and recreate schema from scratch.
+          </p>
+          {dbPath && (
+            <p className="text-[11px] text-gray-500 mt-1 break-all">
+              DB: <span className="font-mono">{dbPath}</span>
+            </p>
+          )}
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-gray-400">
+            This will remove campaigns, jobs, logs, publish history, and app settings.
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={checkSchema}
+              disabled={checkingSchema}
+              className="px-3 py-2 rounded-lg border border-amber-500/40 text-amber-300 text-sm hover:bg-amber-500/10 transition disabled:opacity-50"
+            >
+              {checkingSchema ? 'Checking...' : 'Check Schema'}
+            </button>
+            <button
+              onClick={cleanSchema}
+              disabled={cleaningSchema}
+              className="px-4 py-2 rounded-lg border border-red-500/40 text-red-300 text-sm hover:bg-red-500/10 transition disabled:opacity-50"
+            >
+              {cleaningSchema ? 'Cleaning...' : 'Clean Schema'}
+            </button>
+          </div>
+        </div>
+        {schemaMessage && (
+          <p className={`text-sm ${(schemaMessage.startsWith('Schema cleaned') || schemaMessage.startsWith('Schema OK')) ? 'text-green-400' : 'text-red-400'}`}>
+            {schemaMessage}
+          </p>
+        )}
+        {schemaReport && (
+          <div className="rounded-lg border border-gray-800 bg-black/20 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-gray-400">
+                checkedAt: {schemaReport.checkedAt ? new Date(schemaReport.checkedAt).toLocaleString('vi-VN') : '-'}
+              </p>
+              <button
+                onClick={() => navigator.clipboard?.writeText(JSON.stringify(schemaReport, null, 2)).catch(() => {})}
+                className="px-2 py-1 rounded border border-gray-700 text-[10px] text-gray-200 hover:border-gray-500"
+              >
+                Copy Schema Report
+              </button>
+            </div>
+            <div className="text-xs text-gray-300">
+              {schemaReport.healthy ? (
+                <span className="text-green-400">Schema health: OK</span>
+              ) : (
+                <span className="text-red-400">
+                  Schema health: DRIFT (missing tables/indexes)
+                </span>
+              )}
+            </div>
+            <pre className="text-[11px] text-gray-300 whitespace-pre-wrap break-words max-h-[220px] overflow-y-auto">
+              {JSON.stringify({
+                dbPath: schemaReport.dbPath,
+                missingTables: schemaReport.missingTables,
+                missingIndexes: schemaReport.missingIndexes,
+                tableStats: schemaReport.tableStats,
+              }, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -286,8 +722,9 @@ function NotificationsSection() {
 
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-6 text-center">
         <p className="text-gray-500 text-sm">🔔 Toast notifications are enabled by default.</p>
-        <p className="text-gray-600 text-xs mt-2">More notification settings coming soon — sound on/off, desktop notifications, etc.</p>
+        <p className="text-gray-600 text-xs mt-2">More notification settings coming soon  Esound on/off, desktop notifications, etc.</p>
       </div>
     </div>
   )
 }
+

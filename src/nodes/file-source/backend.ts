@@ -1,10 +1,14 @@
 ﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { failBatchGracefully } from '@core/nodes/NodeHelpers'
+
+const INSTANCE_ID = 'file_source_1'
 
 export async function execute(_input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const localFiles = ctx.params.local_files || []
 
   if (localFiles.length === 0) {
-    throw new Error('No local files provided')
+    return failBatchGracefully(ctx, INSTANCE_ID, 'no_files',
+      'No local files provided')
   }
 
   const videos = localFiles.map((file: any, i: number) => ({

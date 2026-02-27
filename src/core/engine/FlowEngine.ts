@@ -7,6 +7,8 @@ import { ExecutionLogger } from './ExecutionLogger'
 import { FlowDefinition, FlowNodeDefinition } from '../flow/ExecutionContracts'
 import type { JobDocument } from '@main/db/models/Job'
 import { asyncTaskScheduler } from '@main/services/AsyncTaskScheduler'
+import { isNetworkError, isDiskError } from '../nodes/NodeHelpers'
+import { getFreeDiskSpaceMB } from '@main/utils/diskSpace'
 
 // ── DRY Helpers ─────────────────────────────────────
 
@@ -172,13 +174,76 @@ export class FlowEngine {
     console.log('[FlowEngine] Stopped')
   }
 
+  // ── Pre-run health check ────────────────────────
+  /**
+   * Quick health check before starting a campaign.
+   * Checks storage space and workflow service endpoints.
+   * Returns { ok, errors[] } — caller decides whether to block.
+   */
+  public async preRunHealthCheck(campaignId: string): Promise<{ ok: boolean; errors: string[] }> {
+    const errors: string[] = []
+    const store = campaignRepo.tryOpen(campaignId)
+    if (!store) return { ok: false, errors: ['Campaign not found'] }
+
+    // 1. Storage check (cross-platform)
+    try {
+      const { AppSettingsService } = require('@main/services/AppSettingsService')
+      const mediaPath = AppSettingsService.getMediaStoragePath()
+      const freeMB = await getFreeDiskSpaceMB(mediaPath)
+      if (freeMB >= 0 && freeMB < 100) {
+        errors.push(`Insufficient disk space: only ${freeMB} MB free (minimum 100 MB required)`)
+      }
+    } catch (err: any) {
+      // Non-blocking — log but don't prevent start
+      console.warn(`[FlowEngine] Storage check failed: ${err?.message}`)
+    }
+
+    // 2. Workflow service check
+    try {
+      const flow = FlowResolver.resolve(campaignId) || flowLoader.get(store.doc.workflow_id)
+      if (flow?.health_checks?.length) {
+        const { net } = require('electron')
+        for (const hc of flow.health_checks) {
+          try {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 5000)
+            await net.fetch(hc.url, { method: 'HEAD', signal: controller.signal })
+            clearTimeout(timeout)
+          } catch {
+            errors.push(`${hc.name} unreachable (${hc.url})`)
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[FlowEngine] Service check failed: ${err?.message}`)
+    }
+
+    return { ok: errors.length === 0, errors }
+  }
+
   // ── Trigger Campaign ─────────────────────────────
-  public triggerCampaign(campaignId: string) {
+  public async triggerCampaign(campaignId: string) {
     const store = campaignRepo.tryOpen(campaignId)
     if (!store) return console.error(`[FlowEngine] Campaign ${campaignId} not found`)
 
     const flow = FlowResolver.resolve(campaignId) || flowLoader.get(store.doc.workflow_id)
     if (!flow) return console.error(`[FlowEngine] Flow ${store.doc.workflow_id} not found`)
+
+    // Pre-run health check
+    const health = await this.preRunHealthCheck(campaignId)
+    if (!health.ok) {
+      const errorMsg = health.errors.join('; ')
+      store.status = 'error'
+      store.save()
+      ExecutionLogger.campaignEvent(campaignId, 'campaign:healthcheck-failed',
+        `⛔ Cannot start: ${errorMsg}`)
+      // Emit to renderer for toast
+      ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
+        campaign_id: campaignId, errors: health.errors, message: errorMsg,
+      })
+      console.error(`[FlowEngine] Health check failed for ${campaignId}: ${errorMsg}`)
+      return
+    }
 
     store.status = 'active'
     store.save()
@@ -197,7 +262,20 @@ export class FlowEngine {
     ExecutionLogger.campaignEvent(campaignId, 'campaign:paused', 'Campaign paused')
   }
 
-  public resumeCampaign(campaignId: string) {
+  public async resumeCampaign(campaignId: string) {
+    // Pre-run health check before resume
+    const health = await this.preRunHealthCheck(campaignId)
+    if (!health.ok) {
+      const errorMsg = health.errors.join('; ')
+      ExecutionLogger.campaignEvent(campaignId, 'campaign:healthcheck-failed',
+        `⛔ Cannot resume: ${errorMsg}`)
+      ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
+        campaign_id: campaignId, errors: health.errors, message: errorMsg,
+      })
+      console.error(`[FlowEngine] Health check failed for resume ${campaignId}: ${errorMsg}`)
+      return
+    }
+
     campaignRepo.updateStatus(campaignId, 'active')
     ExecutionLogger.campaignEvent(campaignId, 'campaign:resumed', 'Campaign resumed')
 
@@ -205,7 +283,7 @@ export class FlowEngine {
     if (pendingCount === 0) {
       ExecutionLogger.campaignEvent(campaignId, 'campaign:retriggered',
         'No pending jobs — re-triggering')
-      this.triggerCampaign(campaignId)
+      await this.triggerCampaign(campaignId)
     }
   }
 
@@ -281,6 +359,26 @@ export class FlowEngine {
       const errorMsg = err.message || String(err)
       jobRepo.updateStatus(job.id, 'failed', errorMsg)
       ExecutionLogger.nodeError(job.campaign_id, job.id, job.instance_id, job.node_id, errorMsg)
+
+      // Auto-pause on network errors
+      if (isNetworkError(errorMsg)) {
+        this.pauseCampaign(job.campaign_id)
+        ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:network-error',
+          `⚠️ Auto-paused: network error in ${job.instance_id} — ${errorMsg}`)
+        ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
+          campaign_id: job.campaign_id, errors: [errorMsg], message: `Network error: ${errorMsg}`,
+        })
+      }
+
+      // Auto-fail on disk errors (fatal — can't continue)
+      if (isDiskError(errorMsg)) {
+        campaignRepo.updateStatus(job.campaign_id, 'error')
+        ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:disk-error',
+          `⛔ Failed: storage error in ${job.instance_id} — ${errorMsg}`)
+        ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
+          campaign_id: job.campaign_id, errors: [errorMsg], message: `Disk error: ${errorMsg}`,
+        })
+      }
     }
   }
 
@@ -440,6 +538,30 @@ export class FlowEngine {
             return
           }
           skipToNextItem = true
+
+          // Auto-pause on network errors
+          if (isNetworkError(err.message)) {
+            store.status = 'paused'
+            store.save()
+            ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:network-error',
+              `⚠️ Auto-paused: network error in ${childDef.instance_id} — ${err.message}`)
+            ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
+              campaign_id: job.campaign_id, errors: [err.message], message: `Network error: ${err.message}`,
+            })
+            return
+          }
+
+          // Auto-fail on disk errors (fatal)
+          if (isDiskError(err.message)) {
+            store.status = 'error'
+            store.save()
+            ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:disk-error',
+              `⛔ Failed: storage error in ${childDef.instance_id} — ${err.message}`)
+            ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
+              campaign_id: job.campaign_id, errors: [err.message], message: `Disk error: ${err.message}`,
+            })
+            return
+          }
         }
       }
 

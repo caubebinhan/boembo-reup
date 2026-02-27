@@ -27,10 +27,8 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'local-thumb', privileges: { secure: true, supportFetchAPI: true, stream: true } },
 ])
 
-// Sentry
-if (!app.isPackaged || process.env.NODE_ENV === 'development') {
-  initSentry()
-}
+// Sentry (production DSN if configured)
+initSentry()
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -86,6 +84,10 @@ app.whenReady().then(() => {
 
   // Initialize Engine
   flowEngine.start()
+
+  // Start runtime service health monitor (pings workflow URLs periodically)
+  const { serviceHealthMonitor } = require('./services/ServiceHealthMonitor')
+  serviceHealthMonitor.start()
 
   // Initialize Async Task Scheduler (handlers self-register from their modules)
   asyncTaskScheduler.start()

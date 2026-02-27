@@ -7,7 +7,6 @@ const cardModules = import.meta.glob<any>('../../../workflows/*/v*/card.tsx')
 // Build registry: workflowId → lazy factory (latest version wins)
 const CARD_REGISTRY: Record<string, () => Promise<any>> = {}
 for (const [path, factory] of Object.entries(cardModules)) {
-    // path like ../../../workflows/tiktok-repost/v1.0/card.tsx
     const match = path.match(/workflows\/([^/]+)\/v[^/]+\/card\.tsx$/)
     if (match) {
         CARD_REGISTRY[match[1]] = factory
@@ -37,8 +36,8 @@ export function CampaignCard({ campaign, onAction }: CampaignCardProps) {
     if (CustomCard) {
         return (
             <Suspense fallback={
-                <div className="bg-[#111827] border border-gray-800 rounded-xl p-5 animate-pulse">
-                    <span className="text-gray-500">Loading...</span>
+                <div className="bg-white border border-slate-200 rounded-xl p-5 animate-pulse shadow-sm">
+                    <span className="text-slate-300">Loading...</span>
                 </div>
             }>
                 <CustomCard campaign={campaign} onAction={onAction} />
@@ -50,7 +49,7 @@ export function CampaignCard({ campaign, onAction }: CampaignCardProps) {
     return <YamlDrivenCard campaign={campaign} onAction={onAction} workflowId={workflowId} />
 }
 
-// ── Fallback YAML-driven card (original logic) ──
+// ── Fallback YAML-driven card (light theme, click = detail) ──
 function YamlDrivenCard({ campaign, onAction, workflowId }: CampaignCardProps & { workflowId: string }) {
     const { descriptor, loading } = useFlowUIDescriptor(workflowId)
 
@@ -62,8 +61,8 @@ function YamlDrivenCard({ campaign, onAction, workflowId }: CampaignCardProps & 
 
     if (loading || !descriptor?.campaign_card) {
         return (
-            <div className="bg-[#111827] border border-gray-800 rounded-xl p-5 flex items-center justify-center animate-pulse">
-                <span className="text-gray-500">Loading...</span>
+            <div className="bg-white border border-slate-200 rounded-xl p-5 flex items-center justify-center animate-pulse shadow-sm">
+                <span className="text-slate-300">Loading...</span>
             </div>
         )
     }
@@ -71,7 +70,7 @@ function YamlDrivenCard({ campaign, onAction, workflowId }: CampaignCardProps & 
     const { campaign_card, card_actions = [] } = descriptor
     const subtitle = evaluateExpression(campaign_card.subtitle_expr, evalCtx, 'Campaign')
 
-    let badge = { label: '• Unknown', color: '#6b7280', bg: 'rgba(107,114,128,0.15)', blink: false }
+    let badge = { label: '• Unknown', color: '#6b7280', bg: 'rgba(107,114,128,0.1)', blink: false }
     if (campaign_card.status_badges) {
         for (const b of campaign_card.status_badges) {
             if (evaluateExpression(b.condition, evalCtx, false)) {
@@ -83,7 +82,7 @@ function YamlDrivenCard({ campaign, onAction, workflowId }: CampaignCardProps & 
 
     const stats = (campaign_card.stats || []).map((s: any) => {
         const value = evaluateExpression(s.value_expr, evalCtx, 0)
-        const color = s.color_expr ? evaluateExpression(s.color_expr, { ...evalCtx, value }, '#9ca3af') : '#9ca3af'
+        const color = s.color_expr ? evaluateExpression(s.color_expr, { ...evalCtx, value }, '#94a3b8') : '#94a3b8'
         const show = s.show_if ? evaluateExpression(s.show_if, evalCtx, true) : true
         return { ...s, value, color, show }
     }).filter((s: any) => s.show)
@@ -93,47 +92,50 @@ function YamlDrivenCard({ campaign, onAction, workflowId }: CampaignCardProps & 
     )
 
     return (
-        <div className="bg-[#111827] border border-gray-800 rounded-xl p-5 hover:border-gray-700 transition flex flex-col gap-3 relative overflow-hidden">
+        <div
+            onClick={() => onAction('campaign:view-details', { id: campaign.id })}
+            className="bg-white border border-slate-200 rounded-xl p-5 hover:border-purple-300 hover:shadow-lg transition-all cursor-pointer flex flex-col gap-3 relative overflow-hidden group shadow-sm"
+        >
             <div className="flex justify-between items-start pt-1">
-                <h3 className="font-semibold text-lg text-white">{campaign.name}</h3>
+                <h3 className="font-bold text-lg text-slate-800 group-hover:text-purple-700 transition">{campaign.name}</h3>
                 <div
-                    className={`text-xs font-semibold px-2 py-1 rounded-md ${badge.blink ? 'animate-pulse' : ''}`}
+                    className={`text-xs font-bold px-2.5 py-1 rounded-full ${badge.blink ? 'animate-pulse' : ''}`}
                     style={{ backgroundColor: badge.bg, color: badge.color }}
                 >{badge.label}</div>
             </div>
 
-            <div className="text-sm text-gray-400">{subtitle}</div>
+            <div className="text-sm text-slate-400">{subtitle}</div>
 
             <div className="flex items-center text-sm gap-2 mt-1">
                 {stats.map((stat: any, idx: number) => (
                     <div key={stat.key} className="flex items-center" title={stat.label}>
                         <span className="mr-1.5">{stat.icon}</span>
                         <span className="font-medium" style={{ color: stat.color }}>{stat.value}</span>
-                        {idx < stats.length - 1 && <span className="text-gray-700 mx-2">|</span>}
+                        {idx < stats.length - 1 && <span className="text-slate-200 mx-2">|</span>}
                     </div>
                 ))}
             </div>
 
-            <div className="flex items-center gap-2 mt-3 pt-4 border-t border-gray-800">
-                <button
-                    onClick={() => onAction('campaign:view-details', { id: campaign.id })}
-                    className="text-gray-400 hover:text-white px-3 py-1.5 text-sm rounded bg-transparent transition"
-                >Details →</button>
-                <div className="flex-1" />
-                {actions.map((act: any) => {
-                    let cls = "px-4 py-1.5 text-sm rounded font-medium transition"
-                    if (act.style === 'primary') cls += " text-white bg-green-600 hover:bg-green-700"
-                    else if (act.style === 'danger') cls += " text-red-400 border border-red-900/30 hover:bg-red-900/20"
-                    else cls += " text-gray-400 hover:text-white"
-                    return (
-                        <button key={act.key || act.label} onClick={() => {
-                            if (act.confirm && !confirm(`${act.confirm.title}\n${act.confirm.message}`)) return
-                            const payload = evaluateExpression(act.action.payload_expr, evalCtx, {})
-                            onAction(act.action.event, payload)
-                        }} className={cls}>{act.label}</button>
-                    )
-                })}
-            </div>
+            {/* Action buttons — stop propagation so click doesn't navigate */}
+            {actions.length > 0 && (
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+                    <div className="flex-1" />
+                    {actions.map((act: any) => {
+                        let cls = "px-4 py-1.5 text-sm rounded-lg font-medium transition cursor-pointer"
+                        if (act.style === 'primary') cls += " text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+                        else if (act.style === 'danger') cls += " text-red-500 border border-red-200 hover:bg-red-50"
+                        else cls += " text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                        return (
+                            <button key={act.key || act.label} onClick={(e) => {
+                                e.stopPropagation()
+                                if (act.confirm && !confirm(`${act.confirm.title}\n${act.confirm.message}`)) return
+                                const payload = evaluateExpression(act.action.payload_expr, evalCtx, {})
+                                onAction(act.action.event, payload)
+                            }} className={cls}>{act.label}</button>
+                        )
+                    })}
+                </div>
+            )}
         </div>
     )
 }

@@ -1,7 +1,8 @@
 import { existsSync, statSync } from 'node:fs'
 import { campaignRepo } from '../db/repositories/CampaignRepo'
 import { settingsRepo } from '../db/repositories/SettingsRepo'
-import { SentryMain } from '../sentry'
+import { AppSettingsService } from './AppSettingsService'
+import { sendSentryMessageToChannel, verifySentryEventIngestion } from './SentryStagingService'
 import { findTroubleshootingCase, listTroubleshootingCases, runTroubleshootingCase } from './troubleshooting/cases'
 import type {
   TroubleshootingArtifactManifestEntry,
@@ -316,56 +317,88 @@ export class TroubleshootingService {
     return { success: true }
   }
 
-  static sendRunToSentry(runId: string) {
+  static async sendRunToSentry(runId: string) {
     const run = this.getRunById(runId)
     if (!run) throw new Error(`Run not found: ${runId}`)
 
     const errorLines = (run.logs || []).filter(l => l.level === 'error').slice(-20)
     const warnLines = (run.logs || []).filter(l => l.level === 'warn').slice(-20)
-    const fullLog = run.logs || []
+    const fullLogTail = (run.logs || []).slice(-400)
+    const correlationId = `${run.id}:${Date.now()}`
 
-    SentryMain.withScope((scope) => {
-      scope.setLevel(run.status === 'failed' ? 'error' : 'warning')
-      if (run.workflowId) scope.setTag('troubleshooting.workflow_id', run.workflowId)
-      if (run.workflowVersion) scope.setTag('troubleshooting.workflow_version', run.workflowVersion)
-      scope.setTag('troubleshooting.case_id', run.caseId)
-      if (run.group) scope.setTag('troubleshooting.group', run.group)
-      if (run.category) scope.setTag('troubleshooting.category', run.category)
-      if (run.level) scope.setTag('troubleshooting.level', run.level)
-      scope.setTag('troubleshooting.status', run.status)
-      scope.setContext('troubleshooting_run', {
-        id: run.id,
-        title: run.title,
-        summary: run.summary,
-        status: run.status,
-        workflowId: run.workflowId,
-        workflowVersion: run.workflowVersion,
-        category: run.category,
-        group: run.group,
-        level: run.level,
-        tags: run.tags,
-        startedAt: run.startedAt,
-        endedAt: run.endedAt,
-        logStats: run.logStats,
-        caseMeta: run.caseMeta,
-        result: run.result,
-      })
-      if (run.diagnosticFootprint) {
-        scope.setContext('troubleshooting_footprint', run.diagnosticFootprint as any)
-      }
-      scope.setExtra('error_lines', errorLines)
-      scope.setExtra('warn_lines', warnLines)
-      scope.setExtra('full_log', fullLog)
-      scope.setFingerprint([
+    const sentryEnv = AppSettingsService.getSentryRuntimeEnv(process.env)
+
+    const sent = await sendSentryMessageToChannel({
+      channel: 'staging',
+      level: run.status === 'failed' ? 'error' : 'warning',
+      message: `[Troubleshooting] ${run.status.toUpperCase()} ${run.caseId}: ${run.summary || run.title}`,
+      logger: 'troubleshooting.debug',
+      environment: 'staging-debug',
+      tags: {
+        'troubleshooting.workflow_id': run.workflowId || 'unknown-workflow',
+        'troubleshooting.workflow_version': run.workflowVersion || 'unknown-version',
+        'troubleshooting.case_id': run.caseId,
+        'troubleshooting.run_id': run.id,
+        'troubleshooting.correlation_id': correlationId,
+        'troubleshooting.group': run.group,
+        'troubleshooting.category': run.category,
+        'troubleshooting.level': run.level,
+        'troubleshooting.status': run.status,
+      },
+      fingerprint: [
         'troubleshooting',
         run.workflowId || 'unknown-workflow',
         run.workflowVersion || 'unknown-version',
         run.caseId,
-      ])
-      SentryMain.captureMessage(`[Troubleshooting] ${run.status.toUpperCase()} ${run.caseId}: ${run.summary || run.title}`)
-    })
+      ],
+      contexts: {
+        troubleshooting_run: {
+          id: run.id,
+          title: run.title,
+          summary: run.summary,
+          status: run.status,
+          workflowId: run.workflowId,
+          workflowVersion: run.workflowVersion,
+          category: run.category,
+          group: run.group,
+          level: run.level,
+          tags: run.tags,
+          startedAt: run.startedAt,
+          endedAt: run.endedAt,
+          logStats: run.logStats,
+          caseMeta: run.caseMeta,
+          result: run.result,
+          diagnosticFootprint: run.diagnosticFootprint,
+        },
+      },
+      extra: {
+        error_lines: errorLines,
+        warn_lines: warnLines,
+        full_log_tail: fullLogTail,
+      },
+    }, sentryEnv)
+    if (!sent.success || !sent.eventId) {
+      throw new Error(`Sentry staging send failed: ${sent.message}${sent.lastError ? ` (${sent.lastError})` : ''}`)
+    }
 
-    return { success: true }
+    const sentry = await verifySentryEventIngestion(sent.eventId, { channel: 'staging', env: sentryEnv })
+    if (sentry.strictRequired && !sentry.verified) {
+      throw new Error(
+        `Sentry staging verification failed: ${sentry.message}${sentry.issueSearchUrl ? ` (${sentry.issueSearchUrl})` : ''}`
+      )
+    }
+
+    return {
+      success: true,
+      runId: run.id,
+      caseId: run.caseId,
+      correlationId,
+      eventId: sent.eventId,
+      sentry: {
+        ...sentry,
+        submitMessage: sent.message,
+      },
+    }
   }
 
   static async runCase(caseId: TroubleshootingCaseId, hooks?: RunHooks): Promise<TroubleshootingRunRecord> {

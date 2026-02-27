@@ -21,8 +21,8 @@ export function TextInput({
     rows = 3,
     className = '',
 }: TextInputProps) {
-    const baseClasses = `w-full px-4 py-2.5 rounded-lg bg-[#0f172a] border border-gray-700 text-white 
-    placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 
+    const baseClasses = `w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 
+    placeholder-slate-300 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100 
     transition disabled:opacity-50 ${className}`
 
     if (multiline) {

@@ -11,6 +11,14 @@ icon: 🔄
 color: "#00f2ea"
 version: "1.0"
 
+# ── HEALTH CHECKS ────────────────────────
+# Services this workflow needs — checked at app startup
+health_checks:
+  - name: TikTok
+    url: https://www.tiktok.com
+  - name: TikTok Studio
+    url: https://www.tiktok.com/tiktokstudio
+
 # ── NODES ────────────────────────────────
 nodes:
   - node_id: core.check_in_time
