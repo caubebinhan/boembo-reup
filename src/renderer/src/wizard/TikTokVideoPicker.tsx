@@ -19,12 +19,22 @@ export function TikTokVideoPicker() {
 
             <div className="grid grid-cols-2 gap-4 mb-4">
                 {mockVideos.map(vid => (
-                    <div key={vid} className="border p-2 rounded cursor-pointer" onClick={() => {
-                        const s = new Set(selected)
-                        if (s.has(vid)) s.delete(vid)
-                        else s.add(vid)
-                        setSelected(Array.from(s))
-                    }}>
+                    <div key={vid} className="border p-2 rounded cursor-pointer" role="button" tabIndex={0}
+                        onClick={() => {
+                            const s = new Set(selected)
+                            if (s.has(vid)) s.delete(vid)
+                            else s.add(vid)
+                            setSelected(Array.from(s))
+                        }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                const s = new Set(selected)
+                                if (s.has(vid)) s.delete(vid)
+                                else s.add(vid)
+                                setSelected(Array.from(s))
+                            }
+                        }}
+                    >
                         <input type="checkbox" checked={selected.includes(vid)} readOnly className="mr-2" />
                         <span>{vid}</span>
                     </div>

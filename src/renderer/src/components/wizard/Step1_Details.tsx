@@ -101,7 +101,10 @@ export function Step1_Details({ data, updateData }: Step1Props) {
 
                 <div className="grid grid-cols-2 gap-4">
                     <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => updateData({ missedJobHandling: 'auto' })}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && updateData({ missedJobHandling: 'auto' })}
                         className={`p-4 rounded-xl cursor-pointer border-2 transition hover:shadow-md ${(data.missedJobHandling || 'auto') === 'auto'
                             ? 'border-purple-400 bg-purple-50 shadow-sm'
                             : 'border-slate-200 bg-white hover:border-slate-300'
@@ -117,7 +120,10 @@ export function Step1_Details({ data, updateData }: Step1Props) {
                     </div>
 
                     <div
+                        role="button"
+                        tabIndex={0}
                         onClick={() => updateData({ missedJobHandling: 'manual' })}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && updateData({ missedJobHandling: 'manual' })}
                         className={`p-4 rounded-xl cursor-pointer border-2 transition hover:shadow-md ${data.missedJobHandling === 'manual'
                             ? 'border-purple-400 bg-purple-50 shadow-sm'
                             : 'border-slate-200 bg-white hover:border-slate-300'

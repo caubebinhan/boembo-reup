@@ -201,19 +201,21 @@ export class PublishDebugRecorder {
                 method: req.method?.(),
                 failure: req.failure?.()?.errorText,
             }),
-            response: async (res: any) => {
-                try {
-                    const url = res.url?.() || ''
-                    if (!url.includes('tiktokstudio') && !url.includes('tiktok.com')) return
-                    const status = res.status?.()
-                    if (status >= 400) {
-                        this.record('response_error', {
-                            url,
-                            status,
-                            method: res.request?.()?.method?.(),
-                        })
-                    }
-                } catch {}
+            response: (res: any) => {
+                (async () => {
+                    try {
+                        const url = res.url?.() || ''
+                        if (!url.includes('tiktokstudio') && !url.includes('tiktok.com')) return
+                        const status = res.status?.()
+                        if (status >= 400) {
+                            this.record('response_error', {
+                                url,
+                                status,
+                                method: res.request?.()?.method?.(),
+                            })
+                        }
+                    } catch {}
+                })().catch(() => {})
             },
             dialog: (dialog: any) => {
                 this.record('dialog', {

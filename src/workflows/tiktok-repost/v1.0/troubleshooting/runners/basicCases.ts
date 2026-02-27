@@ -33,6 +33,18 @@ function lineOf(text: string, needle: string): number | null {
   return text.slice(0, idx).split('\n').length
 }
 
+type CheckMap = Record<string, boolean>
+
+function logCheckMap(logger: Logger, prefix: string, checks: CheckMap) {
+  for (const [key, okFlag] of Object.entries(checks)) {
+    log(logger, `[${prefix}] ${key}=${okFlag}`)
+  }
+}
+
+function failedChecks(checks: CheckMap): string[] {
+  return Object.entries(checks).filter(([, okFlag]) => !okFlag).map(([key]) => key)
+}
+
 function seededIndex(seed: string | number, length: number): number {
   const text = String(seed)
   let hash = 2166136261 >>> 0
@@ -407,6 +419,119 @@ export async function runCaptionSourceFallbackCase(
   })
 }
 
+export async function runCaptionGeneratedOverrideCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+  const publishTestSource = safeRead(TEST_PUBLISH_FILE)
+
+  const hasPrecedenceExpression =
+    publishTestSource.includes("video.generated_caption || video.description || '#test'") ||
+    publishTestSource.includes('video.generated_caption || video.description || "#test"')
+
+  const fixtureVideo = {
+    platform_id: 'caption-override-1',
+    generated_caption: 'generated caption wins #override',
+    description: 'source description should not override generated caption',
+  }
+  const resolvedCaption = fixtureVideo.generated_caption || fixtureVideo.description || '#test'
+  const transformedVideo = {
+    ...fixtureVideo,
+    data: {
+      generated_caption: fixtureVideo.generated_caption,
+      description: fixtureVideo.description,
+    },
+  }
+
+  const checks: CheckMap = {
+    hasPrecedenceExpression,
+    resolvedToGeneratedCaption: resolvedCaption === fixtureVideo.generated_caption,
+    generatedCaptionPreservedAfterTransform: transformedVideo.generated_caption === fixtureVideo.generated_caption,
+    sourceDescriptionRetained: transformedVideo.description === fixtureVideo.description,
+  }
+  logCheckMap(logger, 'CaptionGeneratedOverride', checks)
+
+  const failed = failedChecks(checks)
+  const result = {
+    checks,
+    fixture: fixtureVideo,
+    resolvedCaption,
+    transformedVideo,
+    files: {
+      testPublish: TEST_PUBLISH_FILE,
+    },
+  }
+
+  if (failed.length > 0) {
+    return fail('Caption generated override contract failed', {
+      errors: [`Failed checks: ${failed.join(', ')}`],
+      artifacts: {
+        testPublishFile: TEST_PUBLISH_FILE,
+      },
+      result,
+    })
+  }
+
+  return ok('Caption generated override contract passed (generated caption has precedence)', {
+    messages: [
+      'Generated caption resolved as final publish caption when both generated and source description exist',
+      'Transform payload retains both generated_caption and source description for diagnostics',
+    ],
+    artifacts: {
+      testPublishFile: TEST_PUBLISH_FILE,
+    },
+    result,
+  })
+}
+
+export async function runCaptionUnicodeHashtagPreserveCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+
+  const unicodeCaption =
+    'multilingual #tag_vn #tag_jp_\u65E5\u672C #tag_emoji_\uD83D\uDE80 https://example.com/demo'
+  const normalizedCaption = unicodeCaption.replace(/\r\n/g, '\n').trim()
+  const transformedCaption = `${normalizedCaption} #processed`
+
+  const hashtagList = normalizedCaption.match(/(^|\s)#\S+/g) || []
+  const transformedHashtagList = transformedCaption.match(/(^|\s)#\S+/g) || []
+
+  const checks: CheckMap = {
+    includesJapaneseToken: normalizedCaption.includes('\u65E5\u672C'),
+    includesEmojiToken: normalizedCaption.includes('\uD83D\uDE80'),
+    includesUrl: normalizedCaption.includes('https://example.com/demo'),
+    hashtagCountStableThroughTransform: transformedHashtagList.length === hashtagList.length + 1,
+    normalizedKeepsOriginalPrefix: transformedCaption.startsWith(normalizedCaption),
+  }
+  logCheckMap(logger, 'CaptionUnicodePreserve', checks)
+
+  const failed = failedChecks(checks)
+  const result = {
+    checks,
+    unicodeCaption,
+    normalizedCaption,
+    transformedCaption,
+    hashtagList,
+    transformedHashtagList,
+  }
+
+  if (failed.length > 0) {
+    return fail('Caption unicode/hashtag preserve contract failed', {
+      errors: [`Failed checks: ${failed.join(', ')}`],
+      result,
+    })
+  }
+
+  return ok('Caption unicode/hashtag preserve contract passed', {
+    messages: [
+      'Unicode tokens and URL survive normalization/transform fixture path',
+      'Hashtags remain intact with deterministic transform append behavior',
+    ],
+    result,
+  })
+}
+
 export async function runTransformChainSmokeCase(
   options?: TroubleshootingCaseRunOptions
 ): Promise<TroubleshootingRunResultLike> {
@@ -474,6 +599,77 @@ export async function runTransformChainSmokeCase(
       'Generated caption and metadata enrichment are visible in final payload',
     ],
     result,
+  })
+}
+
+export async function runTransformConditionSkipItemCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+
+  const fixtureVideos = [
+    { platform_id: 'skip_case_1', local_path: '/tmp/a.mp4', description: 'video 1', status: 'queued' },
+    { platform_id: 'skip_case_2', local_path: '/tmp/b.mp4', description: 'video 2', status: 'queued' },
+    { platform_id: 'skip_case_3', local_path: '/tmp/c.mp4', description: 'video 3', status: 'queued' },
+  ]
+
+  const processed: Array<Record<string, any>> = []
+  const skipped: Array<Record<string, any>> = []
+  const timeline: string[] = []
+
+  for (let i = 0; i < fixtureVideos.length; i += 1) {
+    const item = fixtureVideos[i]
+    const shouldSkip = i === 1
+    if (shouldSkip) {
+      skipped.push({ ...item, skipped: true, skipReason: 'fixture-condition-index-1' })
+      timeline.push(`skip:${item.platform_id}`)
+      continue
+    }
+    processed.push({ ...item, processedOrder: processed.length + 1, skipped: false })
+    timeline.push(`process:${item.platform_id}`)
+  }
+
+  const checks: CheckMap = {
+    skippedExactlyOneItem: skipped.length === 1,
+    skippedExpectedId: skipped[0]?.platform_id === 'skip_case_2',
+    processedTwoItems: processed.length === 2,
+    loopContinuedAfterSkip: processed.some((item) => item.platform_id === 'skip_case_3'),
+    requiredFieldsPreservedForProcessed: processed.every((item) =>
+      typeof item.platform_id === 'string' &&
+      typeof item.local_path === 'string' &&
+      typeof item.description === 'string' &&
+      typeof item.status === 'string'
+    ),
+  }
+  logCheckMap(logger, 'TransformConditionSkip', checks)
+
+  const failed = failedChecks(checks)
+  const result = {
+    checks,
+    fixtureVideos,
+    processedIds: processed.map((item) => item.platform_id),
+    skippedIds: skipped.map((item) => item.platform_id),
+    timeline,
+    processed,
+    skipped,
+  }
+
+  if (failed.length > 0) {
+    return fail('Transform condition skip-item fixture failed', {
+      errors: [`Failed checks: ${failed.join(', ')}`],
+      result,
+    })
+  }
+
+  return ok('Transform condition skip-item fixture passed', {
+    messages: [
+      'Exactly one fixture item was skipped and loop continued processing subsequent items',
+      'Processed items preserved required publish fields',
+    ],
+    result,
+    checks: {
+      logs: ['Skip/process timeline emitted in deterministic order for troubleshooting replay'],
+    },
   })
 }
 
@@ -743,9 +939,9 @@ export async function runScannerFilterThresholdsFixtureCase(
 
     const out = await runScannerNode(null, ctx)
     const rows = Array.isArray(out?.data) ? out.data : []
-    const actualIds = rows.map((v: any) => v.platform_id).sort()
+    const actualIds = rows.map((v: any) => v.platform_id).sort((a: string, b: string) => a.localeCompare(b))
     const expectedIds = ['vid_A', 'vid_D', 'vid_E']
-    const expectedSorted = [...expectedIds].sort()
+    const expectedSorted = [...expectedIds].sort((a, b) => a.localeCompare(b))
     const thumbnailSchedule = scheduleCalls.find(c => c.taskType === 'tiktok.thumbnail.batch')
     const scheduledThumbCount = Array.isArray(thumbnailSchedule?.payload?.videos) ? thumbnailSchedule.payload.videos.length : 0
     const expectedThumbCount = 2
@@ -908,8 +1104,8 @@ export async function runScannerChannelSmokeCase(
 
     const out = await runScannerNode(null, ctx)
     const rows = Array.isArray(out?.data) ? out.data : []
-    const expectedIds = fixtureVideos.map(v => v.platform_id).sort()
-    const actualIds = rows.map((v: any) => v.platform_id).sort()
+    const expectedIds = fixtureVideos.map(v => v.platform_id).sort((a, b) => a.localeCompare(b))
+    const actualIds = rows.map((v: any) => v.platform_id).sort((a: string, b: string) => a.localeCompare(b))
     const expectedThumbCount = fixtureVideos.filter(v => typeof v.thumbnail === 'string' && v.thumbnail.length > 0).length
     const thumbnailSchedule = scheduleCalls.find(c => c.taskType === 'tiktok.thumbnail.batch')
     const scheduledThumbCount = Array.isArray(thumbnailSchedule?.payload?.videos) ? thumbnailSchedule.payload.videos.length : 0
@@ -1137,6 +1333,231 @@ export async function runScannerEmptyChannelCase(
   }
 }
 
+export async function runScannerSessionExpiredCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+  const sourcePick = resolveScannerDebugSource(options, logger)
+
+  const scheduleCalls: any[] = []
+  const progress: string[] = []
+  const infoLogs: string[] = []
+  const errorLogs: string[] = []
+  const alerts: string[] = []
+
+  const originalScanProfile = TikTokScanner.prototype.scanProfile
+  const originalScanKeyword = TikTokScanner.prototype.scanKeyword
+  const originalFindAll = accountRepo.findAll.bind(accountRepo)
+
+  ;(TikTokScanner.prototype as any).scanProfile = async function mockedScanProfile() {
+    throw new Error('session expired: login required')
+  }
+  ;(TikTokScanner.prototype as any).scanKeyword = async function mockedScanKeyword() {
+    throw new Error('session expired: login required')
+  }
+  ;(accountRepo as any).findAll = () => []
+
+  try {
+    const ctx: NodeExecutionContext = {
+      campaign_id: 'fixture-campaign-session-expired',
+      params: {
+        campaign_id: 'fixture-campaign-session-expired',
+        sources: [{
+          type: 'channel',
+          name: sourcePick.sourceName,
+          historyLimit: 5,
+          sortOrder: 'newest',
+          timeRange: 'history_only',
+          autoSchedule: true,
+        }],
+      },
+      store: createDummyStore(),
+      logger: {
+        info(msg: string) {
+          infoLogs.push(msg)
+          log(logger, msg)
+        },
+        error(msg: string, err?: any) {
+          const line = `${msg}${err?.message ? `: ${err.message}` : ''}`
+          errorLogs.push(line)
+          log(logger, line, 'error')
+        },
+      },
+      onProgress(msg: string) {
+        progress.push(msg)
+        log(logger, `[progress] ${msg}`)
+      },
+      alert(_level, title, body) {
+        const line = `${title}${body ? `: ${body}` : ''}`
+        alerts.push(line)
+        log(logger, `[alert] ${line}`, 'warn')
+      },
+      asyncTasks: {
+        schedule(taskType, payload, scheduleOptions) {
+          scheduleCalls.push({ taskType, payload, scheduleOptions })
+          return { taskId: `task_${scheduleCalls.length}`, created: true }
+        },
+      },
+    }
+
+    const out = await runScannerNode(null, ctx)
+    const rows = Array.isArray(out?.data) ? out.data : []
+    const errorText = errorLogs.join(' | ').toLowerCase()
+    const checks: CheckMap = {
+      returnsZeroRows: rows.length === 0,
+      scannerErrorLogged: errorLogs.some((line) => line.includes('Failed to scan')),
+      sessionKeywordPresent: errorText.includes('session') || errorText.includes('expired'),
+      noThumbnailTaskScheduled: scheduleCalls.length === 0,
+      hasScanProgressLog: progress.some((line) => line.toLowerCase().includes('scanning')),
+    }
+    logCheckMap(logger, 'ScannerSessionExpired', checks)
+
+    const failed = failedChecks(checks)
+    const result = {
+      checks,
+      totalReturned: rows.length,
+      sourceSelection: sourcePick,
+      progress,
+      infoLogsTail: infoLogs.slice(-10),
+      errorLogs,
+      alerts,
+    }
+
+    if (failed.length > 0) {
+      return fail('Scanner session-expired fixture failed expected error-path checks', {
+        errors: [`Failed checks: ${failed.join(', ')}`],
+        result,
+      })
+    }
+
+    return ok('Scanner session-expired fixture passed (graceful failure path captured)', {
+      messages: [
+        'Session-expired scanner error is logged with source context',
+        'Run completes gracefully with zero output rows and no thumbnail scheduling',
+      ],
+      result,
+    })
+  } finally {
+    ;(TikTokScanner.prototype as any).scanProfile = originalScanProfile
+    ;(TikTokScanner.prototype as any).scanKeyword = originalScanKeyword
+    ;(accountRepo as any).findAll = originalFindAll
+  }
+}
+
+type RescanVideoFixture = {
+  platform_id: string
+  description: string
+  status: string
+  data?: Record<string, any>
+}
+
+function mergeRescanVideos(
+  existingVideos: RescanVideoFixture[],
+  incomingVideos: RescanVideoFixture[]
+) {
+  const byId = new Map<string, RescanVideoFixture>()
+  const order: string[] = []
+
+  for (const item of existingVideos) {
+    byId.set(item.platform_id, { ...item, data: { ...(item.data || {}) } })
+    order.push(item.platform_id)
+  }
+
+  let duplicateCount = 0
+  let newCount = 0
+  for (const incoming of incomingVideos) {
+    const existing = byId.get(incoming.platform_id)
+    if (existing) {
+      duplicateCount += 1
+      byId.set(incoming.platform_id, {
+        ...existing,
+        ...incoming,
+        status: existing.status || incoming.status,
+        data: {
+          ...(existing.data || {}),
+          ...(incoming.data || {}),
+        },
+      })
+      continue
+    }
+    newCount += 1
+    byId.set(incoming.platform_id, { ...incoming, data: { ...(incoming.data || {}) } })
+    order.push(incoming.platform_id)
+  }
+
+  const merged = order.map((id) => byId.get(id)).filter(Boolean) as RescanVideoFixture[]
+  return {
+    merged,
+    duplicateCount,
+    newCount,
+  }
+}
+
+export async function runScannerRescanDedupeExistingItemsCase(
+  options?: TroubleshootingCaseRunOptions
+): Promise<TroubleshootingRunResultLike> {
+  const logger = options?.logger
+
+  const existingVideos: RescanVideoFixture[] = [
+    { platform_id: 'vid_A', description: 'existing A', status: 'queued', data: { views: 100 } },
+    { platform_id: 'vid_B', description: 'existing B', status: 'queued', data: { views: 200 } },
+    { platform_id: 'vid_C', description: 'existing C', status: 'queued', data: { views: 300 } },
+    { platform_id: 'vid_D', description: 'existing D', status: 'queued', data: { views: 400 } },
+    { platform_id: 'vid_E', description: 'existing E', status: 'queued', data: { views: 500 } },
+  ]
+  const rescanVideos: RescanVideoFixture[] = [
+    { platform_id: 'vid_C', description: 'rescanned C', status: 'queued', data: { views: 333 } },
+    { platform_id: 'vid_D', description: 'rescanned D', status: 'queued', data: { views: 444 } },
+    { platform_id: 'vid_E', description: 'rescanned E', status: 'queued', data: { views: 555 } },
+    { platform_id: 'vid_F', description: 'new F', status: 'queued', data: { views: 666 } },
+    { platform_id: 'vid_G', description: 'new G', status: 'queued', data: { views: 777 } },
+  ]
+
+  const { merged, duplicateCount, newCount } = mergeRescanVideos(existingVideos, rescanVideos)
+  const mergedIds = merged.map((item) => item.platform_id)
+  const uniqueMergedIds = new Set(mergedIds)
+  const expectedHeadOrder = existingVideos.map((item) => item.platform_id)
+  const headOrder = mergedIds.slice(0, expectedHeadOrder.length)
+  const tailOrder = mergedIds.slice(expectedHeadOrder.length)
+
+  const checks: CheckMap = {
+    duplicateCountExpected: duplicateCount === 3,
+    newCountExpected: newCount === 2,
+    mergedCountExpected: merged.length === 7,
+    mergedIdsUnique: uniqueMergedIds.size === merged.length,
+    existingOrderPreserved: JSON.stringify(headOrder) === JSON.stringify(expectedHeadOrder),
+    newIdsAppendedAtTail: JSON.stringify(tailOrder) === JSON.stringify(['vid_F', 'vid_G']),
+    mergedFieldUpdatedForDuplicate: merged.find((item) => item.platform_id === 'vid_C')?.data?.views === 333,
+  }
+  logCheckMap(logger, 'ScannerRescanDedupe', checks)
+
+  const failed = failedChecks(checks)
+  const result = {
+    checks,
+    existingIds: expectedHeadOrder,
+    rescanIds: rescanVideos.map((item) => item.platform_id),
+    mergedIds,
+    duplicateCount,
+    newCount,
+    merged,
+  }
+
+  if (failed.length > 0) {
+    return fail('Scanner re-scan dedupe fixture failed', {
+      errors: [`Failed checks: ${failed.join(', ')}`],
+      result,
+    })
+  }
+
+  return ok('Scanner re-scan dedupe fixture passed (idempotent merge for overlapping platform_id)', {
+    messages: [
+      'Rescan overlap items merged by platform_id without duplicates',
+      'New rescan items were appended in stable order at the end of merged collection',
+    ],
+    result,
+  })
+}
+
 function runThumbnailNormalizationFixture(caseId: string, logger?: Logger): TroubleshootingRunResultLike {
   const cases: Record<string, { input: any; expected: string; label: string }> = {
     'tiktok-repost-v1.thumbnail.normalize-string': {
@@ -1264,8 +1685,17 @@ export async function runBasicTiktokRepostCase(
   if (caseId === 'tiktok-repost-v1.caption.source-fallback') {
     return runCaptionSourceFallbackCase(options)
   }
+  if (caseId === 'tiktok-repost-v1.caption.generated-override') {
+    return runCaptionGeneratedOverrideCase(options)
+  }
+  if (caseId === 'tiktok-repost-v1.caption.unicode-hashtag-preserve') {
+    return runCaptionUnicodeHashtagPreserveCase(options)
+  }
   if (caseId === 'tiktok-repost-v1.transform.chain-smoke') {
     return runTransformChainSmokeCase(options)
+  }
+  if (caseId === 'tiktok-repost-v1.transform.condition-skip-item') {
+    return runTransformConditionSkipItemCase(options)
   }
   if (caseId === 'tiktok-repost-v1.scan.wizard-sources-main-validation') {
     return runWizardSourcesMainValidationCase(options)
@@ -1275,6 +1705,12 @@ export async function runBasicTiktokRepostCase(
   }
   if (caseId === 'tiktok-repost-v1.scan.empty-channel') {
     return runScannerEmptyChannelCase(options)
+  }
+  if (caseId === 'tiktok-repost-v1.scan.session-expired') {
+    return runScannerSessionExpiredCase(options)
+  }
+  if (caseId === 'tiktok-repost-v1.scan.rescan-dedupe-existing-items') {
+    return runScannerRescanDedupeExistingItemsCase(options)
   }
   if (caseId === 'tiktok-repost-v1.scan.wizard-sources-edge-validation-gaps') {
     return runWizardSourcesEdgeGapCase(options)

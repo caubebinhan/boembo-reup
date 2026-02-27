@@ -6,9 +6,16 @@ const ROOT = process.cwd()
 const DEBUG_DIR = path.join(ROOT, 'tests', 'debug')
 const INDEX_JSON = path.join(DEBUG_DIR, 'CASE_INDEX.json')
 const CASEBOOK_MD = path.join(DEBUG_DIR, 'CASEBOOK.md')
+const WORKFLOW_INDEX_ROOT = path.join(DEBUG_DIR, 'workflows')
+const WORKFLOW_INDEX_JSON = path.join(DEBUG_DIR, 'WORKFLOW_INDEX.json')
 
 function sha1(value) {
   return createHash('sha1').update(value).digest('hex')
+}
+
+function toPathSlug(value) {
+  const text = String(value || '').trim().replaceAll(/[^a-zA-Z0-9._-]+/g, '_')
+  return text || 'unknown'
 }
 
 function listFiles(dir, filterFn, out = []) {
@@ -262,6 +269,115 @@ function buildCasebook(entries) {
   return lines.join('\n')
 }
 
+function scopeKey(entry) {
+  const workflowId = entry.workflowId || 'unscoped'
+  const workflowVersion = entry.workflowVersion || 'unversioned'
+  return `${workflowId}@${workflowVersion}`
+}
+
+function groupEntriesByScope(entries) {
+  const grouped = new Map()
+  for (const entry of entries) {
+    const key = scopeKey(entry)
+    if (!grouped.has(key)) grouped.set(key, [])
+    grouped.get(key).push(entry)
+  }
+  return grouped
+}
+
+function toVersionFolder(workflowVersion) {
+  const raw = String(workflowVersion || 'unversioned')
+  return raw.startsWith('v') ? raw : `v${raw}`
+}
+
+function buildScopedCasebook(workflowId, workflowVersion, entries) {
+  const runnable = entries.filter(e => e.status === 'runnable').length
+  const planned = entries.filter(e => e.status === 'planned').length
+  const lines = []
+  lines.push(`# Debug Casebook: ${workflowId}@${workflowVersion}`)
+  lines.push('')
+  lines.push(`- Total cases: **${entries.length}**`)
+  lines.push(`- Runnable: **${runnable}**`)
+  lines.push(`- Planned: **${planned}**`)
+  lines.push(`- Generated at: ${new Date().toISOString()}`)
+  lines.push('')
+  lines.push('## Planned')
+  lines.push('')
+  for (const entry of entries.filter(e => e.status === 'planned')) {
+    lines.push(`### ${entry.id}`)
+    lines.push(`- Title: ${entry.title}`)
+    lines.push(`- Group: ${entry.group} | Category: ${entry.category} | Level: ${entry.level}`)
+    lines.push(`- Fingerprint: \`${entry.fingerprint}\``)
+    lines.push(`- Source: \`${entry.sourceFile}\``)
+    for (const todo of entry.todos) lines.push(`- TODO: ${todo}`)
+    lines.push('')
+  }
+  lines.push('## Runnable')
+  lines.push('')
+  for (const entry of entries.filter(e => e.status === 'runnable')) {
+    lines.push(`- ${entry.id} (\`${entry.fingerprint}\`) -> ${entry.sourceFile}`)
+  }
+  lines.push('')
+  return lines.join('\n')
+}
+
+function writeWorkflowIndexes(entries, generatedAt) {
+  fs.rmSync(WORKFLOW_INDEX_ROOT, { recursive: true, force: true })
+  fs.mkdirSync(WORKFLOW_INDEX_ROOT, { recursive: true })
+
+  const grouped = groupEntriesByScope(entries)
+  const workflowIndexRows = []
+
+  for (const [key, rawEntries] of [...grouped.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const first = rawEntries[0] || {}
+    const workflowId = first.workflowId || 'unscoped'
+    const workflowVersion = first.workflowVersion || 'unversioned'
+    const scopeEntries = [...rawEntries].sort((a, b) => a.id.localeCompare(b.id))
+    const workflowDir = path.join(
+      WORKFLOW_INDEX_ROOT,
+      toPathSlug(workflowId),
+      toPathSlug(toVersionFolder(workflowVersion))
+    )
+    fs.mkdirSync(workflowDir, { recursive: true })
+
+    const indexPath = path.join(workflowDir, 'CASE_INDEX.json')
+    const casebookPath = path.join(workflowDir, 'CASEBOOK.md')
+
+    fs.writeFileSync(indexPath, `${JSON.stringify({
+      schemaVersion: 1,
+      generatedAt,
+      workflowId,
+      workflowVersion,
+      total: scopeEntries.length,
+      entries: scopeEntries,
+    }, null, 2)}\n`, 'utf8')
+
+    fs.writeFileSync(casebookPath, `${buildScopedCasebook(workflowId, workflowVersion, scopeEntries)}\n`, 'utf8')
+
+    const runnable = scopeEntries.filter(e => e.status === 'runnable').length
+    const planned = scopeEntries.filter(e => e.status === 'planned').length
+    workflowIndexRows.push({
+      workflowId,
+      workflowVersion,
+      scope: key,
+      total: scopeEntries.length,
+      runnable,
+      planned,
+      caseIndexPath: path.relative(ROOT, indexPath).replaceAll('\\', '/'),
+      casebookPath: path.relative(ROOT, casebookPath).replaceAll('\\', '/'),
+    })
+  }
+
+  fs.writeFileSync(WORKFLOW_INDEX_JSON, `${JSON.stringify({
+    schemaVersion: 1,
+    generatedAt,
+    totalWorkflows: workflowIndexRows.length,
+    workflows: workflowIndexRows,
+  }, null, 2)}\n`, 'utf8')
+
+  return workflowIndexRows
+}
+
 function main() {
   const workflowCases = parseWorkflowCases()
   const syntheticCases = parseSyntheticCases()
@@ -275,6 +391,7 @@ function main() {
     .map(withFingerprint)
     .map(withTodos)
     .sort((a, b) => a.id.localeCompare(b.id))
+  const generatedAt = Date.now()
 
   fs.mkdirSync(DEBUG_DIR, { recursive: true })
   fs.mkdirSync(path.join(DEBUG_DIR, 'artifacts'), { recursive: true })
@@ -283,15 +400,18 @@ function main() {
 
   fs.writeFileSync(INDEX_JSON, `${JSON.stringify({
     schemaVersion: 1,
-    generatedAt: Date.now(),
+    generatedAt,
     total: entries.length,
     entries,
   }, null, 2)}\n`, 'utf8')
 
   fs.writeFileSync(CASEBOOK_MD, `${buildCasebook(entries)}\n`, 'utf8')
+  const workflowIndexes = writeWorkflowIndexes(entries, generatedAt)
 
   console.log(`[debug-casebook] Wrote ${entries.length} cases to ${path.relative(ROOT, INDEX_JSON)}`)
   console.log(`[debug-casebook] Wrote casebook to ${path.relative(ROOT, CASEBOOK_MD)}`)
+  console.log(`[debug-casebook] Wrote ${workflowIndexes.length} workflow case indexes under ${path.relative(ROOT, WORKFLOW_INDEX_ROOT)}`)
+  console.log(`[debug-casebook] Wrote workflow index map to ${path.relative(ROOT, WORKFLOW_INDEX_JSON)}`)
 }
 
 main()

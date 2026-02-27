@@ -108,7 +108,10 @@ export function Step5_Target({ data, updateData }: Step5Props) {
                         return (
                             <div
                                 key={acc.id}
+                                role="button"
+                                tabIndex={0}
                                 onClick={() => toggleAccount(acc.id)}
+                                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && toggleAccount(acc.id)}
                                 className={`flex items-center p-4 rounded-2xl border-2 transition cursor-pointer select-none group hover:shadow-md animate-slide-up ${isSelected
                                     ? 'border-purple-400 bg-purple-50/50 shadow-sm'
                                     : 'border-slate-200 bg-white hover:border-slate-300'

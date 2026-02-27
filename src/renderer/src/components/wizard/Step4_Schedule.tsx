@@ -41,7 +41,7 @@ export function Step4_Schedule({ data, updateData }: Step4Props) {
 
     const toggleDay = (rangeIdx: number, day: number) => {
         const r = ranges[rangeIdx]
-        const days = r.days.includes(day) ? r.days.filter(d => d !== day) : [...r.days, day].sort()
+        const days = r.days.includes(day) ? r.days.filter(d => d !== day) : [...r.days, day].sort((a, b) => a - b)
         updateRange(rangeIdx, { days })
     }
 

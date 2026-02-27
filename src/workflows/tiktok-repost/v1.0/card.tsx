@@ -93,7 +93,10 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
 
     return (
         <div
+            role="button"
+            tabIndex={0}
             onClick={() => onAction('campaign:view-details', { id: campaign.id })}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onAction('campaign:view-details', { id: campaign.id })}
             className="bg-white border border-slate-200 rounded-xl p-4 hover:border-purple-300 hover:shadow-lg transition-all cursor-pointer relative overflow-hidden group shadow-sm"
         >
             {/* Progress bar accent at top */}

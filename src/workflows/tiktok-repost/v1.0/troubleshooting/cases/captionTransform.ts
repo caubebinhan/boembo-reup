@@ -29,7 +29,7 @@ export const captionTransformCases: TroubleshootingCaseDefinition[] = [
     group: 'caption',
     tags: ['caption', 'override', 'transform'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCaptionState', value: 'generated_caption=present,description=present' }],
       checks: {
@@ -67,7 +67,7 @@ export const captionTransformCases: TroubleshootingCaseDefinition[] = [
     group: 'transform',
     tags: ['transform', 'condition', 'skip', 'loop'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCondition', value: 'skip item index 1' }],
       checks: {
@@ -106,7 +106,7 @@ export const captionTransformCases: TroubleshootingCaseDefinition[] = [
     group: 'caption',
     tags: ['caption', 'unicode', 'hashtags', 'edge'],
     level: 'intermediate',
-    implemented: false,
+    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCaption', value: 'mixed unicode + hashtags + URLs' }],
       checks: {

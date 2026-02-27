@@ -1,63 +1,14 @@
-# Debug Casebook
+# Debug Casebook: tiktok-repost@1.0
 
-Central backlog/index for all troubleshooting/debug scenarios.
-
-## Summary
-
-- Total cases: **63**
+- Total cases: **51**
 - Runnable: **22**
-- Planned: **41**
-- Generated at: 2026-02-27T07:06:48.308Z
+- Planned: **29**
+- Generated at: 2026-02-27T07:06:48.321Z
 
-## Workflow Breakdown
-
-| Scope | Total | Runnable | Planned |
-|---|---:|---:|---:|
-| main@1.0 | 11 | 0 | 11 |
-| tiktok-repost@1.0 | 51 | 22 | 29 |
-| upload-local@1.0 | 1 | 0 | 1 |
-
-## Implementation Queue
-
-### e2e.troubleshooting.artifact.screenshot-preview-visible
-- Title: E2E Mirror: screenshot artifact preview visible
-- Scope: main@1.0
-- Group: external-e2e | Category: e2e | Level: intermediate
-- Fingerprint: `case-1099ef16d144f29d`
-- Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### e2e.troubleshooting.sentry.feedback-links-visible
-- Title: E2E Mirror: sentry feedback links visible
-- Scope: main@1.0
-- Group: external-e2e | Category: e2e | Level: intermediate
-- Fingerprint: `case-5dedf6ed8caec44b`
-- Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### e2e.troubleshooting.suites.grouping-visible
-- Title: E2E Mirror: suite grouping visible
-- Scope: main@1.0
-- Group: external-e2e | Category: e2e | Level: intermediate
-- Fingerprint: `case-ecc4b013f6caa92a`
-- Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
+## Planned
 
 ### tiktok-repost-v1.async-verify.concurrency-key-serialization
 - Title: Async Verify Concurrency Key Serialization
-- Scope: tiktok-repost@1.0
 - Group: async_verify | Category: async_verify | Level: advanced
 - Fingerprint: `case-778f04ed36ef0c1e`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts`
@@ -69,7 +20,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.async-verify.dedupe-active-task
 - Title: Async Verify Dedupe Active Task
-- Scope: tiktok-repost@1.0
 - Group: async_verify | Category: async_verify | Level: advanced
 - Fingerprint: `case-41f28500c5534942`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts`
@@ -81,7 +31,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.async-verify.lease-reclaim
 - Title: Async Verify Lease Reclaim
-- Scope: tiktok-repost@1.0
 - Group: async_verify | Category: async_verify | Level: advanced
 - Fingerprint: `case-e35bdfc391506206`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts`
@@ -93,7 +42,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.async-verify.nonblocking-smoke
 - Title: Async Verify Non-blocking Smoke
-- Scope: tiktok-repost@1.0
 - Group: async_verify | Category: async_verify | Level: advanced
 - Fingerprint: `case-3b7f87f786b1bd40`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts`
@@ -105,7 +53,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.async-verify.timeout-manual-check
 - Title: Async Verify Timed Out → Manual Check
-- Scope: tiktok-repost@1.0
 - Group: async_verify | Category: async_verify | Level: advanced
 - Fingerprint: `case-91281dce9cce1961`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts`
@@ -117,7 +64,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.campaign.concurrent-save-race-smoke
 - Title: Campaign Concurrent Save Race Smoke
-- Scope: tiktok-repost@1.0
 - Group: campaign | Category: campaign | Level: advanced
 - Fingerprint: `case-3961e99a78b8d06d`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts`
@@ -129,7 +75,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.campaign.trigger-pause-resume
 - Title: Campaign Trigger / Pause / Resume
-- Scope: tiktok-repost@1.0
 - Group: campaign | Category: campaign | Level: intermediate
 - Fingerprint: `case-872c960b8d61613f`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts`
@@ -141,7 +86,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.compat.flow-snapshot-version-lock
 - Title: Compat: Flow Snapshot Version Lock
-- Scope: tiktok-repost@1.0
 - Group: compat | Category: compat | Level: advanced
 - Fingerprint: `case-9522b59ab2f49ecf`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts`
@@ -153,7 +97,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.compat.params-defaults-upgrade
 - Title: Compat: Params Defaults on Upgrade
-- Scope: tiktok-repost@1.0
 - Group: compat | Category: compat | Level: advanced
 - Fingerprint: `case-e7283877a64b3961`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts`
@@ -165,7 +108,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.compat.workflow-catalog-dynamic-discovery
 - Title: Compat: Dynamic Workflow/Version Discovery in Debug Tab
-- Scope: tiktok-repost@1.0
 - Group: compat | Category: compat | Level: intermediate
 - Fingerprint: `case-04ffbde7ce246362`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts`
@@ -177,7 +119,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.loop.resume-last-processed-index
 - Title: Loop Resume from last_processed_index
-- Scope: tiktok-repost@1.0
 - Group: campaign | Category: campaign | Level: advanced
 - Fingerprint: `case-260d80c1ce46e469`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts`
@@ -189,7 +130,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.publish.captcha-event
 - Title: Publish CAPTCHA Event Handling
-- Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
 - Fingerprint: `case-a37bdeb75c601aed`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
@@ -201,7 +141,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.publish.cookies-expired-preflight
 - Title: Publish Session Expired / Cookie Invalid
-- Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: intermediate
 - Fingerprint: `case-e96dc34e869b05e7`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
@@ -213,7 +152,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.publish.debug-artifacts-integrity
 - Title: Publish Debug Artifact Integrity
-- Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: intermediate
 - Fingerprint: `case-4470b11ce5e4b6fc`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
@@ -225,7 +163,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.publish.duplicate-dedup
 - Title: Publish Dedup Duplicate Detection
-- Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: intermediate
 - Fingerprint: `case-1f6d58d5590f7820`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
@@ -237,7 +174,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.publish.public-path
 - Title: Publish Path (Public Immediate)
-- Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
 - Fingerprint: `case-785753b247fae1f6`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
@@ -249,7 +185,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.publish.transient-error-retry-diagnostics
 - Title: Publish Transient Error Retry Diagnostics
-- Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
 - Fingerprint: `case-3b00a688a0dbbd26`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
@@ -261,7 +196,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.publish.under-review-path
 - Title: Publish Path (Under Review)
-- Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
 - Fingerprint: `case-1a9ee06da44391cc`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
@@ -273,7 +207,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.publish.verification-incomplete-path
 - Title: Publish Path (verification_incomplete)
-- Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
 - Fingerprint: `case-2000cf738486943f`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
@@ -285,7 +218,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.publish.violation-event
 - Title: Publish Violation Event Handling
-- Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
 - Fingerprint: `case-a90c75828ef4198e`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
@@ -297,7 +229,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.recovery.missed-scheduled-videos
 - Title: Recovery Reschedules Missed Videos
-- Scope: tiktok-repost@1.0
 - Group: recovery | Category: recovery | Level: intermediate
 - Fingerprint: `case-ef1c0eff2dbea644`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts`
@@ -309,7 +240,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.recovery.reset-under-review
 - Title: Recovery Resets under_review to queued
-- Scope: tiktok-repost@1.0
 - Group: recovery | Category: recovery | Level: intermediate
 - Fingerprint: `case-606b138253fb5164`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts`
@@ -321,7 +251,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.recovery.stuck-running-job-diagnostic
 - Title: Recovery Stuck Running Job Diagnostic
-- Scope: tiktok-repost@1.0
 - Group: recovery | Category: recovery | Level: advanced
 - Fingerprint: `case-420945a6c75f4a51`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts`
@@ -333,7 +262,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.scan.selector-drift-dump-artifacts
 - Title: Channel Scan Selector Drift Diagnostics
-- Scope: tiktok-repost@1.0
 - Group: scan | Category: scan | Level: advanced
 - Fingerprint: `case-f6cce24f0d82c1b4`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts`
@@ -345,7 +273,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.thumbnail.bulk-mixed-shapes-grid-snapshot
 - Title: Thumbnail Mixed Shapes Grid Snapshot
-- Scope: tiktok-repost@1.0
 - Group: thumbnail | Category: thumbnail | Level: advanced
 - Fingerprint: `case-a46c3a83f435f0b3`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts`
@@ -357,7 +284,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.thumbnail.ui-render-preview
 - Title: Thumbnail UI Render Preview
-- Scope: tiktok-repost@1.0
 - Group: thumbnail | Category: thumbnail | Level: intermediate
 - Fingerprint: `case-41bcab9e8b620f3d`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts`
@@ -369,7 +295,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.transform-pipeline.field-integrity-db-assert
 - Title: Transform Pipeline Field Integrity DB Assert
-- Scope: tiktok-repost@1.0
 - Group: transform | Category: transform | Level: advanced
 - Fingerprint: `case-f91eaf92ed21e786`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts`
@@ -381,7 +306,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.transform.null-input-guard
 - Title: Null Input Guard in Loop
-- Scope: tiktok-repost@1.0
 - Group: transform | Category: transform | Level: advanced
 - Fingerprint: `case-0c0701db3e477cc8`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts`
@@ -393,7 +317,6 @@ Central backlog/index for all troubleshooting/debug scenarios.
 
 ### tiktok-repost-v1.transform.on-error-continue-policy
 - Title: Transform Error Continue Policy
-- Scope: tiktok-repost@1.0
 - Group: transform | Category: transform | Level: advanced
 - Fingerprint: `case-fb002b6b3644c2c8`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts`
@@ -403,115 +326,7 @@ Central backlog/index for all troubleshooting/debug scenarios.
 - TODO: Attach artifact outputs + diagnostic footprint for investigation.
 - TODO: Flip implemented=true after validation in Debug tab.
 
-### unit.core.pipeline-runner.sequence-resolve-vars
-- Title: Unit Mirror: pipeline runner resolves vars in sequence
-- Scope: main@1.0
-- Group: external-unit | Category: unit | Level: intermediate
-- Fingerprint: `case-784d5d592b844544`
-- Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### unit.main.sentry-staging.service-contracts
-- Title: Unit Mirror: sentry staging service contracts
-- Scope: main@1.0
-- Group: external-unit | Category: unit | Level: intermediate
-- Fingerprint: `case-550086971f3045e0`
-- Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### unit.troubleshooting.artifact-view.data-url-renders-image
-- Title: Unit Mirror: data URL renders as image
-- Scope: main@1.0
-- Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-a0f5bcd585c2e0de`
-- Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### unit.troubleshooting.artifact-view.screenshot-path-renders-image
-- Title: Unit Mirror: screenshot path renders as image
-- Scope: main@1.0
-- Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-c860e164f1f2fdcd`
-- Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### unit.troubleshooting.grouping.suite-and-group-order
-- Title: Unit Mirror: grouped ordering is deterministic
-- Scope: main@1.0
-- Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-3cc19c318f21546c`
-- Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### unit.troubleshooting.suite-classification.db-is-integration
-- Title: Unit Mirror: db tag maps to Integration suite
-- Scope: main@1.0
-- Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-a21c5ca930eefe7c`
-- Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### unit.troubleshooting.suite-classification.real-publish-is-e2e
-- Title: Unit Mirror: real_publish maps to E2E suite
-- Scope: main@1.0
-- Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-231fe9cc2caeb919`
-- Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### unit.troubleshooting.suite-classification.static-analysis-is-unit
-- Title: Unit Mirror: static-analysis maps to Unit suite
-- Scope: main@1.0
-- Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-7d543143859da020`
-- Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-### upload-local-v1.workflow-smoke
-- Title: Upload Local v1 Smoke (Planned)
-- Scope: upload-local@1.0
-- Group: smoke | Category: smoke | Level: basic
-- Fingerprint: `case-baff0f25c0db0f49`
-- Source: `src/workflows/upload-local/v1.0/troubleshooting/cases/index.ts`
-- TODO: Implement runner branch and wire caseId dispatch.
-- TODO: Add deterministic fixture/setup for reproducible debug reruns.
-- TODO: Assert DB/UI/log/event checks from case meta.
-- TODO: Attach artifact outputs + diagnostic footprint for investigation.
-- TODO: Flip implemented=true after validation in Debug tab.
-
-## Runnable Cases
+## Runnable
 
 - dashboard-verify (`case-e6d123d1b79a8c54`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts
 - tiktok-publish-e2e (`case-3fb8b15dd6580665`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts
@@ -535,9 +350,4 @@ Central backlog/index for all troubleshooting/debug scenarios.
 - tiktok-repost-v1.transform.chain-smoke (`case-03fb3175b301a1d0`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts
 - tiktok-repost-v1.transform.condition-skip-item (`case-711e1a3044163fc1`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts
 - tiktok-studio-smoke (`case-b7929d4172c0f34b`) -> src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts
-
-## Notes
-
-- Case runtime metadata and artifacts are persisted by `TroubleshootingService` into `tests/debug/artifacts` and `tests/debug/footprints`.
-- Use `npm run debug:casebook` after adding/editing case definitions.
 

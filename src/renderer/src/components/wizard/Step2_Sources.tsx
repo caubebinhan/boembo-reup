@@ -108,7 +108,7 @@ export function Step2_Sources({ data, updateData }: Step2Props) {
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="font-bold text-lg text-slate-800">{source.name}</span>
-                                        {(source.followerCount || source.likeCount) && (
+                                        {!!(source.followerCount || source.likeCount) && (
                                             <div className="flex items-center gap-3 text-xs text-slate-400">
                                                 {source.followerCount != null && <span>👥 {source.followerCount.toLocaleString()} followers</span>}
                                                 {source.likeCount != null && <span>❤️ {source.likeCount.toLocaleString()} likes</span>}

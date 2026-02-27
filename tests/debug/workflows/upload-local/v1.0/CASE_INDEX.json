@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": 1772176008301,
+  "workflowId": "upload-local",
+  "workflowVersion": "1.0",
+  "total": 1,
+  "entries": [
+    {
+      "id": "upload-local-v1.workflow-smoke",
+      "title": "Upload Local v1 Smoke (Planned)",
+      "description": "Planned smoke case placeholder for upload-local@1.0. Add workflow-specific debug cases here.",
+      "category": "smoke",
+      "group": "smoke",
+      "risk": "safe",
+      "level": "basic",
+      "implemented": false,
+      "sourceFile": "src/workflows/upload-local/v1.0/troubleshooting/cases/index.ts",
+      "workflowId": "upload-local",
+      "workflowVersion": "1.0",
+      "suite": "debug",
+      "fingerprint": "case-baff0f25c0db0f49",
+      "todos": [
+        "Implement runner branch and wire caseId dispatch.",
+        "Add deterministic fixture/setup for reproducible debug reruns.",
+        "Assert DB/UI/log/event checks from case meta.",
+        "Attach artifact outputs + diagnostic footprint for investigation.",
+        "Flip implemented=true after validation in Debug tab."
+      ],
+      "status": "planned"
+    }
+  ]
+}

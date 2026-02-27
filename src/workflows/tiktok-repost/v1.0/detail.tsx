@@ -319,7 +319,7 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
                         {video.statusMessage && ['under_review', 'verifying_publish', 'verification_incomplete', 'duplicate'].includes(video.status) && (
                             <p className="text-[10px] mt-1.5 rounded-lg px-2 py-1 border text-amber-700 bg-amber-50 border-amber-200">
                                 {video.statusMessage}
-                                {video.reviewRetry?.nextRetryAt && video.status === 'under_review' && (
+                                {!!video.reviewRetry?.nextRetryAt && video.status === 'under_review' && (
                                     <span className="text-amber-600"> Next: {new Date(video.reviewRetry.nextRetryAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
                                 )}
                             </p>

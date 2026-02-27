@@ -153,7 +153,10 @@ function NodeCard({
 
             <div
                 id={`vis-node-${node.instance_id}`}
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelect(node)}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect(node)}
                 className={`relative rounded-xl border-2 transition-all duration-300 cursor-pointer overflow-hidden ${bgClass} shadow-sm hover:shadow-md z-10`}
                 style={{
                     borderColor,
