@@ -1,30 +1,30 @@
-﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { TikTokScanner, ScanOptions } from '@main/tiktok/TikTokScanner'
 
 /**
  * Monitoring Node
  *
- * Continuous loop: scan sources → sleep → scan again.
- * New videos → return to scheduler. Campaign paused → exit.
+ * Continuous loop: scan sources -> sleep -> scan again.
+ * New videos -> return to scheduler. Campaign paused -> exit.
  */
 export async function execute(_input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const intervalMinutes = ctx.params.monitorIntervalMinutes ?? 5
   const waitMs = intervalMinutes * 60 * 1000
 
   ctx.logger.info(`[Monitor] Starting continuous monitoring (interval=${intervalMinutes}min)`)
-  ctx.onProgress(`👁 Monitoring bắt đầu (mỗi ${intervalMinutes} phút)...`)
+  ctx.onProgress(`?? Monitoring b?t ??u (m?i ${intervalMinutes} phut)...`)
 
   while (true) {
-    ctx.onProgress(`💤 Đợi ${intervalMinutes} phút trước khi quét...`)
+    ctx.onProgress(`?? ??i ${intervalMinutes} phut tr??c khi quet...`)
     await new Promise(resolve => setTimeout(resolve, waitMs))
 
     // Check campaign status from store (re-read fresh)
     const { campaignRepo } = require('../../main/db/repositories/CampaignRepo')
     const freshStore = campaignRepo.tryOpen(ctx.campaign_id)
     if (!freshStore || !['active', 'running'].includes(freshStore.status)) {
-      ctx.logger.info(`[Monitor] Campaign status=${freshStore?.status} — stopping monitor`)
-      ctx.onProgress('⏸ Monitoring dừng (campaign paused)')
-      return { data: [], action: 'continue', message: 'Campaign paused/stopped — monitoring ended' }
+      ctx.logger.info(`[Monitor] Campaign status=${freshStore?.status} - stopping monitor`)
+      ctx.onProgress('? Monitoring d?ng (campaign paused)')
+      return { data: [], action: 'continue', message: 'Campaign paused/stopped - monitoring ended' }
     }
 
     const params = freshStore.params
@@ -32,7 +32,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     const lastScanTimes = params.last_scan_times || {}
 
     if (sources.length === 0) {
-      ctx.logger.info('[Monitor] No sources configured — skipping scan')
+      ctx.logger.info('[Monitor] No sources configured - skipping scan')
       continue
     }
 
@@ -69,7 +69,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
       }
 
       try {
-        ctx.onProgress(`🔍 Đang quét ${source.type}: ${source.name}...`)
+        ctx.onProgress(`?? ?ang quet ${source.type}: ${source.name}...`)
 
         let result
         if (source.type === 'channel') {
@@ -100,12 +100,12 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     }
 
     if (newVideos.length > 0) {
-      ctx.logger.info(`[Monitor] 🆕 Found ${newVideos.length} new videos — sending to scheduler`)
-      ctx.onProgress(`🆕 ${newVideos.length} video mới!`)
+      ctx.logger.info(`[Monitor] ?? Found ${newVideos.length} new videos - sending to scheduler`)
+      ctx.onProgress(`?? ${newVideos.length} video m?i!`)
       return { data: newVideos, action: 'continue', message: `${newVideos.length} new videos detected` }
     }
 
-    ctx.logger.info(`[Monitor] Scanned ${totalScanned} videos — no new ones.`)
-    ctx.onProgress(`👁 Không có video mới. Quét lại sau ${intervalMinutes} phút...`)
+    ctx.logger.info(`[Monitor] Scanned ${totalScanned} videos - no new ones.`)
+    ctx.onProgress(`?? Khong co video m?i. Quet l?i sau ${intervalMinutes} phut...`)
   }
 }

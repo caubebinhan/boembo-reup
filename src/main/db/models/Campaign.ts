@@ -1,6 +1,6 @@
-ï»¿import type { FlowDefinition } from '@core/flow/ExecutionContracts'
+import type { FlowDefinition } from '@core/flow/ExecutionContracts'
 
-// â”€â”€ Video Record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// „Ÿ„Ÿ Video Record „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
 /**
  * A single video in the campaign's pipeline.
  *
@@ -11,14 +11,14 @@ export interface VideoRecord {
   status: string
   publish_url?: string
   local_path?: string
-  /** Schemaless â€” workflow-specific video metadata */
+  /** Schemaless - workflow-specific video metadata */
   data: Record<string, any>
   scheduled_for?: number
   queue_index?: number
   [key: string]: any
 }
 
-// â”€â”€ Alert Record â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// „Ÿ„Ÿ Alert Record „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
 export interface AlertRecord {
   instance_id?: string
   node_id?: string
@@ -28,7 +28,7 @@ export interface AlertRecord {
   created_at: number
 }
 
-// â”€â”€ Campaign Counters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// „Ÿ„Ÿ Campaign Counters „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
 export interface CampaignCounters {
   queued: number
   downloaded: number
@@ -37,14 +37,14 @@ export interface CampaignCounters {
   [key: string]: number
 }
 
-// â”€â”€ Campaign Document â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// „Ÿ„Ÿ Campaign Document „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
 export interface CampaignDocument {
   id: string
   name: string
   workflow_id: string
   workflow_version: string
   status: string
-  /** Schemaless â€” all workflow-specific config (wizard output) */
+  /** Schemaless - all workflow-specific config (wizard output) */
   params: Record<string, any>
   /** Frozen flow definition at creation time */
   flow_snapshot: FlowDefinition | null
@@ -61,7 +61,7 @@ export interface CampaignDocument {
   updated_at: number
 }
 
-// â”€â”€ Factory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// „Ÿ„Ÿ Factory „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
 export function createCampaignDocument(
   partial: Partial<CampaignDocument> & { id: string; name: string; workflow_id: string }
 ): CampaignDocument {

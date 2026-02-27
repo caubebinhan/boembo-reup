@@ -1,7 +1,7 @@
-ï»¿import type { CampaignStore } from '@main/db/repositories/CampaignRepo'
+import type { CampaignStore } from '@main/db/repositories/CampaignRepo'
 import type { AsyncTaskScheduleOptions, AsyncTaskScheduleResult } from '../async-tasks/types'
 
-// â”€â”€ Config Schema â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// „Ÿ„Ÿ Config Schema „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
 export interface NodeConfigSchemaField {
   key: string
   label: string
@@ -16,7 +16,7 @@ export interface NodeConfigSchema {
   fields: NodeConfigSchemaField[]
 }
 
-// â”€â”€ Execution Context & Result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// „Ÿ„Ÿ Execution Context & Result „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
 export interface NodeExecutionContext {
   campaign_id: string
   job_id?: string
@@ -54,8 +54,8 @@ export interface NodeExecutionResult {
   message?: string
 }
 
-// â”€â”€ Node Manifest (Contract) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-/** Declarative metadata â€” describes WHAT the node is, not HOW it runs */
+// „Ÿ„Ÿ Node Manifest (Contract) „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+/** Declarative metadata - describes WHAT the node is, not HOW it runs */
 export interface NodeManifest {
   id: string
   name: string
@@ -74,7 +74,7 @@ export interface NodeManifest {
   on_save_event?: string
 }
 
-// â”€â”€ Node Definition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// „Ÿ„Ÿ Node Definition „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
 /** Complete node: manifest (contract) + execute (backend) */
 export interface NodeDefinition {
   manifest: NodeManifest

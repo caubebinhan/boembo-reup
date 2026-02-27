@@ -51,7 +51,7 @@ export class AsyncTaskScheduler {
     console.log('[AsyncTaskScheduler] Stopped')
   }
 
-  // ── Schedule (called by nodes via ctx.asyncTasks) ────
+  //  Schedule (called by nodes via ctx.asyncTasks) 
 
   schedule(
     taskType: string,
@@ -82,7 +82,7 @@ export class AsyncTaskScheduler {
     return asyncTaskRepo.insertIfNotExists(doc)
   }
 
-  // ── Tick ─────────────────────────────────────────
+  //  Tick 
 
   private async tick(): Promise<void> {
     if (this.ticking) return  // skip if previous tick still running
@@ -132,7 +132,7 @@ export class AsyncTaskScheduler {
       }
     }
 
-    // Transition claimed ↁErunning
+    // Transition claimed  -> running
     asyncTaskRepo.markRunning(task.id)
     task.status = 'running'
 

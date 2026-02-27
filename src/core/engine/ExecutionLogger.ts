@@ -68,7 +68,7 @@ export class ExecutionLogger {
       console.error('[ExecutionLogger] Failed to write to DB:', err)
     }
 
-    // 3) IPC ↁErenderer
+    // 3) IPC  -> renderer
     this.emitToUI('execution:log', {
       ...entry,
       data_json: entry.data ? JSON.stringify(entry.data) : null,
@@ -76,9 +76,14 @@ export class ExecutionLogger {
     })
   }
 
-  // ── Convenience methods ──
-
-  static nodeStart(campaignId: string, jobId: string, instanceId: string, nodeId: string, inputSummary?: any) {
+  // Convenience methods
+  static nodeStart(
+    campaignId: string,
+    jobId: string,
+    instanceId: string,
+    nodeId: string,
+    inputSummary?: any
+  ) {
     this.log({
       campaign_id: campaignId, job_id: jobId, instance_id: instanceId, node_id: nodeId,
       level: 'info', event: 'node:start',
@@ -119,7 +124,7 @@ export class ExecutionLogger {
       campaignId, instanceId, nodeId, status: 'failed', jobId, error
     })
     // Push error toast to UI
-    this.sendToast('error', `❁E${instanceId}`, error)
+    this.sendToast('error', `${instanceId}`, error)
   }
 
   /** Push a toast notification to the renderer UI */

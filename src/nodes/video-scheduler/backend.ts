@@ -1,4 +1,4 @@
-﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { normalizeTimeRanges } from '../_shared/timeWindow'
 import { computeScheduleSlots, scheduleVideos } from '@shared/scheduling'
 
@@ -22,11 +22,11 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
   const ranges = normalizeTimeRanges(ctx.params)
   const rangeDesc = ranges.length === 1
-    ? `${ranges[0].start}–${ranges[0].end}`
+    ? `${ranges[0].start}?${ranges[0].end}`
     : `${ranges.length} ranges`
 
   ctx.logger.info(`[VideoScheduler] Scheduling ${videos.length} videos (interval=${intervalMinutes}min, jitter=${enableJitter}, window=${rangeDesc})`)
-  ctx.onProgress(`📋 Scheduling ${videos.length} videos...`)
+  ctx.onProgress(`?? Scheduling ${videos.length} videos...`)
 
   // Reset last_processed_index for a fresh run
   ctx.store.lastProcessedIndex = 0
@@ -96,14 +96,14 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     }
     ctx.store.save()
 
-    ctx.logger.info(`[VideoScheduler] ⚠️ Rescheduled ${rescheduled.length} missed videos`)
-    ctx.alert('warn', `⚠️ Detected ${missedVideos.length} missed job${missedVideos.length > 1 ? 's' : ''}`, `Rescheduled ${rescheduled.length} video${rescheduled.length > 1 ? 's' : ''} starting from now`)
+    ctx.logger.info(`[VideoScheduler] ?? Rescheduled ${rescheduled.length} missed videos`)
+    ctx.alert('warn', `?? Detected ${missedVideos.length} missed job${missedVideos.length > 1 ? 's' : ''}`, `Rescheduled ${rescheduled.length} video${rescheduled.length > 1 ? 's' : ''} starting from now`)
   }
 
   const firstTime = new Date(videos[0].scheduled_for).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
   const lastTime = new Date(videos[videos.length - 1].scheduled_for).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-  ctx.logger.info(`[VideoScheduler] ${videos.length} videos scheduled: ${firstTime} → ${lastTime}`)
-  ctx.onProgress(`✅ ${videos.length} videos queued (${firstTime} → ${lastTime})`)
+  ctx.logger.info(`[VideoScheduler] ${videos.length} videos scheduled: ${firstTime} -> ${lastTime}`)
+  ctx.onProgress(`? ${videos.length} videos queued (${firstTime} -> ${lastTime})`)
 
   return { data: videos, action: 'continue', message: `${videos.length} videos scheduled` }
 }

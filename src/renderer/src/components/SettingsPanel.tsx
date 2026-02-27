@@ -52,9 +52,9 @@ type SentryStatus = {
 type SettingsTab = 'browser' | 'storage' | 'notifications'
 
 const TABS: { id: SettingsTab; label: string; icon: string }[] = [
-  { id: 'browser', label: 'Browser & Automation', icon: '🌐' },
-  { id: 'storage', label: 'Storage', icon: '📁' },
-  { id: 'notifications', label: 'Notifications', icon: '🔔' },
+  { id: 'browser', label: 'Browser & Automation', icon: 'B' },
+  { id: 'storage', label: 'Storage', icon: 'S' },
+  { id: 'notifications', label: 'Notifications', icon: 'N' },
 ]
 
 export function SettingsPanel() {
@@ -93,7 +93,7 @@ export function SettingsPanel() {
   )
 }
 
-// ── Browser & Automation ────────────────────────────────────
+//  Browser & Automation 
 
 function BrowserSection({ api }: { api: any }) {
   const [loading, setLoading] = useState(true)
@@ -304,7 +304,7 @@ function BrowserSection({ api }: { api: any }) {
         </div>
         <button onClick={load} disabled={loading}
           className="px-3 py-2 rounded-lg border border-gray-700 text-sm hover:border-cyan-400 hover:text-cyan-300 transition disabled:opacity-50">
-          {loading ? 'Scanning...' : '⟳ Rescan'}
+          {loading ? 'Scanning...' : 'Rescan'}
         </button>
       </div>
 
@@ -513,7 +513,7 @@ function BrowserSection({ api }: { api: any }) {
   )
 }
 
-// ── Storage ─────────────────────────────────────────────────
+//  Storage 
 
 function StorageSection({ api }: { api: any }) {
   const [mediaPath, setMediaPath] = useState('')
@@ -709,7 +709,7 @@ function StorageSection({ api }: { api: any }) {
   )
 }
 
-// ── Notifications ───────────────────────────────────────────
+//  Notifications 
 
 function NotificationsSection() {
   return (
@@ -720,8 +720,8 @@ function NotificationsSection() {
       </div>
 
       <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-6 text-center">
-        <p className="text-gray-500 text-sm">🔔 Toast notifications are enabled by default.</p>
-        <p className="text-gray-600 text-xs mt-2">More notification settings coming soon  Esound on/off, desktop notifications, etc.</p>
+        <p className="text-gray-500 text-sm">Toast notifications are enabled by default.</p>
+        <p className="text-gray-600 text-xs mt-2">More notification settings coming soon  - sound on/off, desktop notifications, etc.</p>
       </div>
     </div>
   )

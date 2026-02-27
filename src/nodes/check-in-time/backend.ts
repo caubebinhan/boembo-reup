@@ -1,4 +1,4 @@
-ï»¿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { normalizeTimeRanges, isWithinAnyWindow, nextValidSlot } from '../_shared/timeWindow'
 
 /**
@@ -6,17 +6,17 @@ import { normalizeTimeRanges, isWithinAnyWindow, nextValidSlot } from '../_share
  *
  * Performs up to THREE checks:
  *
- * 0. **Campaign Start Gate** â€” is `params.firstRunAt` set and in the future?
- *    If yes â†’ sleep until that time. Used as start_gate before scanner.
+ * 0. **Campaign Start Gate** - is `params.firstRunAt` set and in the future?
+ *    If yes -> sleep until that time. Used as start_gate before scanner.
  *
- * 1. **Active Hours** â€” is NOW within any of the configured time ranges?
- *    If not â†’ sleep until the next valid slot across any range.
+ * 1. **Active Hours** - is NOW within any of the configured time ranges?
+ *    If not -> sleep until the next valid slot across any range.
  *
- * 2. **Scheduled Time** â€” does this video have a `scheduled_for`?
- *    If yes and it's in the future â†’ sleep until that exact time.
+ * 2. **Scheduled Time** - does this video have a `scheduled_for`?
+ *    If yes and it's in the future -> sleep until that exact time.
  */
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
-  // â”€â”€ Step 0: Campaign Start Gate (firstRunAt) â”€â”€â”€â”€â”€â”€â”€
+  // „Ÿ„Ÿ Step 0: Campaign Start Gate (firstRunAt) „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
   if (ctx.params.firstRunAt) {
     const firstRunMs = new Date(ctx.params.firstRunAt).getTime()
     if (!isNaN(firstRunMs) && firstRunMs > Date.now()) {
@@ -25,16 +25,16 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       const startStr = new Date(firstRunMs).toLocaleString('vi-VN', {
         weekday: 'short', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit',
       })
-      ctx.logger.info(`[CheckInTime] â° Campaign starts at ${startStr}. Sleeping ${waitMins}min...`)
-      ctx.onProgress(`â° Campaign báº¯t Ä‘áº§u lÃºc ${startStr}. Äang chá»...`)
+      ctx.logger.info(`[CheckInTime] ? Campaign starts at ${startStr}. Sleeping ${waitMins}min...`)
+      ctx.onProgress(`? Campaign b?t ??u luc ${startStr}. ?ang ch?...`)
       await new Promise(resolve => setTimeout(resolve, waitMs))
-      ctx.logger.info(`[CheckInTime] âœ… Campaign start time reached`)
+      ctx.logger.info(`[CheckInTime] ? Campaign start time reached`)
     }
   }
 
   const ranges = normalizeTimeRanges(ctx.params)
 
-  // â”€â”€ Step 1: Active Hours Check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // „Ÿ„Ÿ Step 1: Active Hours Check „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
   const now = new Date()
   if (!isWithinAnyWindow(now, ranges)) {
     const nextSlotMs = nextValidSlot(now.getTime(), ranges)
@@ -45,30 +45,30 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       weekday: 'short', hour: '2-digit', minute: '2-digit',
     })
 
-    const rangeDesc = ranges.map(r => `${r.start}â€“${r.end}`).join(', ')
-    ctx.logger.info(`[CheckInTime] â° Outside active window (${rangeDesc}). Sleeping ${sleepMins}min until ${wakeStr}`)
-    ctx.onProgress(`â° Outside active hours. Resuming at ${wakeStr}...`)
+    const rangeDesc = ranges.map(r => `${r.start}?${r.end}`).join(', ')
+    ctx.logger.info(`[CheckInTime] ? Outside active window (${rangeDesc}). Sleeping ${sleepMins}min until ${wakeStr}`)
+    ctx.onProgress(`? Outside active hours. Resuming at ${wakeStr}...`)
     await new Promise(resolve => setTimeout(resolve, sleepMs))
-    ctx.logger.info(`[CheckInTime] âœ… Woke up â€” within active window now`)
+    ctx.logger.info(`[CheckInTime] ? Woke up - within active window now`)
   }
 
-  // â”€â”€ Step 2: Wait for scheduled_for time â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // „Ÿ„Ÿ Step 2: Wait for scheduled_for time „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
   const scheduledFor = input?.scheduled_for
   if (scheduledFor && typeof scheduledFor === 'number') {
     const waitMs = scheduledFor - Date.now()
     if (waitMs > 0) {
       const scheduledStr = new Date(scheduledFor).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
       const waitMins = (waitMs / 60_000).toFixed(1)
-      ctx.logger.info(`[CheckInTime] â³ Waiting ${waitMins}min until scheduled time ${scheduledStr}`)
-      ctx.onProgress(`â³ Next video at ${scheduledStr} (${waitMins}min)...`)
+      ctx.logger.info(`[CheckInTime] ? Waiting ${waitMins}min until scheduled time ${scheduledStr}`)
+      ctx.onProgress(`? Next video at ${scheduledStr} (${waitMins}min)...`)
       await new Promise(resolve => setTimeout(resolve, waitMs))
-      ctx.logger.info(`[CheckInTime] âœ… Scheduled time reached`)
+      ctx.logger.info(`[CheckInTime] ? Scheduled time reached`)
     } else {
-      ctx.logger.info(`[CheckInTime] âœ… Scheduled time already passed â€” proceeding immediately`)
+      ctx.logger.info(`[CheckInTime] ? Scheduled time already passed - proceeding immediately`)
     }
   }
 
-  ctx.onProgress(`âœ… Ready â€” continuing`)
+  ctx.onProgress(`? Ready - continuing`)
   return { data: input, action: 'continue' }
 }
 

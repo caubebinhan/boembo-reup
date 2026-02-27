@@ -6,7 +6,7 @@ import { net } from 'electron'
 import { AppSettingsService } from '@main/services/AppSettingsService'
 import { Downloader } from '@tobyg74/tiktok-api-dl'
 
-// ── Interfaces ──────────────────────────────────────────────────────────────
+//  Interfaces 
 
 export interface VideoInfo {
   platform_id: string
@@ -36,7 +36,7 @@ export interface ScanResult {
   hasMore?: boolean
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+//  Helpers 
 
 /** Estimate created_at from TikTok video ID (snowflake timestamp in upper bits) */
 function createdAtFromId(id: string): number {
@@ -86,7 +86,7 @@ function applySortOrder(videos: VideoInfo[], sortOrder?: string): VideoInfo[] {
   return arr
 }
 
-// ── Inject cookies into Playwright page ─────────────────────────────────────
+//  Inject cookies into Playwright page 
 
 async function injectCookies(page: Page, cookies: any[]) {
   if (!cookies || cookies.length === 0) return
@@ -127,7 +127,7 @@ async function injectCookies(page: Page, cookies: any[]) {
   }
 }
 
-// ── Extract video items from current page DOM ────────────────────────────────
+//  Extract video items from current page DOM 
 
 const WAIT_SELECTORS = [
   '[data-e2e="user-post-item"]',
@@ -211,11 +211,11 @@ async function extractVideosFromPage(page: Page, authorFilter?: string): Promise
     })))
 }
 
-// ── TikTokScanner ────────────────────────────────────────────────────────────
+//  TikTokScanner 
 
 export class TikTokScanner {
 
-  // ── Scan Profile (browser-based) ─────────────────
+  //  Scan Profile (browser-based) 
 
   async scanProfile(username: string, opts: ScanOptions = {}): Promise<ScanResult> {
     const limit = opts.limit || 50
@@ -276,7 +276,7 @@ export class TikTokScanner {
     }
   }
 
-  // ── Scan Keyword (browser-based) ─────────────────
+  //  Scan Keyword (browser-based) 
 
   async scanKeyword(keyword: string, opts: ScanOptions = {}): Promise<ScanResult> {
     const limit = opts.limit || 50
@@ -333,7 +333,7 @@ export class TikTokScanner {
     }
   }
 
-  // ── Download Video ────────────────────────────────
+  //  Download Video 
 
   async downloadVideo(videoUrl: string, videoId: string): Promise<{ filePath: string; description?: string }> {
     const downloadDir = AppSettingsService.getMediaStoragePath()
@@ -341,14 +341,14 @@ export class TikTokScanner {
 
     const filePath = path.join(downloadDir, `${videoId}.mp4`)
 
-    // Cache check  Eskip if valid file already exists
+    // Cache check  - skip if valid file already exists
     if (fs.existsSync(filePath)) {
       const stats = fs.statSync(filePath)
       if (stats.size > 50 * 1024) {
         console.log(`[TikTokScanner] Cache hit: ${filePath} (${(stats.size / 1024 / 1024).toFixed(1)}MB)`)
         return { filePath }
       }
-      // Corrupt cache  Edelete and re-download
+      // Corrupt cache  - delete and re-download
       fs.unlinkSync(filePath)
     }
 
@@ -358,7 +358,7 @@ export class TikTokScanner {
     try {
       console.log(`[TikTokScanner] Extracting stream URL for ${videoId}...`)
       const result = await Promise.race([
-        // @ts-ignore  Elibrary types may be incomplete
+        // @ts-ignore  - library types may be incomplete
         Downloader(videoUrl, { version: 'v1' }),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Extraction timed out (60s)')), 60000)),
       ]) as any
@@ -389,14 +389,14 @@ export class TikTokScanner {
     if (!response.ok) throw new Error(`Download failed: ${response.status}`)
 
     const buffer = Buffer.from(await response.arrayBuffer())
-    if (buffer.length < 50 * 1024) throw new Error(`Downloaded file too small (${buffer.length}B)  Elikely not a video`)
+    if (buffer.length < 50 * 1024) throw new Error(`Downloaded file too small (${buffer.length}B)  - likely not a video`)
 
     fs.writeFileSync(filePath, buffer)
     console.log(`[TikTokScanner] Downloaded: ${filePath} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`)
     return { filePath, description: realDescription }
   }
 
-  // ── Download Thumbnail ────────────────────────────
+  //  Download Thumbnail 
 
   async downloadThumbnail(thumbnailUrl: string, videoId: string): Promise<string | null> {
     if (!thumbnailUrl || !thumbnailUrl.startsWith('http')) return null

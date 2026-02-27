@@ -1,4 +1,4 @@
-﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 
 /**
  * Condition Node
@@ -22,7 +22,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   let result = false
   try {
     const safeData = typeof input === 'object' && input !== null ? input : {}
-    // Spread data keys as named args — same as safeEval() in FlowEngine.
+    // Spread data keys as named args - same as safeEval() in FlowEngine.
     // This lets flow.yaml write `status === 'violation'` instead of `data.status === 'violation'`.
     const fn = new Function(...Object.keys(safeData), 'params',
       `"use strict"; return Boolean(${expression})`)
@@ -33,8 +33,8 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   }
 
   const branch = result ? 'true' : 'false'
-  ctx.logger.info(`[Condition] "${expression}" → ${branch}`)
-  ctx.onProgress(`🔀 Branch: ${branch}`)
+  ctx.logger.info(`[Condition] "${expression}" -> ${branch}`)
+  ctx.onProgress(`?? Branch: ${branch}`)
 
   return {
     data: { ...input, branch },

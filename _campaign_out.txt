@@ -1,0 +1,77 @@
+﻿DB path: C:\Users\linhlinh\AppData\Roaming\repost-io\repost_io.db
+DB exists: true
+DB size: 786432 bytes
+
+=== SEARCHING FOR CAMPAIGNS ===
+All names found in DB: 盻丘, https://www.tikto・ｽY6・ｽVE・ｽ・ｽ5a87e9e4{, https://www.tiktok.com/, TikTok Repost, kk, @zh.junkai16, tt_chain_token, multi_sids, cmpl_token, sid_guard, uid_tt, uid_tt_ss, sid_tt, sessionid, sessionid_ss, tt_session_tlb_tag, sid_ucp_v1, ssid_ucp_v1, store-idc, store-country-code, store-country-code-src, tt-target-idc, tt-target-idc-sign, tt_csrf_token, store-country-sign, msToken, odin_tt, ttwid, oo, @user4657435333487
+
+=== CAMPAIGN "oo" VIDEO DATA ===
+Found "oo" at byte offset: 600187
+Campaign ID: undefined
+Campaign name: oo
+Campaign status: undefined
+
+=== PUBLISH HISTORY ENTRIES ===
+Found 26 publish_history entries
+[0] pid=7599504994135510293 account=@animationlabjapan status=published url=- campaign=919dbda9
+[1] pid=7600716555638410517 account=@animationlabjapan status=published url=- campaign=919dbda9
+[2] pid=7610546729573698823 account=@animationlabjapan status=published url=- campaign=bd746a40
+[3] pid=7604550752266194198 account=@animationlabjapan status=published url=/@animationlabjapan/video/7611076288958287125 campaign=1224d562
+[4] pid=7604550752266194198 account=@animationlabjapan status=published url=- campaign=1224d562
+[5] pid=7598845941486980372 account=@animationlabjapan status=published url=- campaign=919dbda9
+[6] pid=7600716555638410517 account=@animationlabjapan status=published url=- campaign=919dbda9
+[7] pid=7610546729573698823 account=@animationlabjapan status=published url=- campaign=bd746a40
+[8] pid=7604550752266194198 account=@animationlabjapan status=published url=/@animationlabjapan/video/7611076288958287125 campaign=1224d562
+[9] pid=7604550752266194198 account=@animationlabjapan status=published url=- campaign=1224d562
+[10] pid=7598478726644518164 account=@animationlabjapan status=published url=- campaign=919dbda9
+[11] pid=7585497779209145620 account=@animationlabjapan status=published url=- campaign=919dbda9
+[12] pid=7585497779209145620 account=@animationlabjapan status=published url=- campaign=919dbda9
+[13] pid=7585497779209145620 account=@animationlabjapan status=published url=- campaign=919dbda9
+[14] pid=7598101302954036500 account=@animationlabjapan status=published url=- campaign=919dbda9
+[15] pid=7598478726644518164 account=@animationlabjapan status=published url=- campaign=919dbda9
+[16] pid=7588453302816247060 account=@animationlabjapan status=published url=- campaign=919dbda9
+[17] pid=7599232139720133909 account=@animationlabjapan status=published url=- campaign=919dbda9
+[18] pid=7599504994135510293 account=@animationlabjapan status=published url=- campaign=919dbda9
+[19] pid=7585497779209145620 account=@animationlabjapan status=published url=- campaign=919dbda9
+[20] pid=7599504994135510293 account=@animationlabjapan status=published url=- campaign=919dbda9
+[21] pid=7585497779209145620 account=@animationlabjapan status=published url=- campaign=919dbda9
+[22] pid=7598101302954036500 account=@animationlabjapan status=published url=- campaign=919dbda9
+[23] pid=7598845941486980372 account=@animationlabjapan status=published url=- campaign=919dbda9
+[24] pid=7600716555638410517 account=@animationlabjapan status=published url=- campaign=919dbda9
+[25] pid=7599232139720133909 account=@animationlabjapan status=published url=- campaign=919dbda9
+
+!!! DUPLICATE PUBLISH HISTORY (same video -> same account) !!!
+  Key: cc452234-979f-4ee8-b87e-03d85f035dcd:7599504994135510293 (3 records)
+    status=published url=- created=2026-02-27T01:28:04.028Z
+    status=published url=- created=2026-02-27T01:28:04.028Z
+    status=published url=- created=2026-02-27T01:28:04.028Z
+  Key: cc452234-979f-4ee8-b87e-03d85f035dcd:7600716555638410517 (3 records)
+    status=published url=- created=2026-02-27T01:27:07.993Z
+    status=published url=- created=2026-02-27T01:27:07.993Z
+    status=published url=- created=2026-02-27T01:27:07.993Z
+  Key: cc452234-979f-4ee8-b87e-03d85f035dcd:7610546729573698823 (2 records)
+    status=published url=- created=2026-02-26T09:18:26.649Z
+    status=published url=- created=2026-02-26T09:18:26.649Z
+  Key: cc452234-979f-4ee8-b87e-03d85f035dcd:7604550752266194198 (4 records)
+    status=published url=/@animationlabjapan/video/7611076288958287125 created=2026-02-26T07:43:33.403Z
+    status=published url=- created=2026-02-26T06:26:08.406Z
+    status=published url=/@animationlabjapan/video/7611076288958287125 created=2026-02-26T07:43:33.403Z
+    status=published url=- created=2026-02-26T06:26:08.406Z
+  Key: cc452234-979f-4ee8-b87e-03d85f035dcd:7598845941486980372 (2 records)
+    status=published url=- created=2026-02-27T01:30:06.008Z
+    status=published url=- created=2026-02-27T01:30:06.008Z
+  Key: cc452234-979f-4ee8-b87e-03d85f035dcd:7598478726644518164 (2 records)
+    status=published url=- created=2026-02-27T02:11:12.555Z
+    status=published url=- created=2026-02-27T02:11:12.555Z
+  Key: cc452234-979f-4ee8-b87e-03d85f035dcd:7585497779209145620 (5 records)
+    status=published url=- created=2026-02-27T05:01:39.998Z
+    status=published url=- created=2026-02-27T05:01:33.051Z
+    status=published url=- created=2026-02-27T05:01:32.502Z
+    status=published url=- created=2026-02-27T05:01:40.507Z
+    status=published url=- created=2026-02-27T05:01:32.502Z
+  Key: cc452234-979f-4ee8-b87e-03d85f035dcd:7598101302954036500 (2 records)
+    status=published url=- created=2026-02-27T02:12:17.520Z
+    status=published url=- created=2026-02-27T02:12:17.520Z
+  Key: cc452234-979f-4ee8-b87e-03d85f035dcd:7599232139720133909 (2 records)
+    status=published url=- created=2026-02-27T01:29:06.005Z
+    status=published url=- created=2026-02-27T01:29:06.005Z

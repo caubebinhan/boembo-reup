@@ -1,4 +1,4 @@
-ï»¿import { nodeRegistry } from '../nodes/NodeRegistry'
+import { nodeRegistry } from '../nodes/NodeRegistry'
 import { jobRepo } from '@main/db/repositories/JobRepo'
 import { campaignRepo, CampaignStore } from '@main/db/repositories/CampaignRepo'
 import { FlowResolver } from '../flow/FlowResolver'
@@ -10,7 +10,7 @@ import { asyncTaskScheduler } from '@main/services/AsyncTaskScheduler'
 import { isNetworkError, isDiskError } from '../nodes/NodeHelpers'
 import { getFreeDiskSpaceMB } from '@main/utils/diskSpace'
 
-// â”€â”€ Error handling helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// „Ÿ„Ÿ Error handling helpers „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
 
 /** Auto-pause campaign on network error. Returns true if handled. */
 function handleNetworkError(errorMsg: string, campaignId: string, instanceId: string, store?: CampaignStore): boolean {
@@ -22,7 +22,7 @@ function handleNetworkError(errorMsg: string, campaignId: string, instanceId: st
     campaignRepo.updateStatus(campaignId, 'paused')
   }
   ExecutionLogger.campaignEvent(campaignId, 'campaign:network-error',
-    `âš ï¸ Auto-paused: network error in ${instanceId} â€” ${errorMsg}`)
+    `?? Auto-paused: network error in ${instanceId} - ${errorMsg}`)
   ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
     campaign_id: campaignId, errors: [errorMsg], message: `Network error: ${errorMsg}`,
   })
@@ -39,14 +39,14 @@ function handleDiskError(errorMsg: string, campaignId: string, instanceId: strin
     campaignRepo.updateStatus(campaignId, 'error')
   }
   ExecutionLogger.campaignEvent(campaignId, 'campaign:disk-error',
-    `â›” Failed: storage error in ${instanceId} â€” ${errorMsg}`)
+    `? Failed: storage error in ${instanceId} - ${errorMsg}`)
   ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
     campaign_id: campaignId, errors: [errorMsg], message: `Disk error: ${errorMsg}`,
   })
   return true
 }
 
-// â”€â”€ DRY Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// „Ÿ„Ÿ DRY Helpers „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
 
 /** Safely evaluate a conditional edge expression against data. */
 function safeEval(expression: string, data: any): boolean {
@@ -89,7 +89,7 @@ function matchNodeEvent(nodeDef: FlowNodeDefinition, errorMsg: string): { eventK
   if (!nodeDef.events || !errorMsg) return null
   const lower = errorMsg.toLowerCase()
   for (const [key, handler] of Object.entries(nodeDef.events)) {
-    // Split key "captcha:detected" â†’ ["captcha", "detected"] and check each part
+    // Split key "captcha:detected" -> ["captcha", "detected"] and check each part
     const parts = key.toLowerCase().split(':')
     if (parts.every(p => lower.includes(p))) {
       return { eventKey: key, handler }
@@ -175,10 +175,10 @@ async function executeWithTimeout(NodeImpl: any, inputData: any, ctx: any, nodeD
   return resultPromise
 }
 
-// â”€â”€ FlowEngine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// „Ÿ„Ÿ FlowEngine „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
 
 /**
- * Core FlowEngine â€” a dumb executor.
+ * Core FlowEngine - a dumb executor.
  *
  * Responsibilities:
  *   - Poll pending jobs
@@ -191,7 +191,7 @@ async function executeWithTimeout(NodeImpl: any, inputData: any, ctx: any, nodeD
  *   - Video records, sorting, scheduling
  *   - Download/publish counting
  *   - CAPTCHA or any workflow-specific error handling
- *   - Any domain concept â€” nodes handle their own logic via ctx.store
+ *   - Any domain concept - nodes handle their own logic via ctx.store
  */
 export class FlowEngine {
   private isRunning = false
@@ -201,7 +201,7 @@ export class FlowEngine {
     if (this.isRunning) return
     this.isRunning = true
     this.pollInterval = setInterval(() => this.tick(), 5000)
-    console.log('[FlowEngine] Started â€” polling every 5s')
+    console.log('[FlowEngine] Started - polling every 5s')
   }
 
   public stop() {
@@ -210,11 +210,11 @@ export class FlowEngine {
     console.log('[FlowEngine] Stopped')
   }
 
-  // â”€â”€ Pre-run health check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // „Ÿ„Ÿ Pre-run health check „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
   /**
    * Quick health check before starting a campaign.
    * Checks storage space and workflow service endpoints.
-   * Returns { ok, errors[] } â€” caller decides whether to block.
+   * Returns { ok, errors[] } - caller decides whether to block.
    */
   public async preRunHealthCheck(campaignId: string): Promise<{ ok: boolean; errors: string[] }> {
     const errors: string[] = []
@@ -230,7 +230,7 @@ export class FlowEngine {
         errors.push(`Insufficient disk space: only ${freeMB} MB free (minimum 100 MB required)`)
       }
     } catch (err: any) {
-      // Non-blocking â€” log but don't prevent start
+      // Non-blocking - log but don't prevent start
       console.warn(`[FlowEngine] Storage check failed: ${err?.message}`)
     }
 
@@ -257,7 +257,7 @@ export class FlowEngine {
     return { ok: errors.length === 0, errors }
   }
 
-  // â”€â”€ Trigger Campaign â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // „Ÿ„Ÿ Trigger Campaign „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
   public async triggerCampaign(campaignId: string) {
     const store = campaignRepo.tryOpen(campaignId)
     if (!store) return console.error(`[FlowEngine] Campaign ${campaignId} not found`)
@@ -272,7 +272,7 @@ export class FlowEngine {
       store.status = 'error'
       store.save()
       ExecutionLogger.campaignEvent(campaignId, 'campaign:healthcheck-failed',
-        `â›” Cannot start: ${errorMsg}`)
+        `? Cannot start: ${errorMsg}`)
       // Emit to renderer for toast
       ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
         campaign_id: campaignId, errors: health.errors, message: errorMsg,
@@ -304,7 +304,7 @@ export class FlowEngine {
     if (!health.ok) {
       const errorMsg = health.errors.join('; ')
       ExecutionLogger.campaignEvent(campaignId, 'campaign:healthcheck-failed',
-        `â›” Cannot resume: ${errorMsg}`)
+        `? Cannot resume: ${errorMsg}`)
       ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
         campaign_id: campaignId, errors: health.errors, message: errorMsg,
       })
@@ -318,12 +318,12 @@ export class FlowEngine {
     const pendingCount = jobRepo.countPendingForCampaign(campaignId)
     if (pendingCount === 0) {
       ExecutionLogger.campaignEvent(campaignId, 'campaign:retriggered',
-        'No pending jobs â€” re-triggering')
+        'No pending jobs - re-triggering')
       await this.triggerCampaign(campaignId)
     }
   }
 
-  // â”€â”€ Tick â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // „Ÿ„Ÿ Tick „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
   private async tick() {
     const jobs = jobRepo.findPending(5)
     for (const job of jobs) {
@@ -331,7 +331,7 @@ export class FlowEngine {
     }
   }
 
-  // â”€â”€ Execute Job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // „Ÿ„Ÿ Execute Job „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
   private async executeJob(job: JobDocument) {
     try {
       jobRepo.updateStatus(job.id, 'running')
@@ -345,14 +345,14 @@ export class FlowEngine {
       const store = campaignRepo.open(job.campaign_id)
       const params = store.params
 
-      // â”€â”€ Loop node? â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // „Ÿ„Ÿ Loop node? „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
       if (nodeDef.children && nodeDef.children.length > 0) {
         await this.executeLoop(job, flow, nodeDef, job.data, params, store)
         jobRepo.updateStatus(job.id, 'completed')
         return
       }
 
-      // â”€â”€ Regular node execution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // „Ÿ„Ÿ Regular node execution „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
       const NodeImpl = nodeRegistry.get(nodeDef.node_id)
       if (!NodeImpl) throw new Error(`Node impl ${nodeDef.node_id} not registered`)
 
@@ -369,7 +369,7 @@ export class FlowEngine {
 
       jobRepo.updateStatus(job.id, 'completed')
 
-      // â”€â”€ Flow control â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // „Ÿ„Ÿ Flow control „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
       if (result.action === 'finish') {
         store.status = 'finished'
         store.save()
@@ -401,7 +401,7 @@ export class FlowEngine {
     }
   }
 
-  // â”€â”€ Loop Execution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // „Ÿ„Ÿ Loop Execution „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
   /**
    * Core loop: iterate input array through child nodes sequentially.
    *
@@ -426,7 +426,7 @@ export class FlowEngine {
     ExecutionLogger.log({
       campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
       level: 'info', event: 'loop:start',
-      message: `Loop "${loopDef.instance_id}": ${items.length} items Ã— ${children.length} children${startIndex > 0 ? ` (resume@${startIndex})` : ''}`,
+      message: `Loop "${loopDef.instance_id}": ${items.length} items x ${children.length} children${startIndex > 0 ? ` (resume@${startIndex})` : ''}`,
     })
 
     for (let i = startIndex; i < items.length; i++) {
@@ -519,14 +519,14 @@ export class FlowEngine {
         } catch (err: any) {
           ExecutionLogger.nodeError(job.campaign_id, job.id, childDef.instance_id, childDef.node_id, err.message)
 
-          // â”€â”€ YAML events handling: match error â†’ event key â†’ action + emit â”€â”€
+          // „Ÿ„Ÿ YAML events handling: match error -> event key -> action + emit „Ÿ„Ÿ
           const matchedEvent = matchNodeEvent(childDef, err.message)
           if (matchedEvent) {
             const { eventKey, handler } = matchedEvent
             ExecutionLogger.log({
               campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
               level: 'warn', event: eventKey,
-              message: `Event "${eventKey}" matched â†’ action: ${handler.action}`,
+              message: `Event "${eventKey}" matched -> action: ${handler.action}`,
             })
             if (handler.emit) {
               ExecutionLogger.emitNodeEvent(job.campaign_id, childDef.instance_id, handler.emit, {
@@ -569,7 +569,7 @@ export class FlowEngine {
       store.save()
     }
 
-    // Loop done â€” continue to edges after loop node
+    // Loop done - continue to edges after loop node
     const nextNodes = resolveNextEdges(flow, loopDef.instance_id, { loopCompleted: true, itemCount: items.length })
     for (const next of nextNodes) {
       this.createJob(job.campaign_id, job.workflow_id, next.instance_id, next.node_id,
@@ -577,7 +577,7 @@ export class FlowEngine {
     }
   }
 
-  // â”€â”€ Create Job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // „Ÿ„Ÿ Create Job „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
   private createJob(campaignId: string, workflowId: string, instanceId: string, nodeId: string, data: any, scheduledAt?: number) {
     const jobId = jobRepo.createJob({
       campaign_id: campaignId,

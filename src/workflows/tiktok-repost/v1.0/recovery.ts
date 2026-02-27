@@ -1,4 +1,4 @@
-﻿import { campaignRepo } from '@main/db/repositories/CampaignRepo'
+import { campaignRepo } from '@main/db/repositories/CampaignRepo'
 import { jobRepo } from '@main/db/repositories/JobRepo'
 import { PipelineEventBus } from '@core/engine/PipelineEventBus'
 import { flowEngine } from '@core/engine/FlowEngine'
@@ -28,15 +28,15 @@ export function recover(campaignId: string): void {
 
       if (handling === 'manual') {
         // Manual mode: pause campaign and alert the user
-        console.log(`${tag} Manual mode — pausing campaign (${missedVideos.length} missed videos)`)
+        console.log(`${tag} Manual mode - pausing campaign (${missedVideos.length} missed videos)`)
         campaignRepo.updateStatus(campaignId, 'paused')
 
         store.addAlert({
           instance_id: 'scheduler_1',
           node_id: 'core.video_scheduler',
           level: 'warn',
-          title: `⏸ ${missedVideos.length} video bị missed — campaign đã tạm dừng`,
-          body: 'Kiểm tra lại và resume campaign khi sẵn sàng.',
+          title: `? ${missedVideos.length} video b? missed - campaign ?a t?m d?ng`,
+          body: 'Ki?m tra l?i va resume campaign khi s?n sang.',
         })
 
         PipelineEventBus.emit('pipeline:info', {
@@ -68,19 +68,19 @@ export function recover(campaignId: string): void {
         instance_id: 'scheduler_1',
         node_id: 'core.video_scheduler',
         level: 'warn',
-        title: `⏰ Detected ${missedVideos.length} missed video(s)`,
+        title: `? Detected ${missedVideos.length} missed video(s)`,
         body: `Rescheduled from now (interval=${params.intervalMinutes ?? 1}min, jitter=${params.enableJitter ? 'on' : 'off'})`,
       })
     }
 
-    // 2. Handle under_review videos — reset to 'queued' for retry
+    // 2. Handle under_review videos - reset to 'queued' for retry
     const underReviewVideos = store.videosByStatus('under_review')
     if (underReviewVideos.length > 0) {
-      console.log(`${tag} Found ${underReviewVideos.length} under_review videos — resetting to queued`)
+      console.log(`${tag} Found ${underReviewVideos.length} under_review videos - resetting to queued`)
       for (const v of underReviewVideos) {
         v.status = 'queued'
       }
-      console.log(`${tag} Reset ${underReviewVideos.length} under_review → queued for retry`)
+      console.log(`${tag} Reset ${underReviewVideos.length} under_review -> queued for retry`)
     }
 
     store.save()
@@ -88,7 +88,7 @@ export function recover(campaignId: string): void {
     // 3. Re-trigger if no pending/running jobs
     const pendingCount = jobRepo.countPendingForCampaign(campaignId)
     if (pendingCount === 0) {
-      console.log(`${tag} No pending jobs — re-triggering campaign`)
+      console.log(`${tag} No pending jobs - re-triggering campaign`)
       flowEngine.triggerCampaign(campaignId)
     }
   } catch (err) {

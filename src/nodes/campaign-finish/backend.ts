@@ -1,4 +1,4 @@
-﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 
 /**
  * CampaignFinish Node
@@ -28,7 +28,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   ctx.store.status = 'finished'
   ctx.store.save()
 
-  const summary = `🏁 Campaign finished — ${stats.published} published, ${stats.failed} failed, ${stats.skipped} skipped (${stats.total} total)`
+  const summary = `?? Campaign finished - ${stats.published} published, ${stats.failed} failed, ${stats.skipped} skipped (${stats.total} total)`
 
   ctx.logger.info(`[CampaignFinish] ${summary}`)
   ctx.onProgress(summary)

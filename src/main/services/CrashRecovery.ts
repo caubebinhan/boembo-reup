@@ -1,9 +1,9 @@
-﻿import { jobRepo } from '../db/repositories/JobRepo'
+import { jobRepo } from '../db/repositories/JobRepo'
 import { campaignRepo } from '../db/repositories/CampaignRepo'
 import { PipelineEventBus } from '@core/engine/PipelineEventBus'
 
 /**
- * Crash Recovery Service — orchestrator.
+ * Crash Recovery Service - orchestrator.
  *
  * 1. Generic: reset all stuck 'running' jobs to 'pending'
  * 2. Per-workflow: delegates to registered recovery handlers
@@ -23,7 +23,7 @@ export class CrashRecoveryService {
       // Step 1: Reset stuck 'running' jobs
       const resetJobs = jobRepo.resetRunningJobs()
       if (resetJobs.length > 0) {
-        console.log(`[CrashRecovery] Reset ${resetJobs.length} stuck running jobs → pending`)
+        console.log(`[CrashRecovery] Reset ${resetJobs.length} stuck running jobs -> pending`)
         for (const job of resetJobs) {
           PipelineEventBus.emit('pipeline:info', {
             message: `Recovered job ${job.id} to "pending" status after crash`,

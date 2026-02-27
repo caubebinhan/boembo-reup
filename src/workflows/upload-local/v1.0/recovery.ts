@@ -1,4 +1,4 @@
-﻿import { jobRepo } from '@main/db/repositories/JobRepo'
+import { jobRepo } from '@main/db/repositories/JobRepo'
 import { flowEngine } from '@core/engine/FlowEngine'
 
 /**
@@ -10,7 +10,7 @@ export function recover(campaignId: string): void {
   try {
     const pendingCount = jobRepo.countPendingForCampaign(campaignId)
     if (pendingCount === 0) {
-      console.log(`${tag} No pending jobs — re-triggering campaign`)
+      console.log(`${tag} No pending jobs - re-triggering campaign`)
       flowEngine.triggerCampaign(campaignId)
     }
   } catch (err) {

@@ -5,7 +5,7 @@ import type { PublishHistoryDocument } from '../models/PublishHistory'
 /**
  * Publish History Repository — cross-account dedup.
  *
- * Keeps index columns (account_id, source_platform_id, file_fingerprint)
+ * Keeps index columns (account_id, source_platform_id, file_fingerprint, status)
  * for efficient dedup lookups without scanning all documents.
  */
 export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
@@ -23,10 +23,13 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
          ORDER BY updated_at DESC LIMIT 1`
       )
       .get(accountId, platformId) as { data_json: string } | undefined
-    return row ? JSON.parse(row.data_json) as PublishHistoryDocument : null
+    return row ? (JSON.parse(row.data_json) as PublishHistoryDocument) : null
   }
 
-  findByAccountAndFingerprint(accountId: string, fingerprint: string): PublishHistoryDocument | null {
+  findByAccountAndFingerprint(
+    accountId: string,
+    fingerprint: string
+  ): PublishHistoryDocument | null {
     const row = db
       .prepare(
         `SELECT data_json FROM publish_history
@@ -34,14 +37,16 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
          ORDER BY updated_at DESC LIMIT 1`
       )
       .get(accountId, fingerprint) as { data_json: string } | undefined
-    return row ? JSON.parse(row.data_json) as PublishHistoryDocument : null
+    return row ? (JSON.parse(row.data_json) as PublishHistoryDocument) : null
   }
 
   findByAccount(accountId: string, limit = 200): PublishHistoryDocument[] {
     const rows = db
-      .prepare(`SELECT data_json FROM publish_history WHERE account_id = ? ORDER BY updated_at DESC LIMIT ?`)
+      .prepare(
+        `SELECT data_json FROM publish_history WHERE account_id = ? ORDER BY updated_at DESC LIMIT ?`
+      )
       .all(accountId, limit) as { data_json: string }[]
-    return rows.map(r => JSON.parse(r.data_json) as PublishHistoryDocument)
+    return rows.map((r) => JSON.parse(r.data_json) as PublishHistoryDocument)
   }
 
   // ── Combined dedup lookup (OR match on source_platform_id OR file_fingerprint) ──
@@ -66,12 +71,12 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
       .prepare(
         `SELECT data_json FROM publish_history
          WHERE account_id = ?
-           AND status IN ('under_review', 'published')
+           AND COALESCE(status, json_extract(data_json, '$.status')) IN ('under_review', 'published')
            AND (${clauses.join(' OR ')})
          ORDER BY updated_at DESC LIMIT 1`
       )
       .get(accountId, ...params) as { data_json: string } | undefined
-    return row ? JSON.parse(row.data_json) as PublishHistoryDocument : null
+    return row ? (JSON.parse(row.data_json) as PublishHistoryDocument) : null
   }
 
   // ── Candidates for AV similarity matching ──
@@ -80,11 +85,11 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
       .prepare(
         `SELECT data_json FROM publish_history
          WHERE account_id = ?
-           AND status IN ('under_review', 'published')
+           AND COALESCE(status, json_extract(data_json, '$.status')) IN ('under_review', 'published')
          ORDER BY updated_at DESC LIMIT ?`
       )
       .all(accountId, Math.max(1, Math.min(200, limit))) as { data_json: string }[]
-    return rows.map(r => JSON.parse(r.data_json) as PublishHistoryDocument)
+    return rows.map((r) => JSON.parse(r.data_json) as PublishHistoryDocument)
   }
 
   // ── Partial update (merge into existing document) ──
@@ -99,9 +104,15 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
   protected override syncIndexColumns(doc: PublishHistoryDocument): void {
     db.prepare(
       `UPDATE publish_history
-       SET account_id = ?, source_platform_id = ?, file_fingerprint = ?
+       SET account_id = ?, source_platform_id = ?, file_fingerprint = ?, status = ?
        WHERE id = ?`
-    ).run(doc.account_id, doc.source_platform_id || null, doc.file_fingerprint || null, doc.id)
+    ).run(
+      doc.account_id,
+      doc.source_platform_id || null,
+      doc.file_fingerprint || null,
+      doc.status || null,
+      doc.id
+    )
   }
 }
 

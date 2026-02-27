@@ -5,7 +5,7 @@ import { FlowDefinition, WorkflowUIDescriptor } from './ExecutionContracts'
 
 export class FlowLoader {
   private cache = new Map<string, FlowDefinition>()
-  /** workflowId ↁE{ version ↁEabsolute dir path } */
+  /** workflowId -> { version -> absolute dir path } */
   private versionDirs = new Map<string, Map<string, string>>()
 
   private parseTimeout(value: unknown): number | undefined {

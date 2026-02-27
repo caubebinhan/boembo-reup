@@ -4,7 +4,7 @@ import type { JobDocument } from '../models/Job'
 import * as crypto from 'node:crypto'
 
 /**
- * Job Repository  Eengine job queue.
+ * Job Repository  - engine job queue.
  *
  * Jobs need cross-campaign queries (findPending for engine tick),
  * so we keep index columns (status, campaign_id, scheduled_at)
@@ -15,7 +15,7 @@ export class JobRepository extends BaseRepo<JobDocument> {
     super('jobs')
   }
 
-  // ── Create shorthand ──────────────────────
+  //  Create shorthand 
   createJob(partial: Omit<JobDocument, 'id' | 'created_at' | 'updated_at' | 'status'> & { status?: string }): string {
     const now = Date.now()
     const doc: JobDocument = {
@@ -29,7 +29,7 @@ export class JobRepository extends BaseRepo<JobDocument> {
     return doc.id
   }
 
-  // ── Engine tick: cross-campaign pending query ──
+  //  Engine tick: cross-campaign pending query 
   findPending(limit = 10): JobDocument[] {
     const now = Date.now()
     const rows = db
@@ -42,7 +42,7 @@ export class JobRepository extends BaseRepo<JobDocument> {
     return rows.map(r => JSON.parse(r.data_json))
   }
 
-  // ── By campaign ───────────────────────────
+  //  By campaign 
   findByCampaign(campaignId: string): JobDocument[] {
     const rows = db
       .prepare(`SELECT data_json FROM jobs WHERE campaign_id = ? ORDER BY created_at DESC`)
@@ -60,7 +60,7 @@ export class JobRepository extends BaseRepo<JobDocument> {
     return row?.cnt ?? 0
   }
 
-  // ── Status update ─────────────────────────
+  //  Status update 
   updateStatus(id: string, status: string, error?: string): void {
     const doc = this.findById(id)
     if (!doc) return
@@ -73,7 +73,7 @@ export class JobRepository extends BaseRepo<JobDocument> {
     this.save(doc)
   }
 
-  // ── Reset stuck jobs ──────────────────────
+  //  Reset stuck jobs 
   resetRunningJobs(): JobDocument[] {
     const rows = db
       .prepare(`SELECT data_json FROM jobs WHERE status = 'running'`)
@@ -87,7 +87,7 @@ export class JobRepository extends BaseRepo<JobDocument> {
     return jobs
   }
 
-  // ── Sync index columns alongside data_json ──
+  //  Sync index columns alongside data_json 
   protected override syncIndexColumns(doc: JobDocument): void {
     db.prepare(
       `UPDATE jobs SET status = ?, campaign_id = ?, scheduled_at = ? WHERE id = ?`

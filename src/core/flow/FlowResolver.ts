@@ -1,9 +1,9 @@
-﻿import { campaignRepo } from '@main/db/repositories/CampaignRepo'
+import { campaignRepo } from '@main/db/repositories/CampaignRepo'
 import { FlowDefinition } from './ExecutionContracts'
 import { flowLoader } from './FlowLoader'
 
 /**
- * FlowResolver — resolves the correct flow definition for a campaign.
+ * FlowResolver - resolves the correct flow definition for a campaign.
  *
  * Priority:
  *   1. Campaign's flow_snapshot (pinned at creation time)

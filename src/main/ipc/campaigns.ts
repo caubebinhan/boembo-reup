@@ -41,7 +41,7 @@ export function setupCampaignIPC() {
     return doc
   })
 
-  // ── Campaign Delete ───────────────────────────────
+  //  Campaign Delete 
   ipcMain.handle(IPC_CHANNELS.CAMPAIGN_DELETE, async (_event, { id }) => {
     campaignRepo.delete(id)
     // Clean up execution_logs
@@ -51,7 +51,7 @@ export function setupCampaignIPC() {
     return true
   })
 
-  // ── Run / Pause / Resume ─────────────────────────
+  //  Run / Pause / Resume 
   ipcMain.handle(IPC_CHANNELS.CAMPAIGN_TRIGGER, async (_event, { id }) => {
     flowEngine.triggerCampaign(id)
     return true
@@ -79,7 +79,7 @@ export function setupCampaignIPC() {
     return true
   })
 
-  // ── Flow presets ─────────────────────────────────
+  //  Flow presets 
   ipcMain.handle('flow:get-presets', async () => {
     return flowLoader.getAll().map(f => ({
       id: f.id,
@@ -106,7 +106,7 @@ export function setupCampaignIPC() {
     return flow?.ui || null
   })
 
-  // ── Jobs & Flow Nodes ────────────────────────────
+  //  Jobs & Flow Nodes 
   ipcMain.handle(IPC_CHANNELS.CAMPAIGN_GET_JOBS, async (_event, { id }) => {
     return jobRepo.findByCampaign(id)
   })
@@ -123,7 +123,7 @@ export function setupCampaignIPC() {
           instance_id: n.instance_id,
           children: n.children,
           execution: (n as any).execution,
-          // visualizer meta  Esourced from each node's manifest.ts
+          // visualizer meta  - sourced from each node's manifest.ts
           icon: manifest?.icon,
           label: manifest?.label || manifest?.name,
           color: manifest?.color,
@@ -140,12 +140,12 @@ export function setupCampaignIPC() {
     }
   })
 
-  // ── Execution Logs ───────────────────────────────
+  //  Execution Logs 
   ipcMain.handle('campaign:get-logs', async (_event, { id, limit }) => {
     return ExecutionLogger.getLogsForCampaign(id, limit || 200)
   })
 
-  // ── Node Progress ────────────────────────────────
+  //  Node Progress 
   ipcMain.handle('campaign:get-node-progress', async (_event, { id }) => {
     return db.prepare(`
       SELECT instance_id, message
@@ -156,7 +156,7 @@ export function setupCampaignIPC() {
     `).all(id)
   })
 
-  // ── Update campaign params (merge) ────────────────
+  //  Update campaign params (merge) 
   ipcMain.handle(IPC_CHANNELS.CAMPAIGN_UPDATE_PARAMS, async (_event, { id, params }) => {
     const store = campaignRepo.tryOpen(id)
     if (!store) return { success: false, error: 'Campaign not found' }
@@ -168,7 +168,7 @@ export function setupCampaignIPC() {
     return { success: true, params: store.doc.params }
   })
 
-  // ── Trigger event on campaign (e.g. reschedule) ───
+  //  Trigger event on campaign (e.g. reschedule) 
   ipcMain.handle('campaign:trigger-event', async (_event, { id, event, params }) => {
     const store = campaignRepo.tryOpen(id)
     if (!store) return { success: false, error: 'Campaign not found' }
