@@ -40,13 +40,13 @@ export interface OutputOptions {
 }
 
 export class FFmpegCommandBuilder {
-  private inputs: Array<{ path: string; options?: string[] }> = []
-  private filterComplexChain: FFmpegFilter[] = []
-  private simpleFilters: FFmpegFilter[] = []
-  private mappings: string[] = []
+  private readonly inputs: Array<{ path: string; options?: string[] }> = []
+  private readonly filterComplexChain: FFmpegFilter[] = []
+  private readonly simpleFilters: FFmpegFilter[] = []
+  private readonly mappings: string[] = []
   private outputPath = ''
   private outputOpts: OutputOptions = {}
-  private globalArgs: string[] = []
+  private readonly globalArgs: string[] = []
   private seekStart: number | null = null
   private seekEnd: number | null = null
 
@@ -130,30 +130,15 @@ export class FFmpegCommandBuilder {
     if (!this.outputPath) throw new Error('FFmpegCommandBuilder: output path is required')
     if (this.inputs.length === 0) throw new Error('FFmpegCommandBuilder: at least one input is required')
 
-    const args: string[] = ['-y'] // overwrite output
-    args.push(...this.globalArgs)
+    const args: string[] = ['-y', ...this.globalArgs]
 
-    // Inputs
-    for (const inp of this.inputs) {
-      if (inp.options) args.push(...inp.options)
-      args.push('-i', inp.path)
-    }
+    // Inputs + seek
+    args.push(...this.buildInputArgs())
 
-    // Seek (applied to output for accuracy after filters)
-    if (this.seekStart !== null) {
-      args.push('-ss', String(this.seekStart))
-    }
-    if (this.seekEnd !== null) {
-      args.push('-to', String(this.seekEnd))
-    }
-
-    // Filter complex
+    // Filters
     if (this.filterComplexChain.length > 0) {
       args.push('-filter_complex', this.buildFilterComplexString())
-    }
-
-    // Simple video filters (only if no filter_complex)
-    if (this.simpleFilters.length > 0 && this.filterComplexChain.length === 0) {
+    } else if (this.simpleFilters.length > 0) {
       args.push('-vf', this.buildSimpleFilterString())
     }
 
@@ -162,17 +147,32 @@ export class FFmpegCommandBuilder {
       args.push('-map', m.startsWith('[') ? m : `[${m}]`)
     }
 
-    // Output options
-    const opts = this.outputOpts
-    if (opts.codec) args.push('-c:v', opts.codec)
-    if (opts.audioCodec) args.push('-c:a', opts.audioCodec)
-    if (opts.crf !== undefined) args.push('-crf', String(opts.crf))
-    if (opts.preset) args.push('-preset', opts.preset)
-    if (opts.format) args.push('-f', opts.format)
-    if (opts.movflags) args.push('-movflags', opts.movflags)
-    if (opts.extra) args.push(...opts.extra)
+    // Output
+    args.push(...this.buildOutputOptionArgs(), this.outputPath)
+    return args
+  }
 
-    args.push(this.outputPath)
+  private buildInputArgs(): string[] {
+    const args: string[] = []
+    for (const inp of this.inputs) {
+      if (inp.options) args.push(...inp.options)
+      args.push('-i', inp.path)
+    }
+    if (this.seekStart !== null) args.push('-ss', String(this.seekStart))
+    if (this.seekEnd !== null) args.push('-to', String(this.seekEnd))
+    return args
+  }
+
+  private buildOutputOptionArgs(): string[] {
+    const { codec, audioCodec, crf, preset, format, movflags, extra } = this.outputOpts
+    const args: string[] = []
+    if (codec) args.push('-c:v', codec)
+    if (audioCodec) args.push('-c:a', audioCodec)
+    if (crf !== undefined) args.push('-crf', String(crf))
+    if (preset) args.push('-preset', preset)
+    if (format) args.push('-f', format)
+    if (movflags) args.push('-movflags', movflags)
+    if (extra) args.push(...extra)
     return args
   }
 

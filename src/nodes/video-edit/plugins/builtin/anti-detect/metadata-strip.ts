@@ -13,6 +13,7 @@ const metadataStrip: VideoEditPlugin = {
   icon: '🛡️',
   description: 'Remove all metadata (EXIF, creation time, GPS, etc.)',
   defaultEnabled: true,
+  recommended: true,
 
   configSchema: [
     {

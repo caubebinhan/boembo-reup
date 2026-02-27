@@ -309,16 +309,17 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     const verifyInfo = taskId ? ` — async verify task ${taskId} (${created ? 'created' : 'existing'})` : ''
     ctx.logger.info(`Published (${status}): ${result.videoUrl || 'unknown url'}${verifyInfo}`)
 
-    return {
-      data: {
-        ...video,
-        published_url: result.videoUrl,
-        published: true,
-        status,
-        asyncVerifyTaskId: taskId,
-        ...(isVerificationIncomplete ? { verification_incomplete: true } : { under_review: true }),
-      }
+    const returnData: Record<string, any> = {
+      ...video,
+      published_url: result.videoUrl,
+      published: true,
+      status,
+      asyncVerifyTaskId: taskId,
     }
+    if (isVerificationIncomplete) returnData.verification_incomplete = true
+    else returnData.under_review = true
+
+    return { data: returnData }
   }
 
 

@@ -1,140 +1,169 @@
 import type { TroubleshootingCaseDefinition } from '@main/services/troubleshooting/types'
 import { meta, ttCase } from './_shared'
 
+const COMPAT_CASE_BASE = {
+  risk: 'safe' as const,
+  category: 'compat',
+  group: 'compat',
+  implemented: true
+}
+
 export const compatCases: TroubleshootingCaseDefinition[] = [
   ttCase({
+    ...COMPAT_CASE_BASE,
     id: 'tiktok-repost-v1.compat.flow-snapshot-version-lock',
     title: 'Compat: Flow Snapshot Version Lock',
-    description: 'Old campaign with frozen flow_snapshot continues to run after code changes without version drift.',
-    risk: 'safe',
-    category: 'compat',
-    group: 'compat',
+    description:
+      'Old campaign with frozen flow_snapshot continues to run after code changes without version drift.',
     tags: ['compat', 'flow_snapshot', 'versioning', 'db'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaignVersion', value: '1.0 (frozen snapshot)' }],
       checks: {
-        db: ['campaign.flow_snapshot remains unchanged during execution', 'Campaign.workflow_version preserved'],
-        logs: ['Flow resolution path logs whether snapshot vs loader flow used'],
+        db: [
+          'campaign.flow_snapshot remains unchanged during execution',
+          'Campaign.workflow_version preserved'
+        ],
+        logs: ['Flow resolution path logs whether snapshot vs loader flow used']
       },
-      passMessages: ['Existing campaigns remain executable after workflow code changes'],
-    }),
+      passMessages: ['Existing campaigns remain executable after workflow code changes']
+    })
   }),
   ttCase({
+    ...COMPAT_CASE_BASE,
     id: 'tiktok-repost-v1.compat.params-defaults-upgrade',
     title: 'Compat: Params Defaults on Upgrade',
-    description: 'Missing params in older campaign docs get safe defaults and do not break v1 runtime.',
-    risk: 'safe',
-    category: 'compat',
-    group: 'compat',
+    description:
+      'Missing params in older campaign docs get safe defaults and do not break v1 runtime.',
     tags: ['compat', 'params', 'defaults', 'edge'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'fixtureMissingParams', value: 'interval/privacy/publishVerifyMaxRetries variants' }],
+      parameters: [
+        { key: 'fixtureMissingParams', value: 'interval/privacy/publishVerifyMaxRetries variants' }
+      ],
       checks: {
-        db: ['Older campaign docs load without data corruption', 'Defaulted params are applied safely at runtime'],
-        logs: ['Fallback/default branches are observable in troubleshooting output'],
+        db: [
+          'Older campaign docs load without data corruption',
+          'Defaulted params are applied safely at runtime'
+        ],
+        logs: ['Fallback/default branches are observable in troubleshooting output']
       },
-      errorMessages: ['Missing param should never crash node execution with undefined access'],
-    }),
+      errorMessages: ['Missing param should never crash node execution with undefined access']
+    })
   }),
   ttCase({
+    ...COMPAT_CASE_BASE,
     id: 'tiktok-repost-v1.compat.workflow-catalog-dynamic-discovery',
     title: 'Compat: Dynamic Workflow/Version Discovery in Debug Tab',
-    description: 'Troubleshooting registry/UI lists workflow versions dynamically from providers and keeps tiktok-repost@1.0 filter stable.',
-    risk: 'safe',
-    category: 'compat',
-    group: 'compat',
+    description:
+      'Troubleshooting registry/UI lists workflow versions dynamically from providers and keeps tiktok-repost@1.0 filter stable.',
     tags: ['compat', 'ui', 'versioning', 'dynamic-discovery'],
     level: 'intermediate',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'fixtureProviders', value: 'tiktok-repost@1.0 + upload-local@1.0 (+ future versions)' }],
+      parameters: [
+        {
+          key: 'fixtureProviders',
+          value: 'tiktok-repost@1.0 + upload-local@1.0 (+ future versions)'
+        }
+      ],
       checks: {
         db: ['No DB assertions (UI/catalog runtime check)'],
-        ui: ['Workflow dropdown lists discovered providers only', 'Version dropdown updates by workflow selection'],
-        logs: ['Provider auto-discovery count and duplicate-case warnings (if any) logged'],
+        ui: [
+          'Workflow dropdown lists discovered providers only',
+          'Version dropdown updates by workflow selection'
+        ],
+        logs: ['Provider auto-discovery count and duplicate-case warnings (if any) logged']
       },
-      passMessages: ['Debug tab remains version-aware without hardcoded workflow/version lists'],
-    }),
+      passMessages: ['Debug tab remains version-aware without hardcoded workflow/version lists']
+    })
   }),
   ttCase({
+    ...COMPAT_CASE_BASE,
     id: 'tiktok-repost-v1.compat.old-campaign-rerun-after-code-update',
     title: 'Compat: Existing Campaign Re-runs After Workflow Code Update',
-    description: 'Deploy a workflow code update; existing active campaign re-triggers and completes without schema mismatch or runtime error.',
-    risk: 'safe',
-    category: 'compat',
-    group: 'compat',
+    description:
+      'Deploy a workflow code update; existing active campaign re-triggers and completes without schema mismatch or runtime error.',
     tags: ['compat', 'deploy', 'code-update', 'regression'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaignAge', value: '>7 days old (pre-update)' }],
       checks: {
-        db: ['campaign.flow_snapshot matches pre-update snapshot (immutable)', 'Campaign re-run uses snapshot flow, not new code flow'],
+        db: [
+          'campaign.flow_snapshot matches pre-update snapshot (immutable)',
+          'Campaign re-run uses snapshot flow, not new code flow'
+        ],
         logs: ['FlowEngine selects flow_snapshot over loader after deploy'],
-        events: ['campaign:triggered without schema mismatch error'],
+        events: ['campaign:triggered without schema mismatch error']
       },
-      passMessages: ['Old campaigns remain runnable after workflow code updates (flow_snapshot isolation)'],
-    }),
+      passMessages: [
+        'Old campaigns remain runnable after workflow code updates (flow_snapshot isolation)'
+      ]
+    })
   }),
   ttCase({
+    ...COMPAT_CASE_BASE,
     id: 'tiktok-repost-v1.compat.orphan-async-tasks-deleted-video',
     title: 'Compat: Orphan Async Tasks After Campaign Video Deleted',
-    description: 'Video row deleted from campaign while async verify task is pending; verify task cleanup or skip-on-missing behavior.',
-    risk: 'safe',
-    category: 'compat',
-    group: 'compat',
+    description:
+      'Video row deleted from campaign while async verify task is pending; verify task cleanup or skip-on-missing behavior.',
     tags: ['compat', 'async-task', 'orphan', 'db', 'edge'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'fixtureVideoDeleteTiming', value: 'deleted after task enqueued, before execution' }],
+      parameters: [
+        { key: 'fixtureVideoDeleteTiming', value: 'deleted after task enqueued, before execution' }
+      ],
       checks: {
-        db: ['Async task either deleted with video or skips gracefully on execute when target missing', 'No unhandled error crash from null video lookup'],
-        logs: ['Orphan task detection logged with task_id and missing video context'],
+        db: [
+          'Async task either deleted with video or skips gracefully on execute when target missing',
+          'No unhandled error crash from null video lookup'
+        ],
+        logs: ['Orphan task detection logged with task_id and missing video context']
       },
-      passMessages: ['Orphan async tasks are cleaned up or skip safely; no permanent error loop'],
-    }),
+      passMessages: ['Orphan async tasks are cleaned up or skip safely; no permanent error loop']
+    })
   }),
   ttCase({
+    ...COMPAT_CASE_BASE,
     id: 'tiktok-repost-v1.compat.db-schema-forward-compat-new-field',
-    title: 'Compat: DB Schema Forward Compat — Unknown Fields Survive Round-Trip',
-    description: 'Future version writes extra fields to campaign data_json; current version loads and saves without stripping unknown fields.',
-    risk: 'safe',
-    category: 'compat',
-    group: 'compat',
+    title: 'Compat: DB Schema Forward Compat - Unknown Fields Survive Round-Trip',
+    description:
+      'Future version writes extra fields to campaign data_json; current version loads and saves without stripping unknown fields.',
     tags: ['compat', 'db', 'schema', 'forward-compat', 'edge'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'fixtureExtraField', value: 'future_flag: true injected into data_json' }],
+      parameters: [
+        { key: 'fixtureExtraField', value: 'future_flag: true injected into data_json' }
+      ],
       checks: {
-        db: ['Extra unknown field survives load-save round-trip (not stripped)', 'TypeScript type-narrowing does not crash on unknown field'],
-        logs: ['No parse error or silent removal of unknown fields logged'],
+        db: [
+          'Extra unknown field survives load-save round-trip (not stripped)',
+          'TypeScript type-narrowing does not crash on unknown field'
+        ],
+        logs: ['No parse error or silent removal of unknown fields logged']
       },
-      passMessages: ['Additive schema changes are forward-compatible with current version'],
-    }),
+      passMessages: ['Additive schema changes are forward-compatible with current version']
+    })
   }),
   ttCase({
+    ...COMPAT_CASE_BASE,
     id: 'tiktok-repost-v1.compat.multi-workflow-coexistence',
     title: 'Compat: tiktok-repost@1.0 and upload-local@1.0 Coexist',
-    description: 'Both workflow types run simultaneously; verify no shared mutable state, duplicate event listeners, or job queue cross-contamination.',
-    risk: 'safe',
-    category: 'compat',
-    group: 'compat',
+    description:
+      'Both workflow types run simultaneously; verify no shared mutable state, duplicate event listeners, or job queue cross-contamination.',
     tags: ['compat', 'multi-workflow', 'isolation', 'engine'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'fixtureWorkflows', value: 'tiktok-repost@1.0 + upload-local@1.0 (1 campaign each)' }],
+      parameters: [
+        { key: 'fixtureWorkflows', value: 'tiktok-repost@1.0 + upload-local@1.0 (1 campaign each)' }
+      ],
       checks: {
-        db: ['Each campaign\'s jobs/videos are scoped to their own workflow_id', 'No workflow event handlers receive events from other workflow campaigns'],
-        logs: ['FlowEngine logs campaign_id + workflow_id context on each event'],
+        db: [
+          "Each campaign's jobs/videos are scoped to their own workflow_id",
+          'No workflow event handlers receive events from other workflow campaigns'
+        ],
+        logs: ['FlowEngine logs campaign_id + workflow_id context on each event']
       },
-      passMessages: ['Multiple workflow types run in isolation without interference'],
-    }),
-  }),
+      passMessages: ['Multiple workflow types run in isolation without interference']
+    })
+  })
 ]

@@ -13,7 +13,7 @@ const builtinPlugins = import.meta.glob('./plugins/builtin/**/*.ts', { eager: tr
 
 for (const [path, mod] of Object.entries(builtinPlugins)) {
   const plugin = (mod as any).default
-  if (plugin && plugin.id && plugin.buildFilters) {
+  if (plugin?.id && plugin?.buildFilters) {
     videoEditPluginRegistry.register(plugin)
   } else {
     console.warn(`[VideoEdit] Skipping invalid plugin at ${path}`)

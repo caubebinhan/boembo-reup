@@ -38,7 +38,7 @@ const audioReplace: VideoEditPlugin = {
       label: 'Original audio volume',
       default: 0.3,
       min: 0,
-      max: 1.0,
+      max: 1,
       step: 0.1,
       condition: { field: 'mode', value: 'mix' },
     },
@@ -46,9 +46,9 @@ const audioReplace: VideoEditPlugin = {
       key: 'newVolume',
       type: 'slider',
       label: 'New audio volume',
-      default: 1.0,
+      default: 1,
       min: 0.1,
-      max: 2.0,
+      max: 2,
       step: 0.1,
     },
     {
@@ -76,7 +76,7 @@ const audioReplace: VideoEditPlugin = {
     if (!audioPath) return []
 
     const mode = params.mode || 'replace'
-    const newVol = params.newVolume ?? 1.0
+    const newVol = params.newVolume ?? 1
     const loop = params.loop ?? true
     const offset = params.startOffset ?? 0
 
@@ -87,15 +87,14 @@ const audioReplace: VideoEditPlugin = {
     const commands: FFmpegCommand[] = []
 
     if (mode === 'replace') {
-      // Simple replace: take video from input 0, audio from input 1
       commands.push({
         inputs: [{ path: audioPath, options: inputOptions }],
-        filters: newVol !== 1.0
+        filters: newVol !== 1
           ? [{ filter: 'volume', options: { volume: newVol }, inputs: ['1:a'], outputs: ['a_out'] }]
           : [],
         outputOptions: {
           '-map': '0:v',
-          '-map_audio': newVol !== 1.0 ? '[a_out]' : '1:a',
+          '-map_audio': newVol !== 1 ? '[a_out]' : '1:a',
           '-shortest': '',
         },
       })

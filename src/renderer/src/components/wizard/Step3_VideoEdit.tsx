@@ -9,7 +9,7 @@
  *   - videoEditOperations: VideoEditOperation[]
  *   - videoEditAssets: Record<string, { type, path, name }>
  */
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 
 // ── Types (shared with core — inlined for renderer isolation) ───
 // These mirror src/core/video-edit/types.ts for the renderer side
@@ -41,6 +41,8 @@ interface PluginMeta {
     defaultEnabled?: boolean
     allowMultipleInstances?: boolean
     addInstanceLabel?: string
+    recommended?: boolean
+    warning?: string
     configSchema: PluginConfigField[]
 }
 
@@ -52,202 +54,13 @@ interface VideoEditOperation {
     order: number
 }
 
-// ── Plugin registry (renderer side — populated from IPC or static) ─
-
-// For now, define available plugins statically (matches backend builtins)
+// ── Plugin groups for UI tabs ───────────────────────
 const PLUGIN_GROUPS = [
     { key: 'anti-detect', label: 'Anti-Detect', icon: '🛡️', color: '#ef4444' },
     { key: 'transform', label: 'Transform', icon: '🔄', color: '#3b82f6' },
     { key: 'overlay', label: 'Overlay', icon: '🏷️', color: '#8b5cf6' },
     { key: 'filter', label: 'Filter', icon: '🎨', color: '#f59e0b' },
     { key: 'audio', label: 'Audio', icon: '🎵', color: '#10b981' },
-]
-
-const AVAILABLE_PLUGINS: PluginMeta[] = [
-    // Anti-Detect
-    {
-        id: 'builtin.metadata_strip', name: 'Strip Metadata', group: 'anti-detect', icon: '🛡️', description: 'Remove all metadata', defaultEnabled: true, configSchema: [
-            { key: 'stripAll', type: 'boolean', label: 'Strip all metadata', default: true },
-        ]
-    },
-    {
-        id: 'builtin.unique_encode', name: 'Re-encode Unique', group: 'anti-detect', icon: '🔀', description: 'Change file fingerprint', defaultEnabled: true, configSchema: [
-            { key: 'preset', type: 'select', label: 'Quality preset', default: 'balanced', options: [{ value: 'fast', label: 'Fast' }, { value: 'balanced', label: 'Balanced' }, { value: 'quality', label: 'Quality' }] },
-            { key: 'crfOffset', type: 'slider', label: 'CRF offset', default: 2, min: 0, max: 6, step: 1, unit: '±' },
-            { key: 'addNoise', type: 'boolean', label: 'Add subtle noise', default: true },
-            { key: 'noiseStrength', type: 'slider', label: 'Noise strength', default: 1, min: 1, max: 5, step: 1, condition: { field: 'addNoise', value: true } },
-        ]
-    },
-    {
-        id: 'builtin.frame_offset', name: 'Trim First/Last Frame', group: 'anti-detect', icon: '✂️', description: 'Unique timestamps', defaultEnabled: true, configSchema: [
-            { key: 'trimStartMs', type: 'slider', label: 'Trim start', default: 100, min: 0, max: 500, step: 50, unit: 'ms' },
-            { key: 'trimEndMs', type: 'slider', label: 'Trim end', default: 100, min: 0, max: 500, step: 50, unit: 'ms' },
-        ]
-    },
-    {
-        id: 'builtin.mirror_flip', name: 'Mirror + Zoom', group: 'anti-detect', icon: '🪞', description: 'Change visual fingerprint', configSchema: [
-            { key: 'flipAxis', type: 'select', label: 'Flip', default: 'h', options: [{ value: 'h', label: 'Horizontal' }, { value: 'v', label: 'Vertical' }, { value: 'both', label: 'Both' }] },
-            { key: 'zoom', type: 'slider', label: 'Zoom', default: 1.02, min: 1.0, max: 1.10, step: 0.01, unit: 'x' },
-        ]
-    },
-    // ── Advanced Anti-Detect (research-based) ──
-    {
-        id: 'builtin.prnu_destroy', name: 'PRNU Destroy', group: 'anti-detect', icon: '🔬', description: 'Strip camera sensor fingerprint + synthetic grain', defaultEnabled: true, configSchema: [
-            { key: 'denoiseStrength', type: 'select', label: 'Denoise level', default: 'medium', options: [{ value: 'light', label: 'Light' }, { value: 'medium', label: 'Balanced' }, { value: 'strong', label: 'Thorough' }] },
-            { key: 'grainType', type: 'select', label: 'Grain type', default: 'film', options: [{ value: 'film', label: '🎬 Film grain' }, { value: 'digital', label: '📱 Digital noise' }, { value: 'none', label: '❌ None' }] },
-            { key: 'grainIntensity', type: 'slider', label: 'Grain intensity', default: 5, min: 1, max: 15, step: 1, description: '1-5 subtle, 6-10 visible, 11-15 heavy' },
-        ]
-    },
-    {
-        id: 'builtin.pitch_shift', name: 'Audio Anti-Fingerprint', group: 'anti-detect', icon: '🎵', description: 'Pitch shift + EQ to evade audio detection', defaultEnabled: true, configSchema: [
-            { key: 'shiftSemitones', type: 'slider', label: 'Pitch shift', default: 1.0, min: -3, max: 3, step: 0.5, unit: 'semitones' },
-            { key: 'applyEQ', type: 'boolean', label: 'Frequency masking (EQ)', default: true },
-            { key: 'eqHighpass', type: 'slider', label: 'Highpass', default: 80, min: 20, max: 300, step: 10, unit: 'Hz', condition: { field: 'applyEQ', value: true } },
-            { key: 'eqLowpass', type: 'slider', label: 'Lowpass', default: 14000, min: 5000, max: 20000, step: 500, unit: 'Hz', condition: { field: 'applyEQ', value: true } },
-            { key: 'addAmbient', type: 'boolean', label: 'Ambient noise layer', default: false },
-        ]
-    },
-    {
-        id: 'builtin.frame_decimate', name: 'Temporal Disruption', group: 'anti-detect', icon: '🎞️', description: 'Frame decimation + FPS shift', defaultEnabled: true, configSchema: [
-            { key: 'mode', type: 'select', label: 'Mode', default: 'decimate', options: [{ value: 'decimate', label: 'Decimate frames' }, { value: 'fps_shift', label: 'FPS shift' }, { value: 'both', label: 'Both' }] },
-            { key: 'decimateCycle', type: 'slider', label: 'Cycle (1 in N)', default: 5, min: 3, max: 10, step: 1 },
-        ]
-    },
-    {
-        id: 'builtin.codec_reforge', name: 'Codec Reforge', group: 'anti-detect', icon: '⚙️', description: 'New GOP + motion vectors + quantization', defaultEnabled: true, configSchema: [
-            { key: 'scalePercent', type: 'slider', label: 'Scale shift', default: 2, min: 0, max: 8, step: 1, unit: '%' },
-            { key: 'gopSize', type: 'select', label: 'GOP interval', default: 'auto', options: [{ value: 'auto', label: 'Random 48-120' }, { value: '48', label: '48' }, { value: '72', label: '72' }, { value: '120', label: '120' }] },
-            { key: 'qualityMode', type: 'select', label: 'Quality', default: 'crf', options: [{ value: 'crf', label: 'CRF' }, { value: 'cbr', label: 'CBR' }] },
-            { key: 'crfValue', type: 'slider', label: 'CRF', default: 21, min: 18, max: 28, step: 1, condition: { field: 'qualityMode', value: 'crf' } },
-        ]
-    },
-    {
-        id: 'builtin.color_shift', name: 'Hash Evasion', group: 'anti-detect', icon: '🎯', description: 'Micro color/geometry to defeat PDQ/vPDQ', defaultEnabled: true, configSchema: [
-            { key: 'colorShift', type: 'boolean', label: 'Color micro-shift', default: true },
-            { key: 'microRotate', type: 'boolean', label: 'Micro-rotation (1-3°)', default: true },
-            { key: 'rotationDegree', type: 'slider', label: 'Angle', default: 1.5, min: 0.5, max: 3.0, step: 0.5, unit: '°', condition: { field: 'microRotate', value: true } },
-            { key: 'asymmetricScale', type: 'boolean', label: 'Asymmetric scaling', default: true },
-        ]
-    },
-    // Transform
-    {
-        id: 'builtin.rotate', name: 'Rotate / Flip', group: 'transform', icon: '🔄', description: 'Rotate or flip', configSchema: [
-            { key: 'angle', type: 'select', label: 'Angle', default: '0', options: [{ value: '0', label: 'None' }, { value: '90', label: '90°' }, { value: '180', label: '180°' }, { value: '270', label: '270°' }] },
-            { key: 'flip', type: 'select', label: 'Flip', default: 'none', options: [{ value: 'none', label: 'None' }, { value: 'h', label: 'Horizontal' }, { value: 'v', label: 'Vertical' }] },
-        ]
-    },
-    {
-        id: 'builtin.crop', name: 'Smart Crop', group: 'transform', icon: '✂️', description: 'Crop video', configSchema: [
-            { key: 'mode', type: 'select', label: 'Mode', default: 'aspect', options: [{ value: 'aspect', label: 'Aspect Ratio' }, { value: 'manual', label: 'Manual' }] },
-            { key: 'aspectRatio', type: 'select', label: 'Ratio', default: '9:16', options: [{ value: '9:16', label: '9:16' }, { value: '16:9', label: '16:9' }, { value: '1:1', label: '1:1' }, { value: '4:5', label: '4:5' }], condition: { field: 'mode', value: 'aspect' } },
-            { key: 'position', type: 'select', label: 'Position', default: 'center', options: [{ value: 'center', label: 'Center' }, { value: 'top', label: 'Top' }, { value: 'bottom', label: 'Bottom' }], condition: { field: 'mode', value: 'aspect' } },
-        ]
-    },
-    {
-        id: 'builtin.resize', name: 'Resize', group: 'transform', icon: '📐', description: 'Scale video', configSchema: [
-            { key: 'width', type: 'number', label: 'Width', default: -1, min: -1, description: '-1 = auto' },
-            { key: 'height', type: 'number', label: 'Height', default: -1, min: -1 },
-            { key: 'scaleMode', type: 'select', label: 'Mode', default: 'fit', options: [{ value: 'fit', label: 'Fit' }, { value: 'fill', label: 'Fill' }, { value: 'stretch', label: 'Stretch' }] },
-        ]
-    },
-    {
-        id: 'builtin.pad', name: 'Add Background', group: 'transform', icon: '🖼️', description: 'Background padding', configSchema: [
-            { key: 'targetAspect', type: 'select', label: 'Ratio', default: '9:16', options: [{ value: '9:16', label: '9:16 TikTok' }, { value: '16:9', label: '16:9 YouTube' }, { value: '1:1', label: '1:1 Square' }] },
-            { key: 'bgMode', type: 'select', label: 'Background', default: 'blur', options: [{ value: 'blur', label: 'Blurred original' }, { value: 'color', label: 'Solid color' }] },
-            { key: 'bgColor', type: 'color', label: 'Color', default: '#000000', condition: { field: 'bgMode', value: 'color' } },
-            { key: 'blurStrength', type: 'slider', label: 'Blur', default: 20, min: 5, max: 50, step: 5, condition: { field: 'bgMode', value: 'blur' } },
-        ]
-    },
-    {
-        id: 'builtin.trim', name: 'Trim / Cut', group: 'transform', icon: '✂️', description: 'Trim time range', configSchema: [
-            { key: 'mode', type: 'select', label: 'Mode', default: 'keep', options: [{ value: 'keep', label: 'Keep range' }, { value: 'remove', label: 'Remove range' }] },
-            { key: 'startTime', type: 'time', label: 'Start', default: 0 },
-            { key: 'endTime', type: 'time', label: 'End', default: 0 },
-        ]
-    },
-    {
-        id: 'builtin.speed', name: 'Speed', group: 'transform', icon: '⚡', description: 'Change speed', configSchema: [
-            { key: 'speed', type: 'slider', label: 'Speed', default: 1.0, min: 0.25, max: 4.0, step: 0.25, unit: 'x' },
-            { key: 'preservePitch', type: 'boolean', label: 'Preserve pitch', default: true },
-        ]
-    },
-    // Overlay
-    {
-        id: 'builtin.watermark_image', name: 'Image Watermark', group: 'overlay', icon: '🏷️', description: 'Logo overlay', allowMultipleInstances: true, addInstanceLabel: 'Add watermark', configSchema: [
-            { key: 'image', type: 'asset', label: 'Image', required: true },
-            { key: 'position', type: 'position', label: 'Position', default: 'bottom-right' },
-            { key: 'size', type: 'slider', label: 'Size', default: 15, min: 5, max: 50, step: 1, unit: '%' },
-            { key: 'opacity', type: 'slider', label: 'Opacity', default: 0.8, min: 0.1, max: 1.0, step: 0.05 },
-            { key: 'padding', type: 'slider', label: 'Padding', default: 20, min: 0, max: 100, step: 5, unit: 'px' },
-            { key: 'timeRange', type: 'timeRange', label: 'When visible' },
-        ]
-    },
-    {
-        id: 'builtin.watermark_text', name: 'Text Watermark', group: 'overlay', icon: '✍️', description: 'Text overlay', allowMultipleInstances: true, addInstanceLabel: 'Add text', configSchema: [
-            { key: 'text', type: 'string', label: 'Text', placeholder: 'Enter text...', required: true },
-            { key: 'fontSize', type: 'slider', label: 'Size', default: 24, min: 10, max: 120, step: 2, unit: 'px' },
-            { key: 'fontColor', type: 'color', label: 'Color', default: '#ffffff' },
-            { key: 'position', type: 'position', label: 'Position', default: 'bottom-center' },
-            { key: 'bgOpacity', type: 'slider', label: 'Background', default: 0.5, min: 0, max: 1, step: 0.1 },
-            { key: 'timeRange', type: 'timeRange', label: 'When visible' },
-        ]
-    },
-    {
-        id: 'builtin.logo_sequence', name: 'Logo Sequence', group: 'overlay', icon: '🎞️', description: 'Logo at timestamps', configSchema: [
-            { key: 'image', type: 'asset', label: 'Logo image', required: true },
-            { key: 'size', type: 'slider', label: 'Size', default: 10, min: 3, max: 40, step: 1, unit: '%' },
-            { key: 'opacity', type: 'slider', label: 'Opacity', default: 0.9, min: 0.1, max: 1.0, step: 0.05 },
-        ]
-    },
-    // Filter
-    {
-        id: 'builtin.color_grade', name: 'Color Grading', group: 'filter', icon: '🎨', description: 'Adjust colors', configSchema: [
-            { key: 'preset', type: 'select', label: 'Preset', default: 'custom', options: [{ value: 'custom', label: '🎨 Custom' }, { value: 'warm', label: '🌅 Warm' }, { value: 'cool', label: '❄️ Cool' }, { value: 'vintage', label: '📷 Vintage' }, { value: 'vivid', label: '🌈 Vivid' }, { value: 'desaturated', label: '🖤 Desaturated' }] },
-            { key: 'brightness', type: 'slider', label: 'Brightness', default: 0, min: -0.5, max: 0.5, step: 0.05, condition: { field: 'preset', value: 'custom' } },
-            { key: 'contrast', type: 'slider', label: 'Contrast', default: 1.0, min: 0.5, max: 2.0, step: 0.05, condition: { field: 'preset', value: 'custom' } },
-            { key: 'saturation', type: 'slider', label: 'Saturation', default: 1.0, min: 0, max: 3.0, step: 0.1, condition: { field: 'preset', value: 'custom' } },
-        ]
-    },
-    {
-        id: 'builtin.blur_region', name: 'Blur Region', group: 'filter', icon: '🔲', description: 'Blur area', allowMultipleInstances: true, addInstanceLabel: 'Add blur', configSchema: [
-            { key: 'region', type: 'region', label: 'Region', required: true },
-            { key: 'mode', type: 'select', label: 'Mode', default: 'gaussian', options: [{ value: 'gaussian', label: '🌫️ Gaussian' }, { value: 'pixelate', label: '🟦 Pixelate' }] },
-            { key: 'intensity', type: 'slider', label: 'Intensity', default: 20, min: 5, max: 50, step: 5 },
-            { key: 'timeRange', type: 'timeRange', label: 'Active during' },
-        ]
-    },
-    {
-        id: 'builtin.denoise', name: 'Denoise', group: 'filter', icon: '✨', description: 'Reduce noise', configSchema: [
-            { key: 'strength', type: 'select', label: 'Strength', default: 'medium', options: [{ value: 'light', label: '🌤️ Light' }, { value: 'medium', label: '🌥️ Medium' }, { value: 'strong', label: '☁️ Strong' }] },
-            { key: 'method', type: 'select', label: 'Method', default: 'hqdn3d', options: [{ value: 'hqdn3d', label: 'Fast' }, { value: 'nlmeans', label: 'Quality (slow)' }] },
-        ]
-    },
-    // Audio
-    {
-        id: 'builtin.audio_replace', name: 'Replace Audio', group: 'audio', icon: '🎵', description: 'New audio track', configSchema: [
-            { key: 'audioFile', type: 'asset', label: 'Audio file', required: true },
-            { key: 'mode', type: 'select', label: 'Mode', default: 'replace', options: [{ value: 'replace', label: 'Replace' }, { value: 'mix', label: 'Mix' }] },
-            { key: 'newVolume', type: 'slider', label: 'Volume', default: 1.0, min: 0.1, max: 2.0, step: 0.1, unit: 'x' },
-            { key: 'loop', type: 'boolean', label: 'Loop audio', default: true },
-        ]
-    },
-    {
-        id: 'builtin.audio_fade', name: 'Audio Fade', group: 'audio', icon: '🔊', description: 'Fade in/out', configSchema: [
-            { key: 'fadeIn', type: 'slider', label: 'Fade in', default: 1.0, min: 0, max: 10, step: 0.5, unit: 's' },
-            { key: 'fadeOut', type: 'slider', label: 'Fade out', default: 1.0, min: 0, max: 10, step: 0.5, unit: 's' },
-        ]
-    },
-    {
-        id: 'builtin.mute_segment', name: 'Mute Segment', group: 'audio', icon: '🔇', description: 'Mute time range', allowMultipleInstances: true, addInstanceLabel: 'Add mute', configSchema: [
-            { key: 'timeRange', type: 'timeRange', label: 'Mute during', required: true },
-        ]
-    },
-    {
-        id: 'builtin.volume', name: 'Volume', group: 'audio', icon: '🔉', description: 'Adjust volume', configSchema: [
-            { key: 'volume', type: 'slider', label: 'Volume', default: 100, min: 0, max: 300, step: 5, unit: '%' },
-            { key: 'normalize', type: 'boolean', label: 'Normalize loudness', default: false },
-        ]
-    },
 ]
 
 // ── Helpers ──────────────────────────────────────────
@@ -262,10 +75,6 @@ function getDefaultParams(plugin: PluginMeta): Record<string, any> {
         if (f.default !== undefined) params[f.key] = f.default
     }
     return params
-}
-
-function getPluginById(id: string): PluginMeta | undefined {
-    return AVAILABLE_PLUGINS.find((p) => p.id === id)
 }
 
 // ── Position Picker Widget ──────────────────────────
@@ -569,6 +378,13 @@ function OperationCard({ operation, plugin, onUpdate, onRemove, onToggle, onMove
                     </span>
                 )}
 
+                {/* Recommended badge */}
+                {plugin.recommended && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-green-50 text-green-600">
+                        ✓ Recommended
+                    </span>
+                )}
+
                 {/* Expand/collapse */}
                 <button onClick={() => setExpanded(!expanded)} className="text-slate-400 hover:text-purple-500 text-xs px-1 cursor-pointer">
                     {expanded ? '▼' : '▶'}
@@ -581,6 +397,12 @@ function OperationCard({ operation, plugin, onUpdate, onRemove, onToggle, onMove
             {/* Config fields */}
             {expanded && operation.enabled && (
                 <div className="px-4 pb-3 flex flex-col gap-2.5 border-t border-slate-100 pt-2.5">
+                    {/* Warning banner */}
+                    {plugin.warning && (
+                        <div className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 rounded-lg px-3 py-2 leading-snug">
+                            {plugin.warning}
+                        </div>
+                    )}
                     {plugin.configSchema.map((field) => (
                         <FieldRenderer
                             key={field.key}
@@ -598,15 +420,16 @@ function OperationCard({ operation, plugin, onUpdate, onRemove, onToggle, onMove
 
 // ── Plugin Browser ──────────────────────────────────
 
-function PluginBrowser({ onAdd, existingPluginIds }: {
+function PluginBrowser({ plugins, onAdd, existingPluginIds }: {
+    plugins: PluginMeta[]
     onAdd: (pluginId: string) => void
     existingPluginIds: Set<string>
 }) {
     const [selectedGroup, setSelectedGroup] = useState<string | null>(null)
 
     const filteredPlugins = selectedGroup
-        ? AVAILABLE_PLUGINS.filter((p) => p.group === selectedGroup)
-        : AVAILABLE_PLUGINS
+        ? plugins.filter((p) => p.group === selectedGroup)
+        : plugins
 
     return (
         <div className="flex flex-col gap-3">
@@ -652,8 +475,14 @@ function PluginBrowser({ onAdd, existingPluginIds }: {
                             <div className="flex items-center gap-2 mb-1">
                                 <span className="text-lg">{plugin.icon}</span>
                                 <span className="text-sm font-semibold text-slate-700">{plugin.name}</span>
+                                {plugin.recommended && (
+                                    <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-green-50 text-green-600 border border-green-200">Recommended</span>
+                                )}
                             </div>
                             <p className="text-[11px] text-slate-400 leading-snug">{plugin.description}</p>
+                            {plugin.warning && (
+                                <p className="text-[10px] text-amber-500 leading-snug mt-0.5">{plugin.warning}</p>
+                            )}
                             {alreadyAdded && <span className="text-[10px] text-green-500 font-semibold mt-1 block">✓ Added</span>}
                             {plugin.allowMultipleInstances && existingPluginIds.has(plugin.id) && (
                                 <span className="text-[10px] text-purple-500 font-semibold mt-1 block">+ Add another</span>
@@ -675,6 +504,20 @@ interface Step3Props {
 
 export function Step3_VideoEdit({ data, updateData }: Step3Props) {
     const [showBrowser, setShowBrowser] = useState(false)
+    const [availablePlugins, setAvailablePlugins] = useState<PluginMeta[]>([])
+
+    // Load plugin metadata from backend registry via IPC
+    useEffect(() => {
+        window.api?.invoke('video-edit:get-plugins').then((plugins: PluginMeta[]) => {
+            if (plugins?.length) setAvailablePlugins(plugins)
+        }).catch(() => {
+            // IPC not available (e.g. in dev/test) — will show empty
+        })
+    }, [])
+
+    const getPluginById = useCallback((id: string) => {
+        return availablePlugins.find((p) => p.id === id)
+    }, [availablePlugins])
 
     const operations: VideoEditOperation[] = data.videoEditOperations || []
 
@@ -682,27 +525,32 @@ export function Step3_VideoEdit({ data, updateData }: Step3Props) {
         updateData({ videoEditOperations: ops })
     }, [updateData])
 
-    // Default operations on first mount
-    useMemo(() => {
-        if (!data.videoEditOperations) {
-            const defaults: VideoEditOperation[] = AVAILABLE_PLUGINS
-                .filter((p) => p.defaultEnabled)
-                .map((p, i) => ({
-                    id: genId(),
-                    pluginId: p.id,
-                    enabled: true,
-                    params: getDefaultParams(p),
-                    order: i,
-                }))
-            updateData({ videoEditOperations: defaults })
+    // Load default operations from backend when plugins are available
+    useEffect(() => {
+        if (!data.videoEditOperations && availablePlugins.length > 0) {
+            window.api?.invoke('video-edit:get-defaults').then((defaults: VideoEditOperation[]) => {
+                if (defaults?.length) updateData({ videoEditOperations: defaults })
+            }).catch(() => {
+                // Fallback: create defaults from available plugins
+                const defaults: VideoEditOperation[] = availablePlugins
+                    .filter((p) => p.defaultEnabled)
+                    .map((p, i) => ({
+                        id: genId(),
+                        pluginId: p.id,
+                        enabled: true,
+                        params: getDefaultParams(p),
+                        order: i,
+                    }))
+                updateData({ videoEditOperations: defaults })
+            })
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [availablePlugins])
 
     const existingPluginIds = useMemo(() => new Set(operations.map((o) => o.pluginId)), [operations])
 
     const addOperation = useCallback((pluginId: string) => {
-        const plugin = getPluginById(pluginId)
+        const plugin = availablePlugins.find((p) => p.id === pluginId)
         if (!plugin) return
         const newOp: VideoEditOperation = {
             id: genId(),
@@ -767,7 +615,7 @@ export function Step3_VideoEdit({ data, updateData }: Step3Props) {
                         <h4 className="font-semibold text-sm text-slate-600">Choose an operation to add</h4>
                         <button onClick={() => setShowBrowser(false)} className="text-slate-400 hover:text-slate-600 text-sm cursor-pointer">✕</button>
                     </div>
-                    <PluginBrowser onAdd={addOperation} existingPluginIds={existingPluginIds} />
+                    <PluginBrowser plugins={availablePlugins} onAdd={addOperation} existingPluginIds={existingPluginIds} />
                 </div>
             )}
 

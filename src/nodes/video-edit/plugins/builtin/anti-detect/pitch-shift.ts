@@ -25,17 +25,18 @@ const pitchShift: VideoEditPlugin = {
   name: 'Audio Anti-Fingerprint',
   group: 'anti-detect',
   icon: '🎵',
-  description: 'Pitch shift + EQ to evade audio fingerprinting',
+  description: 'Shift audio pitch + EQ filtering to evade audio fingerprinting',
   defaultEnabled: true,
+  warning: '⚠️ Alters original audio. Pitch shift may be noticeable on speech/music. Use with caution.',
 
   configSchema: [
     {
       key: 'shiftSemitones',
       type: 'slider',
       label: 'Pitch shift',
-      default: 1.0,
-      min: -3.0,
-      max: 3.0,
+      default: 1,
+      min: -3,
+      max: 3,
       step: 0.5,
       unit: 'semitones',
       description: 'Positive = higher pitch, Negative = lower. 1-2 semitones recommended.',
@@ -93,7 +94,7 @@ const pitchShift: VideoEditPlugin = {
   ],
 
   buildFilters(params, ctx) {
-    const semitones = params.shiftSemitones ?? 1.0
+    const semitones = params.shiftSemitones ?? 1
     const applyEQ = params.applyEQ ?? true
     const key = ctx.instanceKey
     const filters: FFmpegFilter[] = []
@@ -112,9 +113,7 @@ const pitchShift: VideoEditPlugin = {
         options: { r: targetRate },
         inputs: ['0:a'],
         outputs: [`a_rate_${key}`],
-      })
-
-      filters.push({
+      }, {
         filter: 'aresample',
         options: { sample_rate: 44100 },
         inputs: [`a_rate_${key}`],
@@ -128,7 +127,7 @@ const pitchShift: VideoEditPlugin = {
 
     const prevLabel = semitones !== 0 ? `a_pitch_${key}` : '0:a'
 
-    // Step 2: EQ band filtering — remove signature frequencies
+    // Step 2: EQ band filtering
     if (applyEQ) {
       const hp = params.eqHighpass ?? 80
       const lp = params.eqLowpass ?? 14000
@@ -139,13 +138,10 @@ const pitchShift: VideoEditPlugin = {
         options: { f: hp, poles: 2 },
         inputs: [currentLabel],
         outputs: [`a_hp_${key}`],
-      })
-      currentLabel = `a_hp_${key}`
-
-      filters.push({
+      }, {
         filter: 'lowpass',
         options: { f: lp, poles: 2 },
-        inputs: [currentLabel],
+        inputs: [`a_hp_${key}`],
         outputs: [`a_eq_${key}`],
       })
     }
@@ -199,8 +195,10 @@ function buildAtempoChain(
   let currentInput = inputLabel
   let idx = 0
 
-  while (remaining > 2.0 || remaining < 0.5) {
-    const t = remaining > 2.0 ? 2.0 : 0.5
+  const CLAMP_MIN = 0.5
+  const CLAMP_MAX = 2
+  while (remaining > CLAMP_MAX || remaining < CLAMP_MIN) {
+    const t = remaining > CLAMP_MAX ? CLAMP_MAX : CLAMP_MIN
     const outLabel = `atempo_${key}_${idx}`
     filters.push({
       filter: 'atempo',

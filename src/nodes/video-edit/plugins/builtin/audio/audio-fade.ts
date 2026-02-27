@@ -17,7 +17,7 @@ const audioFade: VideoEditPlugin = {
       key: 'fadeIn',
       type: 'slider',
       label: 'Fade in duration',
-      default: 1.0,
+      default: 1,
       min: 0,
       max: 10,
       step: 0.5,
@@ -27,7 +27,7 @@ const audioFade: VideoEditPlugin = {
       key: 'fadeOut',
       type: 'slider',
       label: 'Fade out duration',
-      default: 1.0,
+      default: 1,
       min: 0,
       max: 10,
       step: 0.5,
@@ -36,8 +36,8 @@ const audioFade: VideoEditPlugin = {
   ],
 
   buildFilters(params, ctx) {
-    const fadeIn = params.fadeIn ?? 1.0
-    const fadeOut = params.fadeOut ?? 1.0
+    const fadeIn = params.fadeIn ?? 1
+    const fadeOut = params.fadeOut ?? 1
     const filters: FFmpegFilter[] = []
 
     if (fadeIn > 0) {

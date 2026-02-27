@@ -21,8 +21,9 @@ const prnuDestroy: VideoEditPlugin = {
   name: 'PRNU Destroy',
   group: 'anti-detect',
   icon: '🔬',
-  description: 'Strip camera sensor fingerprint (PRNU) + add synthetic grain',
+  description: 'Remove PRNU sensor fingerprint + add synthetic grain',
   defaultEnabled: true,
+  recommended: true,
 
   configSchema: [
     {

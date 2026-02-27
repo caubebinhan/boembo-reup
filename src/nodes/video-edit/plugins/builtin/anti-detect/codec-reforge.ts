@@ -24,8 +24,9 @@ const codecReforge: VideoEditPlugin = {
   name: 'Codec Reforge',
   group: 'anti-detect',
   icon: '⚙️',
-  description: 'Destroy codec fingerprint — new GOP, motion vectors, quantization',
+  description: 'Re-encode with randomized codec parameters to defeat codec forensics',
   defaultEnabled: true,
+  recommended: true,
 
   configSchema: [
     {

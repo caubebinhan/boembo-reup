@@ -98,6 +98,51 @@ type ArchivedArtifactEntry = {
   sha1: string
 }
 
+function archiveSingleArtifact(
+  rawValue: unknown,
+  key: string,
+  safeKey: string,
+  runDir: string,
+): ArchivedArtifactEntry | null {
+  if (rawValue === undefined || rawValue === null || rawValue === '') return null
+
+  // Case 1: absolute file path
+  if (typeof rawValue === 'string' && isAbsolutePathString(rawValue) && existsSync(rawValue)) {
+    const fileExt = extname(rawValue) || '.txt'
+    const targetPath = resolve(runDir, `${safeKey}${fileExt}`)
+    copyFileSync(rawValue, targetPath)
+    const bytes = readFileSync(targetPath)
+    return { key, sourceType: 'path', sourcePath: rawValue, archivedPath: targetPath, size: bytes.length, sha1: toStableHash(bytes) }
+  }
+
+  // Case 2: data URL image
+  if (typeof rawValue === 'string' && rawValue.startsWith('data:image/')) {
+    const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(rawValue)
+    if (match) {
+      const bytes = Buffer.from(match[2], 'base64')
+      const targetPath = resolve(runDir, `${safeKey}${imageExtFromMime(match[1])}`)
+      writeFileSync(targetPath, bytes)
+      return { key, sourceType: 'data-url', archivedPath: targetPath, size: bytes.length, sha1: toStableHash(bytes) }
+    }
+  }
+
+  // Case 3: JSON object
+  if (typeof rawValue === 'object') {
+    const targetPath = resolve(runDir, `${safeKey}.json`)
+    const text = JSON.stringify(rawValue, null, 2)
+    writeFileSync(targetPath, text, 'utf8')
+    const bytes = Buffer.from(text, 'utf8')
+    return { key, sourceType: 'json', archivedPath: targetPath, size: bytes.length, sha1: toStableHash(bytes) }
+  }
+
+  // Case 4: plain text
+  const text = String(rawValue)
+  const targetPath = resolve(runDir, `${safeKey}.txt`)
+  writeFileSync(targetPath, text, 'utf8')
+  const bytes = Buffer.from(text, 'utf8')
+  return { key, sourceType: 'text', archivedPath: targetPath, size: bytes.length, sha1: toStableHash(bytes) }
+}
+
 function archiveRunArtifacts(record: TroubleshootingRunRecord) {
   const resultObj = record.result && typeof record.result === 'object' ? record.result : null
   const artifactObj = resultObj?.artifacts && typeof resultObj.artifacts === 'object'
@@ -113,72 +158,11 @@ function archiveRunArtifacts(record: TroubleshootingRunRecord) {
   const entries: ArchivedArtifactEntry[] = []
 
   for (const [key, rawValue] of Object.entries(artifactObj)) {
-    if (rawValue === undefined || rawValue === null || rawValue === '') continue
-    const safeKey = toCaseSlug(key)
-
-    if (typeof rawValue === 'string' && isAbsolutePathString(rawValue) && existsSync(rawValue)) {
-      const fileExt = extname(rawValue) || '.txt'
-      const targetPath = resolve(runDir, `${safeKey}${fileExt}`)
-      copyFileSync(rawValue, targetPath)
-      const bytes = readFileSync(targetPath)
-      archivedArtifacts[key] = targetPath
-      entries.push({
-        key,
-        sourceType: 'path',
-        sourcePath: rawValue,
-        archivedPath: targetPath,
-        size: bytes.length,
-        sha1: toStableHash(bytes),
-      })
-      continue
+    const entry = archiveSingleArtifact(rawValue, key, toCaseSlug(key), runDir)
+    if (entry) {
+      archivedArtifacts[key] = entry.archivedPath
+      entries.push(entry)
     }
-
-    if (typeof rawValue === 'string' && rawValue.startsWith('data:image/')) {
-      const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(rawValue)
-      if (match) {
-        const bytes = Buffer.from(match[2], 'base64')
-        const targetPath = resolve(runDir, `${safeKey}${imageExtFromMime(match[1])}`)
-        writeFileSync(targetPath, bytes)
-        archivedArtifacts[key] = targetPath
-        entries.push({
-          key,
-          sourceType: 'data-url',
-          archivedPath: targetPath,
-          size: bytes.length,
-          sha1: toStableHash(bytes),
-        })
-        continue
-      }
-    }
-
-    if (typeof rawValue === 'object') {
-      const targetPath = resolve(runDir, `${safeKey}.json`)
-      const text = JSON.stringify(rawValue, null, 2)
-      writeFileSync(targetPath, text, 'utf8')
-      const bytes = Buffer.from(text, 'utf8')
-      archivedArtifacts[key] = targetPath
-      entries.push({
-        key,
-        sourceType: 'json',
-        archivedPath: targetPath,
-        size: bytes.length,
-        sha1: toStableHash(bytes),
-      })
-      continue
-    }
-
-    const text = String(rawValue)
-    const targetPath = resolve(runDir, `${safeKey}.txt`)
-    writeFileSync(targetPath, text, 'utf8')
-    const bytes = Buffer.from(text, 'utf8')
-    archivedArtifacts[key] = targetPath
-    entries.push({
-      key,
-      sourceType: 'text',
-      archivedPath: targetPath,
-      size: bytes.length,
-      sha1: toStableHash(bytes),
-    })
   }
 
   const manifestPath = resolve(runDir, 'artifact-manifest.json')

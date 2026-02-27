@@ -25,6 +25,8 @@ const frameDecimate: VideoEditPlugin = {
   icon: '🎞️',
   description: 'Break temporal hash matching via frame decimation + FPS shift',
   defaultEnabled: true,
+  recommended: true,
+  warning: 'Slightly changes video timing/duration (2-4%). Imperceptible to human eye but breaks temporal hash matching.',
 
   configSchema: [
     {
@@ -116,10 +118,7 @@ const frameDecimate: VideoEditPlugin = {
         options: { fps: targetFps },
         inputs: prevLabel ? [prevLabel] : undefined,
         outputs: [`fps_${key}`],
-      })
-
-      // Recalculate timestamps
-      filters.push({
+      }, {
         filter: 'setpts',
         options: { expr: 'N/FRAME_RATE/TB' },
         inputs: [`fps_${key}`],

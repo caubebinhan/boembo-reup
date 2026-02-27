@@ -25,6 +25,7 @@ const colorShift: VideoEditPlugin = {
   icon: '🎯',
   description: 'Micro color/geometry shifts to defeat perceptual hashing (PDQ/vPDQ)',
   defaultEnabled: true,
+  recommended: true,
 
   configSchema: [
     {
@@ -47,7 +48,7 @@ const colorShift: VideoEditPlugin = {
       label: 'Rotation angle',
       default: 1.5,
       min: 0.5,
-      max: 3.0,
+      max: 3,
       step: 0.5,
       unit: '°',
       condition: { field: 'microRotate', value: true },
@@ -67,11 +68,10 @@ const colorShift: VideoEditPlugin = {
 
     // Step 1: Color micro-shift
     if (params.colorShift !== false) {
-      // Randomize slightly for each video
-      const contrast = 1.0 + (Math.random() * 0.08 - 0.02)  // 0.98-1.06
-      const brightness = (Math.random() * 0.04 - 0.01)       // -0.01 to 0.03
-      const saturation = 1.0 + (Math.random() * 0.15 - 0.05) // 0.95-1.10
-      const gamma = 1.0 + (Math.random() * 0.06 - 0.02)      // 0.98-1.04
+      const contrast = 1 + (Math.random() * 0.08 - 0.02)
+      const brightness = (Math.random() * 0.04 - 0.01)
+      const saturation = 1 + (Math.random() * 0.15 - 0.05)
+      const gamma = 1 + (Math.random() * 0.06 - 0.02)
 
       filters.push({
         filter: 'eq',
@@ -104,10 +104,7 @@ const colorShift: VideoEditPlugin = {
         },
         inputs: prevLabel ? [prevLabel] : undefined,
         outputs: [`rot_${key}`],
-      })
-
-      // Crop back to original dimensions (remove rotation artifacts)
-      filters.push({
+      }, {
         filter: 'crop',
         options: {
           w: ctx.inputWidth,
@@ -122,11 +119,9 @@ const colorShift: VideoEditPlugin = {
 
     const afterRotLabel = params.microRotate !== false ? `crop_${key}` : prevLabel
 
-    // Step 3: Asymmetric scaling — different X/Y ratio breaks grid alignment
     if (params.asymmetricScale !== false) {
-      // Scale X by 100-102%, Y by 99-101% (imperceptible)
-      const scaleX = 1.0 + (Math.random() * 0.02)  // 1.00-1.02
-      const scaleY = 0.99 + (Math.random() * 0.02)  // 0.99-1.01
+      const scaleX = 1 + (Math.random() * 0.02)
+      const scaleY = 0.99 + (Math.random() * 0.02)
       const newW = Math.round(ctx.inputWidth * scaleX / 2) * 2
       const newH = Math.round(ctx.inputHeight * scaleY / 2) * 2
 
@@ -135,10 +130,7 @@ const colorShift: VideoEditPlugin = {
         options: { w: newW, h: newH },
         inputs: afterRotLabel ? [afterRotLabel] : undefined,
         outputs: [`asym_${key}`],
-      })
-
-      // Scale back to exact original dimensions
-      filters.push({
+      }, {
         filter: 'scale',
         options: { w: ctx.inputWidth, h: ctx.inputHeight },
         inputs: [`asym_${key}`],

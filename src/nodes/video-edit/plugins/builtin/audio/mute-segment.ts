@@ -4,7 +4,7 @@
  * Mute audio during specific time ranges.
  * Multi-instance: user can mute multiple segments.
  */
-import type { VideoEditPlugin, FFmpegFilter } from '@core/video-edit/types'
+import type { VideoEditPlugin } from '@core/video-edit/types'
 
 const muteSegment: VideoEditPlugin = {
   id: 'builtin.mute_segment',

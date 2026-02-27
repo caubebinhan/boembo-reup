@@ -4,10 +4,11 @@
  * Singleton registry for video-edit plugins.
  * Plugins self-register at import time (similar to NodeRegistry).
  */
-import type { VideoEditPlugin, VideoEditConfig, PluginGroup } from './types'
+import type { VideoEditPlugin, VideoEditOperation, PluginGroup } from './types'
+import { generateOperationId } from './types'
 
 class VideoEditPluginRegistryImpl {
-  private plugins = new Map<string, VideoEditPlugin>()
+  private readonly plugins = new Map<string, VideoEditPlugin>()
 
   /** Register a plugin. Throws if a plugin with the same ID already exists. */
   register(plugin: VideoEditPlugin): void {
@@ -38,14 +39,36 @@ class VideoEditPluginRegistryImpl {
   }
 
   /**
-   * Get default VideoEditConfig[] for new campaigns.
-   * Returns configs for all plugins with `defaultEnabled: true`.
+   * Get serializable plugin metadata for the renderer (wizard UI).
+   * Strips runtime functions (buildFilters, validate, etc.) — only UI-safe data.
    */
-  getDefaults(): VideoEditConfig[] {
+  getPluginMetas() {
     return [...this.plugins.values()].map((p) => ({
+      id: p.id,
+      name: p.name,
+      group: p.group,
+      icon: p.icon,
+      description: p.description,
+      defaultEnabled: p.defaultEnabled,
+      allowMultipleInstances: p.allowMultipleInstances,
+      addInstanceLabel: p.addInstanceLabel,
+      recommended: p.recommended,
+      warning: p.warning,
+      configSchema: p.configSchema,
+    }))
+  }
+
+  /**
+   * Get default VideoEditOperation[] for new campaigns.
+   * Returns operations for all plugins with `defaultEnabled: true`.
+   */
+  getDefaults(): VideoEditOperation[] {
+    return [...this.plugins.values()].map((p, i) => ({
+      id: generateOperationId(),
       pluginId: p.id,
       enabled: p.defaultEnabled ?? false,
       params: this.getDefaultParams(p),
+      order: i,
     }))
   }
 

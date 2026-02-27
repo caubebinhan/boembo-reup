@@ -12,8 +12,9 @@ const uniqueEncode: VideoEditPlugin = {
   name: 'Re-encode Unique',
   group: 'anti-detect',
   icon: '🔀',
-  description: 'Re-encode with unique parameters to change file fingerprint',
+  description: 'Re-encode with unique encoding parameters to create a unique binary fingerprint',
   defaultEnabled: true,
+  recommended: true,
 
   configSchema: [
     {
@@ -76,9 +77,10 @@ const uniqueEncode: VideoEditPlugin = {
   },
 
   getOutputOptions(params) {
-    const preset = params.preset === 'fast' ? 'veryfast'
-      : params.preset === 'quality' ? 'slow'
-        : 'medium'
+    let preset: string
+    if (params.preset === 'fast') preset = 'veryfast'
+    else if (params.preset === 'quality') preset = 'slow'
+    else preset = 'medium'
 
     // Randomize CRF slightly around base 23
     const baseCrf = 23

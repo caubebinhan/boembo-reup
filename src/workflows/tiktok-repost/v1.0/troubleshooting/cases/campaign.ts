@@ -1,294 +1,327 @@
 import type { TroubleshootingCaseDefinition } from '@main/services/troubleshooting/types'
 import { meta, ttCase } from './_shared'
 
+const CAMPAIGN_CASE_BASE = {
+  risk: 'safe' as const,
+  category: 'campaign',
+  group: 'campaign',
+  implemented: true
+}
+
 export const campaignCases: TroubleshootingCaseDefinition[] = [
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.create-smoke',
     title: 'Campaign Create Smoke',
-    description: 'Create campaign for tiktok-repost@1.0 and verify workflow_id/workflow_version/flow_snapshot persisted.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'Create campaign for tiktok-repost@1.0 and verify workflow_id/workflow_version/flow_snapshot persisted.',
     tags: ['campaign', 'create', 'db', 'flow-snapshot'],
     level: 'basic',
-    implemented: true,
     meta: meta({
       parameters: [
         { key: 'workflowId', value: 'tiktok-repost' },
         { key: 'workflowVersion', value: '1.0' },
-        { key: 'fixtureMode', value: 'create-minimal-campaign' },
+        { key: 'fixtureMode', value: 'create-minimal-campaign' }
       ],
       checks: {
         db: [
           'campaigns.data_json stores workflow_id=tiktok-repost',
           'campaigns.data_json stores workflow_version=1.0',
           'flow_snapshot is frozen and non-null for new campaign',
-          'counters + meta initialized to defaults',
+          'counters + meta initialized to defaults'
         ],
         ui: ['Campaign appears in list and opens detail page'],
-        logs: ['Creation path and persisted campaign id are logged'],
+        logs: ['Creation path and persisted campaign id are logged']
       },
       passMessages: ['Campaign created and persisted with correct versioned flow snapshot'],
-      errorMessages: ['Schema/persistence mismatch includes exact missing field names'],
-    }),
+      errorMessages: ['Schema/persistence mismatch includes exact missing field names']
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.detail-ui-open-snapshot',
     title: 'Campaign Detail UI Open Snapshot',
-    description: 'Open newly created campaign detail and capture UI snapshot to verify version badge, counters, and empty-state sections.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'Open newly created campaign detail and capture UI snapshot to verify version badge, counters, and empty-state sections.',
     tags: ['campaign', 'ui', 'detail', 'artifact:screenshot'],
     level: 'basic',
-    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureCampaign', value: 'newly-created tiktok-repost@1.0 campaign' },
-        { key: 'captureViewport', value: 'desktop', description: 'Initial screenshot viewport' },
+        { key: 'captureViewport', value: 'desktop', description: 'Initial screenshot viewport' }
       ],
       checks: {
         db: ['Campaign document exists before opening UI'],
-        ui: ['Detail page renders workflow/version information', 'Counters/empty states render without crash'],
+        ui: [
+          'Detail page renders workflow/version information',
+          'Counters/empty states render without crash'
+        ],
         logs: ['UI open route + campaign id logged by troubleshooting runner'],
-        files: ['Capture screenshot of campaign detail initial state'],
+        files: ['Capture screenshot of campaign detail initial state']
       },
-      passMessages: ['UI baseline snapshot can be compared for future regressions'],
-    }),
+      passMessages: ['UI baseline snapshot can be compared for future regressions']
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.trigger-pause-resume',
     title: 'Campaign Trigger / Pause / Resume',
-    description: 'Trigger campaign, pause, resume, and verify jobs/campaign status transitions stay consistent.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'Trigger campaign, pause, resume, and verify jobs/campaign status transitions stay consistent.',
     tags: ['campaign', 'jobs', 'pause', 'resume', 'engine'],
     level: 'intermediate',
-    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureCampaignState', value: 'ready-to-trigger' },
-        { key: 'actions', value: 'trigger→pause→resume' },
+        { key: 'actions', value: 'trigger→pause→resume' }
       ],
       checks: {
         db: [
           'campaign status transitions active→paused→active (or finished) are persisted',
           'jobs rows created for start nodes',
-          'No duplicate pending jobs created on resume when jobs already exist',
+          'No duplicate pending jobs created on resume when jobs already exist'
         ],
         logs: ['FlowEngine campaign events emitted in correct order'],
-        events: ['campaign:triggered / campaign:paused / campaign:resumed emitted'],
+        events: ['campaign:triggered / campaign:paused / campaign:resumed emitted']
       },
-      errorMessages: ['Resume/trigger race or duplicate jobs are explicit in logs'],
-    }),
+      errorMessages: ['Resume/trigger race or duplicate jobs are explicit in logs']
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.loop.resume-last-processed-index',
     title: 'Loop Resume from last_processed_index',
-    description: 'Simulate interruption and verify loop resumes exactly from persisted last_processed_index.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'Simulate interruption and verify loop resumes exactly from persisted last_processed_index.',
     tags: ['loop', 'resume', 'last_processed_index', 'recovery'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureVideosCount', value: 5 },
-        { key: 'interruptionAfterIndex', value: 2 },
+        { key: 'interruptionAfterIndex', value: 2 }
       ],
       checks: {
         db: [
           'campaign.last_processed_index persisted before interruption',
           'Resume starts at exact saved index (no duplicate processing, no skipped items)',
-          'Final last_processed_index reaches total item count',
+          'Final last_processed_index reaches total item count'
         ],
-        logs: ['Loop iteration logs show resume offset and subsequent progression'],
+        logs: ['Loop iteration logs show resume offset and subsequent progression']
       },
-      passMessages: ['Resume behavior is idempotent and index-accurate'],
-    }),
+      passMessages: ['Resume behavior is idempotent and index-accurate']
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.concurrent-save-race-smoke',
     title: 'Campaign Concurrent Save Race Smoke',
-    description: 'Simulate flow update + troubleshooting patch update close together and verify no obvious campaign document corruption.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'Simulate flow update + troubleshooting patch update close together and verify no obvious campaign document corruption.',
     tags: ['campaign', 'db', 'race', 'edge'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureRaceWrites', value: 'video status patch + metadata update' },
-        { key: 'repeat', value: 5, description: 'Loop attempts to increase collision probability' },
+        { key: 'repeat', value: 5, description: 'Loop attempts to increase collision probability' }
       ],
       checks: {
         db: [
           'Campaign data_json remains valid JSON and reloadable after concurrent-ish writes',
-          'Unrelated videos/alerts/meta fields are not accidentally dropped',
+          'Unrelated videos/alerts/meta fields are not accidentally dropped'
         ],
-        logs: ['Before/after campaign snapshots or diffs are logged for failed assertions'],
+        logs: ['Before/after campaign snapshots or diffs are logged for failed assertions']
       },
       errorMessages: ['Lost-update symptoms include exact field diffs in logs'],
-      notes: ['Useful regression check once async task handlers start patching campaigns in background.'],
-    }),
+      notes: [
+        'Useful regression check once async task handlers start patching campaigns in background.'
+      ]
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.delete-while-running',
     title: 'Campaign Delete While Running',
-    description: 'User deletes campaign while FlowEngine has an active job; verify engine stops gracefully and campaign document is cleaned up.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'User deletes campaign while FlowEngine has an active job; verify engine stops gracefully and campaign document is cleaned up.',
     tags: ['campaign', 'lifecycle', 'delete', 'engine', 'edge'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaignState', value: 'active with running job' }],
       checks: {
-        db: ['Campaign row removed or status=deleted', 'Associated jobs marked cancelled/stopped', 'No orphan publish_history rows hold reference to deleted campaign'],
-        logs: ['FlowEngine detects deleted campaign and aborts job gracefully', 'No unhandled rejection from mid-run abort'],
-        events: ['campaign:deleted emitted; campaign:cancelled for running job'],
+        db: [
+          'Campaign row removed or status=deleted',
+          'Associated jobs marked cancelled/stopped',
+          'No orphan publish_history rows hold reference to deleted campaign'
+        ],
+        logs: [
+          'FlowEngine detects deleted campaign and aborts job gracefully',
+          'No unhandled rejection from mid-run abort'
+        ],
+        events: ['campaign:deleted emitted; campaign:cancelled for running job']
       },
-      errorMessages: ['Deleting active campaign must not leave engine in broken state'],
-    }),
+      errorMessages: ['Deleting active campaign must not leave engine in broken state']
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.edit-params-while-running',
     title: 'Campaign Params Edited While Running',
-    description: 'User edits campaign interval while a job is in progress; verify running job uses old params, next job uses updated params.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'User edits campaign interval while a job is in progress; verify running job uses old params, next job uses updated params.',
     tags: ['campaign', 'lifecycle', 'params', 'hot-reload', 'edge'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'editedParam', value: 'publishIntervalMinutes: 60 → 30' }],
+      parameters: [{ key: 'editedParam', value: 'publishIntervalMinutes: 60 -> 30' }],
       checks: {
-        db: ['campaign.params updated with new interval', 'Running job continues with original params snapshot', 'Next scheduled job uses updated interval'],
-        logs: ['Param change detected; isolation of in-flight vs queued behavior logged'],
+        db: [
+          'campaign.params updated with new interval',
+          'Running job continues with original params snapshot',
+          'Next scheduled job uses updated interval'
+        ],
+        logs: ['Param change detected; isolation of in-flight vs queued behavior logged']
       },
-      passMessages: ['Params edit is safe and does not corrupt the currently-running job'],
-    }),
+      passMessages: ['Params edit is safe and does not corrupt the currently-running job']
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.multi-campaign-same-source',
     title: 'Multiple Campaigns Scanning Same Source Channel',
-    description: 'Two active campaigns both scan the same @channel; verify no cross-contamination of video rows.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'Two active campaigns both scan the same @channel; verify no cross-contamination of video rows.',
     tags: ['campaign', 'isolation', 'multi-campaign', 'source', 'edge'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'fixtureCampaignCount', value: 2 },{ key: 'sharedSource', value: 'same @channel' }],
+      parameters: [
+        { key: 'fixtureCampaignCount', value: 2 },
+        { key: 'sharedSource', value: 'same @channel' }
+      ],
       checks: {
-        db: ['Each campaign.videos[] is scoped to its own campaign_id', 'No cross-campaign video row contamination'],
-        logs: ['Each scanner run logs its campaign_id as scope identifier'],
+        db: [
+          'Each campaign.videos[] is scoped to its own campaign_id',
+          'No cross-campaign video row contamination'
+        ],
+        logs: ['Each scanner run logs its campaign_id as scope identifier']
       },
-      passMessages: ['Campaigns are fully isolated even when sharing the same source'],
-    }),
+      passMessages: ['Campaigns are fully isolated even when sharing the same source']
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.all-videos-failed-terminal',
     title: 'Campaign Terminal: All Videos Failed',
-    description: 'Every video in campaign transitions to failed; verify campaign auto-stops, alert fires, and status is final/failed.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'Every video in campaign transitions to failed; verify campaign auto-stops, alert fires, and status is final/failed.',
     tags: ['campaign', 'lifecycle', 'terminal', 'all-failed', 'edge'],
     level: 'intermediate',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'fixtureVideoCount', value: 5 },{ key: 'fixtureAllOutcome', value: 'failed' }],
+      parameters: [
+        { key: 'fixtureVideoCount', value: 5 },
+        { key: 'fixtureAllOutcome', value: 'failed' }
+      ],
       checks: {
-        db: ['campaign.status=failed or completed_with_errors', 'failed_count matches total video count', 'No queued/running videos remain'],
+        db: [
+          'campaign.status=failed or completed_with_errors',
+          'failed_count matches total video count',
+          'No queued/running videos remain'
+        ],
         logs: ['Terminal condition detected and logged'],
-        events: ['campaign:failed emitted with failure summary'],
+        events: ['campaign:failed emitted with failure summary']
       },
-      passMessages: ['All-failed terminal state is clean and user-facing'],
-    }),
+      passMessages: ['All-failed terminal state is clean and user-facing']
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.scheduler-missed-window-auto-reschedule',
     title: 'Campaign Scheduler: Missed Window Auto-Reschedule on Boot',
-    description: 'App restarts after scheduled_for is in the past; FlowEngine reschedules missed jobs from now without skipping.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'App restarts after scheduled_for is in the past; FlowEngine reschedules missed jobs from now without skipping.',
     tags: ['campaign', 'scheduler', 'boot', 'recovery', 'missed-window'],
     level: 'intermediate',
-    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureMissedWindowMinutes', value: 45 }],
       checks: {
-        db: ['scheduled_for updated to >= now on boot recovery', 'No video is processed multiple times due to replay'],
+        db: [
+          'scheduled_for updated to >= now on boot recovery',
+          'No video is processed multiple times due to replay'
+        ],
         logs: ['Boot recovery: missed window count logged with old/new scheduled_for values'],
-        events: ['campaign:missed-schedule-recovered emitted with count'],
+        events: ['campaign:missed-schedule-recovered emitted with count']
       },
-      passMessages: ['Missed schedule window is recovered deterministically on restart'],
-    }),
+      passMessages: ['Missed schedule window is recovered deterministically on restart']
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.completed-immutability',
     title: 'Completed Campaign is Immutable',
-    description: 'Completed/finished campaign cannot be triggered again; any re-trigger attempt is rejected with clear error.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'Completed/finished campaign cannot be triggered again; any re-trigger attempt is rejected with clear error.',
     tags: ['campaign', 'lifecycle', 'completed', 'immutable', 'edge'],
     level: 'basic',
-    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCampaignStatus', value: 'completed' }],
       checks: {
-        db: ['campaign.status remains completed after re-trigger attempt', 'No new job rows created'],
+        db: [
+          'campaign.status remains completed after re-trigger attempt',
+          'No new job rows created'
+        ],
         logs: ['Re-trigger rejected with reason: campaign already completed'],
-        events: ['No campaign:triggered emitted for completed campaign'],
+        events: ['No campaign:triggered emitted for completed campaign']
       },
-      passMessages: ['Completed campaign state is final and re-trigger-proof'],
-    }),
+      passMessages: ['Completed campaign state is final and re-trigger-proof']
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.stats-counter-integrity',
     title: 'Campaign Stats Counter Integrity on Concurrent Updates',
-    description: 'Concurrent publish completions update published_count; verify counter reflects exact total without missed increments or double-counts.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'Concurrent publish completions update published_count; verify counter reflects exact total without missed increments or double-counts.',
     tags: ['campaign', 'stats', 'counter', 'race', 'db'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'fixturePublishCount', value: 5 },{ key: 'fixtureCounterInitial', value: 0 }],
+      parameters: [
+        { key: 'fixturePublishCount', value: 5 },
+        { key: 'fixtureCounterInitial', value: 0 }
+      ],
       checks: {
-        db: ['campaign.published_count === 5 after 5 concurrent publishes', 'No counter race condition produces value < 5 or > 5'],
-        logs: ['Each counter increment operation is individually logged with campaign_id + before/after'],
+        db: [
+          'campaign.published_count === 5 after 5 concurrent publishes',
+          'No counter race condition produces value < 5 or > 5'
+        ],
+        logs: [
+          'Each counter increment operation is individually logged with campaign_id + before/after'
+        ]
       },
-      passMessages: ['Atomic counter increments are correct under concurrent publish load'],
-    }),
+      passMessages: ['Atomic counter increments are correct under concurrent publish load']
+    })
   }),
   ttCase({
+    ...CAMPAIGN_CASE_BASE,
     id: 'tiktok-repost-v1.campaign.video-status-transitions-valid',
     title: 'Campaign Video Status Transitions: Valid State Machine',
-    description: 'Verify all allowed status transitions (queued→published, queued→failed, under_review→published, etc.) occur correctly; invalid transitions are rejected.',
-    risk: 'safe',
-    category: 'campaign',
-    group: 'campaign',
+    description:
+      'Verify all allowed status transitions (queued→published, queued→failed, under_review→published, etc.) occur correctly; invalid transitions are rejected.',
     tags: ['campaign', 'status', 'state-machine', 'db', 'edge'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'transitionsUnderTest', value: 'queued→published, queued→failed, under_review→published, under_review→verification_incomplete, failed→queued (manual retry)' }],
+      parameters: [
+        {
+          key: 'transitionsUnderTest',
+          value:
+            'queued→published, queued→failed, under_review→published, under_review→verification_incomplete, failed→queued (manual retry)'
+        }
+      ],
       checks: {
-        db: ['Each valid transition changes video.status as expected', 'Invalid transition (e.g. published→queued) is blocked or rejected with log'],
-        logs: ['Status transition decisions logged with from/to state and reason'],
+        db: [
+          'Each valid transition changes video.status as expected',
+          'Invalid transition (e.g. published→queued) is blocked or rejected with log'
+        ],
+        logs: ['Status transition decisions logged with from/to state and reason']
       },
-      passMessages: ['All tested status transitions conform to expected state machine definition'],
-    }),
-  }),
+      passMessages: ['All tested status transitions conform to expected state machine definition']
+    })
+  })
 ]

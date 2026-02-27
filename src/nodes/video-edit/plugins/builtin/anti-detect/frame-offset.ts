@@ -12,8 +12,9 @@ const frameOffset: VideoEditPlugin = {
   name: 'Trim First/Last Frame',
   group: 'anti-detect',
   icon: '✂️',
-  description: 'Trim a few ms from start/end to create unique timestamps',
-  defaultEnabled: true,
+  description: 'Trim a small random portion from the start',
+  defaultEnabled: false,
+  warning: '⚠️ Removes 0.1-0.5s from the start of the video. May cut important intro content.',
 
   configSchema: [
     {

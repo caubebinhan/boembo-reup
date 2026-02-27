@@ -4,10 +4,9 @@
  * Core interfaces for the plugin-based video editing system.
  * Supports multi-instance operations (user can add N instances of same plugin).
  */
-import type { FFmpegFilter } from '@main/ffmpeg/FFmpegCommandBuilder'
-
 // Re-export for convenience
-export type { FFmpegFilter }
+export type { FFmpegFilter } from '@main/ffmpeg/FFmpegCommandBuilder'
+import type { FFmpegFilter } from '@main/ffmpeg/FFmpegCommandBuilder'
 
 // ── Plugin Config Schema ────────────────────────────
 
@@ -100,6 +99,10 @@ export interface VideoEditPlugin {
   allowMultipleInstances?: boolean
   /** Label for the "add" button when allowMultipleInstances is true */
   addInstanceLabel?: string
+  /** If true, show "Recommended" badge in wizard — safe, invisible anti-detect plugins */
+  recommended?: boolean
+  /** Warning text shown when user enables this plugin (e.g. "Alters original audio") */
+  warning?: string
 
   /** Config schema — used to auto-render wizard UI form */
   configSchema: PluginConfigField[]

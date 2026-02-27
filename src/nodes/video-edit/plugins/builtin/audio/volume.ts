@@ -46,7 +46,7 @@ const volume: VideoEditPlugin = {
         inputs: ['0:a'],
         outputs: ['a_out'],
       })
-    } else if (vol !== 1.0) {
+    } else if (vol !== 1) {
       filters.push({
         filter: 'volume',
         options: { volume: vol },

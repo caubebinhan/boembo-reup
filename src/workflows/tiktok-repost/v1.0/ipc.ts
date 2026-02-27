@@ -8,8 +8,17 @@ import { ipcMain, BrowserWindow, shell } from 'electron'
 import { campaignRepo } from '@main/db/repositories/CampaignRepo'
 import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 import { normalizeTimeRanges, nextValidSlot } from '@nodes/_shared/timeWindow'
+import { videoEditPluginRegistry } from '@core/video-edit'
 
 export function setup() {
+  // ── Video Edit Plugins (auto-loaded from registry) ────
+  ipcMain.handle('video-edit:get-plugins', () => {
+    return videoEditPluginRegistry.getPluginMetas()
+  })
+
+  ipcMain.handle('video-edit:get-defaults', () => {
+    return videoEditPluginRegistry.getDefaults()
+  })
   // ── Videos by campaign ────────────────────────────────
   ipcMain.handle('campaign:get-videos', async (_event, { id }) => {
     const store = campaignRepo.tryOpen(id)

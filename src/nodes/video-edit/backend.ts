@@ -14,15 +14,13 @@ export default async function execute(
   input: Record<string, any>,
   ctx: NodeExecutionContext,
 ): Promise<NodeExecutionResult> {
-  const video = input.video || input.data?.video
-  if (!video) {
-    return { data: input, message: 'No video in input — passthrough' }
+  // Input is the flat video object (same convention as downloader, caption-gen, publisher)
+  const video = input
+  if (!video?.local_path) {
+    return { data: input, message: 'No local_path — passthrough (video not downloaded yet?)' }
   }
 
   const videoPath: string = video.local_path
-  if (!videoPath) {
-    return { data: input, message: 'No local_path — passthrough (video not downloaded yet?)' }
-  }
 
   // Get operation configs from campaign params (multi-instance format)
   const operations: VideoEditOperation[] =
@@ -42,7 +40,7 @@ export default async function execute(
     }
   }
 
-  const videoId = video.id || video.video_id
+  const videoId = video.platform_id || video.id || video.video_id
   ctx.logger.info(`VideoEdit: starting ${enabledCount || 'default'} operation(s) on ${videoPath}`)
   ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'video_edit_1', 'video-edit:started', {
     videoId,
@@ -70,20 +68,9 @@ export default async function execute(
       ctx.logger.info('VideoEdit: no modifications applied')
       return { data: input, message: 'No video modifications applied' }
     }
-
-    const updatedVideo = {
-      ...video,
-      local_path: result.outputPath,
-      original_path: video.original_path || video.local_path,
-      video_edit: {
-        appliedOperations: result.appliedOperations,
-        totalDurationMs: result.totalDurationMs,
-        editedAt: Date.now(),
-      },
-    }
-
-    if (ctx.store && video.id) {
-      await ctx.store.updateVideo(video.id, { local_path: result.outputPath })
+    // Update video record in campaign store
+    if (ctx.store?.updateVideo && video.platform_id) {
+      await Promise.resolve(ctx.store.updateVideo(video.platform_id, { local_path: result.outputPath }))
     }
 
     ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'video_edit_1', 'video-edit:completed', {
@@ -96,7 +83,16 @@ export default async function execute(
     ctx.logger.info(`VideoEdit: done in ${result.totalDurationMs}ms — ${result.appliedOperations.length} operation(s)`)
 
     return {
-      data: { ...input, video: updatedVideo },
+      data: {
+        ...video,
+        local_path: result.outputPath,
+        original_path: video.original_path || videoPath,
+        video_edit: {
+          appliedOperations: result.appliedOperations,
+          totalDurationMs: result.totalDurationMs,
+          editedAt: Date.now(),
+        },
+      },
       message: `Edited with ${result.appliedOperations.length} operation(s)`,
     }
   } catch (error: any) {
@@ -105,7 +101,7 @@ export default async function execute(
       videoId, error: error.message,
     })
 
-    ctx.alert('warning', `Video edit failed: ${error.message}. Using original video.`)
+    ctx.alert('warn', `Video edit failed: ${error.message}. Using original video.`)
     return { data: input, message: `Edit failed: ${error.message}` }
   }
 }

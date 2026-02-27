@@ -13,6 +13,7 @@ const mirrorFlip: VideoEditPlugin = {
   icon: '🪞',
   description: 'Mirror and slightly zoom to change visual fingerprint',
   defaultEnabled: false,
+  warning: '⚠️ Visibly flips the video. Text and logos will appear mirrored. Not suitable for all content.',
 
   configSchema: [
     {
@@ -31,8 +32,8 @@ const mirrorFlip: VideoEditPlugin = {
       type: 'slider',
       label: 'Zoom factor',
       default: 1.02,
-      min: 1.0,
-      max: 1.10,
+      min: 1,
+      max: 1.1,
       step: 0.01,
       description: 'Slight zoom to crop edges (1.0 = no zoom)',
     },
@@ -52,14 +53,13 @@ const mirrorFlip: VideoEditPlugin = {
     }
 
     // Zoom via scale + crop (to maintain original dimensions)
-    if (zoom > 1.0) {
+    if (zoom > 1) {
       const scaledW = Math.round(ctx.inputWidth * zoom)
       const scaledH = Math.round(ctx.inputHeight * zoom)
       filters.push({
         filter: 'scale',
         options: { w: scaledW, h: scaledH },
-      })
-      filters.push({
+      }, {
         filter: 'crop',
         options: { w: ctx.inputWidth, h: ctx.inputHeight },
       })

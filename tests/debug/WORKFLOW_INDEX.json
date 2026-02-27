@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": 1772180544314,
+  "generatedAt": 1772182793399,
   "totalWorkflows": 3,
   "workflows": [
     {
@@ -18,8 +18,8 @@
       "workflowVersion": "1.0",
       "scope": "tiktok-repost@1.0",
       "total": 129,
-      "runnable": 95,
-      "planned": 34,
+      "runnable": 57,
+      "planned": 72,
       "caseIndexPath": "tests/debug/workflows/tiktok-repost/v1.0/CASE_INDEX.json",
       "casebookPath": "tests/debug/workflows/tiktok-repost/v1.0/CASEBOOK.md"
     },

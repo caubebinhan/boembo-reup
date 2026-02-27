@@ -1,165 +1,184 @@
 import type { TroubleshootingCaseDefinition } from '@main/services/troubleshooting/types'
 import { meta, ttCase } from './_shared'
 
+const TRANSFORM_CASE_BASE = {
+  risk: 'safe' as const,
+  implemented: true
+}
+
 export const captionTransformCases: TroubleshootingCaseDefinition[] = [
   ttCase({
+    ...TRANSFORM_CASE_BASE,
     id: 'tiktok-repost-v1.caption.source-fallback',
     title: 'Caption Fallback to Source',
-    description: 'When generated caption is missing, publish path uses source description fallback.',
-    risk: 'safe',
+    description:
+      'When generated caption is missing, publish path uses source description fallback.',
     category: 'caption',
     group: 'caption',
     tags: ['caption', 'fallback', 'publish-input'],
     level: 'basic',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'fixtureCaptionState', value: 'generated_caption=null,description=present' }],
+      parameters: [
+        { key: 'fixtureCaptionState', value: 'generated_caption=null,description=present' }
+      ],
       checks: {
-        db: ['Video record retains source description', 'Resolved caption value passed to publish layer is source description'],
-        logs: ['Caption source fallback decision visible in debug logs'],
-      },
-    }),
+        db: [
+          'Video record retains source description',
+          'Resolved caption value passed to publish layer is source description'
+        ],
+        logs: ['Caption source fallback decision visible in debug logs']
+      }
+    })
   }),
   ttCase({
+    ...TRANSFORM_CASE_BASE,
     id: 'tiktok-repost-v1.caption.generated-override',
     title: 'Generated Caption Override',
-    description: 'Generated caption should override source description and flow preserves it through later nodes.',
-    risk: 'safe',
+    description:
+      'Generated caption should override source description and flow preserves it through later nodes.',
     category: 'caption',
     group: 'caption',
     tags: ['caption', 'override', 'transform'],
     level: 'intermediate',
-    implemented: true,
     meta: meta({
-      parameters: [{ key: 'fixtureCaptionState', value: 'generated_caption=present,description=present' }],
+      parameters: [
+        { key: 'fixtureCaptionState', value: 'generated_caption=present,description=present' }
+      ],
       checks: {
-        db: ['generated_caption persists after transform chain', 'Publish input uses generated_caption'],
-        logs: ['Caption precedence path logged for debugability'],
+        db: [
+          'generated_caption persists after transform chain',
+          'Publish input uses generated_caption'
+        ],
+        logs: ['Caption precedence path logged for debugability']
       },
-      passMessages: ['Caption precedence remains stable across node changes'],
-    }),
+      passMessages: ['Caption precedence remains stable across node changes']
+    })
   }),
   ttCase({
+    ...TRANSFORM_CASE_BASE,
     id: 'tiktok-repost-v1.transform.chain-smoke',
     title: 'Transform Chain Smoke',
-    description: 'Run core transform/condition nodes in the v1 flow and verify key fields survive chain mutations.',
-    risk: 'safe',
+    description:
+      'Run core transform/condition nodes in the v1 flow and verify key fields survive chain mutations.',
     category: 'transform',
     group: 'transform',
     tags: ['transform', 'chain', 'smoke', 'db'],
     level: 'basic',
-    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureVideoCount', value: 2 }],
       checks: {
-        db: ['Required publish fields (platform_id/local_path/description) survive transformations'],
-        logs: ['Node-by-node transform outputs visible in troubleshooting logs'],
+        db: [
+          'Required publish fields (platform_id/local_path/description) survive transformations'
+        ],
+        logs: ['Node-by-node transform outputs visible in troubleshooting logs']
       },
-      errorMessages: ['Unexpected field drops are shown in diff/assert logs'],
-    }),
+      errorMessages: ['Unexpected field drops are shown in diff/assert logs']
+    })
   }),
   ttCase({
+    ...TRANSFORM_CASE_BASE,
     id: 'tiktok-repost-v1.transform.condition-skip-item',
     title: 'Condition Skip Item',
-    description: 'Condition/guard node skips one item while loop continues processing subsequent items.',
-    risk: 'safe',
+    description:
+      'Condition/guard node skips one item while loop continues processing subsequent items.',
     category: 'transform',
     group: 'transform',
     tags: ['transform', 'condition', 'skip', 'loop'],
     level: 'intermediate',
-    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCondition', value: 'skip item index 1' }],
       checks: {
         db: ['Skipped item state is preserved/marked without corrupting later items'],
         logs: ['Skip decision logged at condition node and loop continues to next item'],
-        events: ['Optional skip notification/log event emitted'],
+        events: ['Optional skip notification/log event emitted']
       },
-      passMessages: ['Skip path does not terminate loop early'],
-    }),
+      passMessages: ['Skip path does not terminate loop early']
+    })
   }),
   ttCase({
+    ...TRANSFORM_CASE_BASE,
     id: 'tiktok-repost-v1.transform.null-input-guard',
     title: 'Null Input Guard in Loop',
-    description: 'Loop child receives null input and engine logs error then skips item without crashing campaign.',
-    risk: 'safe',
+    description:
+      'Loop child receives null input and engine logs error then skips item without crashing campaign.',
     category: 'transform',
     group: 'transform',
     tags: ['transform', 'loop', 'null-input', 'edge'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureInjectNullAtIndex', value: 1 }],
       checks: {
         db: ['Campaign remains runnable and subsequent items still process'],
-        logs: ['FlowEngine null input guard log emitted with child instance id'],
+        logs: ['FlowEngine null input guard log emitted with child instance id']
       },
-      errorMessages: ['No uncaught exception or campaign hard-stop for null input edge case'],
-    }),
+      errorMessages: ['No uncaught exception or campaign hard-stop for null input edge case']
+    })
   }),
   ttCase({
+    ...TRANSFORM_CASE_BASE,
     id: 'tiktok-repost-v1.caption.unicode-hashtag-preserve',
     title: 'Caption Unicode + Hashtag Preserve',
-    description: 'Unicode, emoji-like text, and hashtags survive transform chain and publish input sanitation without accidental stripping.',
-    risk: 'safe',
+    description:
+      'Unicode, emoji-like text, and hashtags survive transform chain and publish input sanitation without accidental stripping.',
     category: 'caption',
     group: 'caption',
     tags: ['caption', 'unicode', 'hashtags', 'edge'],
     level: 'intermediate',
-    implemented: true,
     meta: meta({
       parameters: [{ key: 'fixtureCaption', value: 'mixed unicode + hashtags + URLs' }],
       checks: {
         db: ['Caption text is preserved (or intentionally normalized) predictably across nodes'],
-        logs: ['Sanitization/normalization diff is logged when changes are applied'],
+        logs: ['Sanitization/normalization diff is logged when changes are applied']
       },
-      passMessages: ['Caption handling is deterministic for multilingual content'],
-    }),
+      passMessages: ['Caption handling is deterministic for multilingual content']
+    })
   }),
   ttCase({
+    ...TRANSFORM_CASE_BASE,
     id: 'tiktok-repost-v1.transform.on-error-continue-policy',
     title: 'Transform Error Continue Policy',
-    description: 'Transform node throws for one item and workflow follows configured continue/skip policy without stopping entire loop.',
-    risk: 'safe',
+    description:
+      'Transform node throws for one item and workflow follows configured continue/skip policy without stopping entire loop.',
     category: 'transform',
     group: 'transform',
     tags: ['transform', 'error-policy', 'continue', 'loop', 'edge'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
       parameters: [
         { key: 'fixtureThrowAtIndex', value: 1 },
-        { key: 'policy', value: 'continue/skip-item' },
+        { key: 'policy', value: 'continue/skip-item' }
       ],
       checks: {
         db: ['Failed item is marked appropriately while later items continue processing'],
         logs: ['Thrown error stack/message and policy branch are both recorded'],
-        events: ['Optional warning/error event emitted for skipped item'],
+        events: ['Optional warning/error event emitted for skipped item']
       },
-      errorMessages: ['Single-item transform error should not hard-stop the whole campaign under continue policy'],
-    }),
+      errorMessages: [
+        'Single-item transform error should not hard-stop the whole campaign under continue policy'
+      ]
+    })
   }),
   ttCase({
+    ...TRANSFORM_CASE_BASE,
     id: 'tiktok-repost-v1.transform-pipeline.field-integrity-db-assert',
     title: 'Transform Pipeline Field Integrity DB Assert',
-    description: 'DB-level assertions verify transform pipeline never drops required publish fields or mutates unrelated records.',
-    risk: 'safe',
+    description:
+      'DB-level assertions verify transform pipeline never drops required publish fields or mutates unrelated records.',
     category: 'transform',
     group: 'transform',
     tags: ['transform', 'db', 'integrity', 'regression'],
     level: 'advanced',
-    implemented: true,
     meta: meta({
       parameters: [{ key: 'requiredFields', value: 'platform_id,local_path,description,status' }],
       checks: {
         db: [
           'Before/after snapshots show only expected field changes for target video',
-          'Other videos in campaign remain unchanged',
+          'Other videos in campaign remain unchanged'
         ],
         logs: ['Field diff assertion output logged on failure'],
-        files: ['Optional DB snapshot JSON before/after for debugging'],
+        files: ['Optional DB snapshot JSON before/after for debugging']
       },
-      passMessages: ['Transform node changes are scoped and field-safe'],
-    }),
-  }),
+      passMessages: ['Transform node changes are scoped and field-safe']
+    })
+  })
 ]
