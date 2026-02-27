@@ -90,6 +90,23 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     }
   }
 
+  // ── Deduplicate by platform_id across sources ──
+  const beforeDedup = allVideos.length
+  const seenPids = new Set<string>()
+  const dedupedVideos: typeof allVideos = []
+  for (const v of allVideos) {
+    const pid = v.platform_id
+    if (!pid || seenPids.has(pid)) continue
+    seenPids.add(pid)
+    dedupedVideos.push(v)
+  }
+  if (dedupedVideos.length < beforeDedup) {
+    ctx.logger.info(`[Scanner] Deduped across sources: ${beforeDedup} → ${dedupedVideos.length} unique videos`)
+  }
+  // Replace allVideos with deduplicated list
+  allVideos.length = 0
+  allVideos.push(...dedupedVideos)
+
   // Build summary progress with per-source breakdown
   const summary = sources.length > 1
     ? `🔍 ${allVideos.length} videos (${sourceCounts.join(', ')})`

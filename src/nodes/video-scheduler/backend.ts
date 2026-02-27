@@ -9,11 +9,26 @@ import { computeScheduleSlots, scheduleVideos } from '@shared/scheduling'
  * Supports: firstRunAt gate, enableJitter, autoSchedule per-source.
  */
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
-  const videos = Array.isArray(input) ? input : (input.videos || input.items || [])
+  let videos = Array.isArray(input) ? input : (input.videos || input.items || [])
 
   if (videos.length === 0) {
     ctx.logger.info('[VideoScheduler] No videos to schedule')
     return { data: videos, action: 'continue', message: 'No videos to schedule' }
+  }
+
+  // ── Deduplicate by platform_id (safety net) ──
+  {
+    const seen = new Set<string>()
+    const before = videos.length
+    videos = videos.filter((v: any) => {
+      const pid = v.platform_id || v.id
+      if (!pid || seen.has(pid)) return false
+      seen.add(pid)
+      return true
+    })
+    if (videos.length < before) {
+      ctx.logger.info(`[VideoScheduler] Deduped: ${before} → ${videos.length} unique videos`)
+    }
   }
 
   const intervalMinutes = ctx.params.intervalMinutes ?? 60
