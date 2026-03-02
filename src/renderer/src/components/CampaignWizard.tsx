@@ -119,6 +119,10 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
     const totalSteps = 1 + workflowSteps.length
     const isLastStep = currentStepIndex === totalSteps - 1
 
+    // Detect if current step is the video editor (needs full-screen)
+    const currentStepId = isStep0 ? 'setup' : workflowSteps[workflowStepIndex]?.id || ''
+    const isVideoEditStep = currentStepId === 'video-edit'
+
     // Build stepper display
     const stepperSteps = useMemo(() => {
         const setup = { id: 'setup', title: 'Setup', icon: '⚙️' }
@@ -290,14 +294,20 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-            <div className="bg-white w-[860px] h-[90vh] flex flex-col rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-                {/* Stepper */}
-                <div className="border-b border-slate-200 bg-slate-50 shrink-0">
-                    <WizardStepper steps={stepperSteps} currentIndex={currentStepIndex} />
-                </div>
+            <div className={`flex flex-col rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 ${isVideoEditStep
+                ? 'w-[98vw] h-[96vh] bg-[#fcfbf8] border border-[#e8e4db]'
+                : 'bg-white w-[860px] h-[90vh] border border-slate-200'
+                }`}>
+                {/* Stepper — hidden during full-screen video edit */}
+                {!isVideoEditStep && (
+                    <div className="border-b border-slate-200 bg-slate-50 shrink-0">
+                        <WizardStepper steps={stepperSteps} currentIndex={currentStepIndex} />
+                    </div>
+                )}
 
                 {/* Content — fills remaining height, scrolls internally */}
-                <div className="flex-1 overflow-y-auto p-8 bg-white">
+                <div className={`flex-1 overflow-y-auto ${isVideoEditStep ? 'p-0 bg-[#fcfbf8]' : 'p-8 bg-white'
+                    }`}>
                     <WizardStepErrorBoundary
                         stepId={isStep0 ? 'setup' : workflowSteps[workflowStepIndex]?.id || 'unknown'}
                         onSkip={!isLastStep ? () => { setDirection('next'); setCurrentStepIndex(prev => prev + 1) } : undefined}
@@ -313,37 +323,39 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
                     )}
                 </div>
 
-                {/* Footer */}
-                <div className="border-t border-slate-200 bg-slate-50 p-4 flex justify-between items-center shrink-0">
-                    <button
-                        onClick={handleBack}
-                        className="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-100 transition font-medium cursor-pointer"
-                    >
-                        {currentStepIndex === 0 ? 'Cancel' : '← Back'}
-                    </button>
-
-                    <span className="text-xs text-slate-400 font-medium">
-                        Step {currentStepIndex + 1} of {totalSteps}
-                    </span>
-
-                    {!isLastStep || workflowSteps.length === 0 ? (
+                {/* Footer — hidden during full-screen video edit (uses internal nav) */}
+                {!isVideoEditStep && (
+                    <div className="border-t border-slate-200 bg-slate-50 p-4 flex justify-between items-center shrink-0">
                         <button
-                            onClick={handleNext}
-                            disabled={isStep0 && (!campaignName.trim() || !selectedWorkflow)}
-                            className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-medium transition disabled:opacity-50 shadow-lg shadow-purple-200 cursor-pointer"
+                            onClick={handleBack}
+                            className="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-100 transition font-medium cursor-pointer"
                         >
-                            Next →
+                            {currentStepIndex === 0 ? 'Cancel' : '← Back'}
                         </button>
-                    ) : (
-                        <button
-                            onClick={handleSave}
-                            disabled={isSubmitting}
-                            className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition disabled:opacity-50 shadow-lg shadow-emerald-200 cursor-pointer"
-                        >
-                            {isSubmitting ? 'Saving…' : '💾 Create Campaign'}
-                        </button>
-                    )}
-                </div>
+
+                        <span className="text-xs text-slate-400 font-medium">
+                            Step {currentStepIndex + 1} of {totalSteps}
+                        </span>
+
+                        {!isLastStep || workflowSteps.length === 0 ? (
+                            <button
+                                onClick={handleNext}
+                                disabled={isStep0 && (!campaignName.trim() || !selectedWorkflow)}
+                                className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-medium transition disabled:opacity-50 shadow-lg shadow-purple-200 cursor-pointer"
+                            >
+                                Next →
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleSave}
+                                disabled={isSubmitting}
+                                className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition disabled:opacity-50 shadow-lg shadow-emerald-200 cursor-pointer"
+                            >
+                                {isSubmitting ? 'Saving…' : '💾 Create Campaign'}
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     )

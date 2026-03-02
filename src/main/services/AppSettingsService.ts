@@ -92,6 +92,16 @@ export class AppSettingsService {
     return DEFAULT_STORAGE_DIR
   }
 
+  // ── Video Edit Plugins ──────────────────────────────
+
+  static getEnabledPlugins(): string[] {
+    return this.getJson<string[]>('videoEdit.enabledPlugins', [])
+  }
+
+  static setEnabledPlugins(ids: string[]): void {
+    this.setJson('videoEdit.enabledPlugins', ids)
+  }
+
   static getSentryOAuthConnection(): SentryOAuthConnectionSettings | null {
     return this.getJson<SentryOAuthConnectionSettings | null>(SENTRY_OAUTH_CONNECTION_KEY, null)
   }

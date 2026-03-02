@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { TroubleshootingCaseId, TroubleshootingService } from '../services/TroubleshootingService'
+import { jobRepo } from '../db/repositories/JobRepo'
 
 function emitToAll(channel: string, payload: any) {
   try {
@@ -71,4 +72,41 @@ export function setupTroubleshootingIPC() {
     })
     return run
   })
+
+  if (process.env.NODE_ENV === 'test') {
+    ipcMain.removeHandler('troubleshooting:test:enqueue-job')
+    ipcMain.handle(
+      'troubleshooting:test:enqueue-job',
+      async (
+        _event,
+        payload?: {
+          campaignId?: string
+          workflowId?: string
+          nodeId?: string
+          instanceId?: string
+          data?: Record<string, any>
+          scheduledAt?: number
+        }
+      ) => {
+        const campaignId = String(payload?.campaignId || '').trim()
+        const workflowId = String(payload?.workflowId || '').trim()
+        const nodeId = String(payload?.nodeId || '').trim()
+        const instanceId = String(payload?.instanceId || '').trim()
+        if (!campaignId || !workflowId || !nodeId || !instanceId) {
+          throw new Error('Missing required enqueue payload fields')
+        }
+        const jobId = jobRepo.createJob({
+          campaign_id: campaignId,
+          workflow_id: workflowId,
+          node_id: nodeId,
+          instance_id: instanceId,
+          type: 'FLOW_STEP',
+          data: payload?.data || {},
+          scheduled_at: payload?.scheduledAt || Date.now(),
+          status: 'pending',
+        })
+        return { ok: true, jobId }
+      }
+    )
+  }
 }

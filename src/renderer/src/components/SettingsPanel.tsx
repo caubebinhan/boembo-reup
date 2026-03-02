@@ -49,12 +49,13 @@ type SentryStatus = {
   connection?: SentryConnection
 }
 
-type SettingsTab = 'browser' | 'storage' | 'notifications'
+type SettingsTab = 'browser' | 'storage' | 'notifications' | 'plugins'
 
 const TABS: { id: SettingsTab; label: string; icon: string }[] = [
   { id: 'browser', label: 'Browser & Automation', icon: 'B' },
   { id: 'storage', label: 'Storage', icon: 'S' },
   { id: 'notifications', label: 'Notifications', icon: 'N' },
+  { id: 'plugins', label: 'Video Plugins', icon: '🧩' },
 ]
 
 export function SettingsPanel() {
@@ -87,6 +88,7 @@ export function SettingsPanel() {
           {tab === 'browser' && <BrowserSection api={api} />}
           {tab === 'storage' && <StorageSection api={api} />}
           {tab === 'notifications' && <NotificationsSection />}
+          {tab === 'plugins' && <PluginsSection api={api} />}
         </div>
       </div>
     </div>
@@ -726,4 +728,138 @@ function NotificationsSection() {
     </div>
   )
 }
+
+// ── Plugins Section ──────────────────────────────────
+
+type PluginMeta = {
+  id: string; name: string; group: string; icon: string
+  description: string; previewHint: string
+  defaultEnabled?: boolean; recommended?: boolean
+}
+
+const PLUGIN_GROUPS: { id: string; emoji: string; label: string }[] = [
+  { id: 'anti-detect', emoji: '🛡️', label: 'Anti-Detect' },
+  { id: 'transform', emoji: '🔧', label: 'Transform' },
+  { id: 'overlay', emoji: '🖼️', label: 'Overlay' },
+  { id: 'filter', emoji: '🎨', label: 'Filter' },
+  { id: 'audio', emoji: '🔊', label: 'Audio' },
+]
+
+function PluginsSection({ api }: { api: any }) {
+  const [plugins, setPlugins] = useState<PluginMeta[]>([])
+  const [enabledIds, setEnabledIds] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      api.invoke('video-edit:get-plugin-metas'),
+      api.invoke('settings:get-enabled-plugins'),
+    ]).then(([metas, ids]: [PluginMeta[], string[]]) => {
+      setPlugins(metas || [])
+      // If no plugins saved yet, auto-enable recommended
+      if (!ids || ids.length === 0) {
+        const recommended = (metas || []).filter((p: PluginMeta) => p.defaultEnabled || p.recommended).map((p: PluginMeta) => p.id)
+        setEnabledIds(recommended)
+        api.invoke('settings:set-enabled-plugins', recommended)
+      } else {
+        setEnabledIds(ids)
+      }
+    }).catch(console.error).finally(() => setLoading(false))
+  }, [api])
+
+  const toggle = (id: string) => {
+    const next = enabledIds.includes(id) ? enabledIds.filter(x => x !== id) : [...enabledIds, id]
+    setEnabledIds(next)
+    api.invoke('settings:set-enabled-plugins', next)
+  }
+
+  const enableAll = () => {
+    const all = plugins.map(p => p.id)
+    setEnabledIds(all)
+    api.invoke('settings:set-enabled-plugins', all)
+  }
+
+  const disableAll = () => {
+    setEnabledIds([])
+    api.invoke('settings:set-enabled-plugins', [])
+  }
+
+  if (loading) return <p className="text-sm text-vintage-gray animate-pulse">Loading plugins...</p>
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-lg font-semibold text-vintage-charcoal">Video Edit Plugins</h2>
+          <p className="text-xs text-vintage-gray mt-1">
+            Enable/disable plugins for the video editor. Only enabled plugins will be available in the editor.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={enableAll}
+            className="px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition bg-pastel-mint/50 text-green-700 hover:bg-pastel-mint">
+            Enable All
+          </button>
+          <button onClick={disableAll}
+            className="px-3 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition bg-pastel-pink/50 text-red-700 hover:bg-pastel-pink">
+            Disable All
+          </button>
+        </div>
+      </div>
+
+      <p className="text-xs text-vintage-gray mb-4">
+        {enabledIds.length} of {plugins.length} plugins enabled
+      </p>
+
+      {PLUGIN_GROUPS.map(group => {
+        const gp = plugins.filter(p => p.group === group.id)
+        if (gp.length === 0) return null
+        return (
+          <div key={group.id} className="mb-5">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-vintage-gray mb-2 flex items-center gap-2">
+              <span>{group.emoji}</span> {group.label}
+              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-vintage-cream">
+                {gp.filter(p => enabledIds.includes(p.id)).length}/{gp.length}
+              </span>
+            </h3>
+            <div className="flex flex-col gap-1.5">
+              {gp.map(plugin => {
+                const enabled = enabledIds.includes(plugin.id)
+                return (
+                  <div key={plugin.id}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all cursor-pointer"
+                    style={{
+                      background: enabled ? 'white' : 'transparent',
+                      border: `1px solid ${enabled ? 'var(--ev-c-gray-3)' : 'transparent'}`,
+                      opacity: enabled ? 1 : 0.5,
+                    }}
+                    onClick={() => toggle(plugin.id)}>
+                    <span className="text-lg">{plugin.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-vintage-charcoal">{plugin.name}</p>
+                      <p className="text-[10px] text-vintage-gray truncate">{plugin.description}</p>
+                    </div>
+                    {plugin.recommended && (
+                      <span className="text-[8px] px-1.5 py-0.5 rounded font-bold bg-pastel-mint text-green-700 shrink-0">
+                        REC
+                      </span>
+                    )}
+                    <button
+                      className="relative w-10 h-5 rounded-full transition-all duration-200 shrink-0 cursor-pointer"
+                      style={{ background: enabled ? '#7c3aed' : '#e8e4db' }}
+                      onClick={e => { e.stopPropagation(); toggle(plugin.id) }}>
+                      <div className="absolute top-[2px] w-4 h-4 rounded-full bg-white shadow-sm transition-all duration-200"
+                        style={{ left: enabled ? 22 : 2 }} />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 

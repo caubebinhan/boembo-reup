@@ -224,8 +224,15 @@ async function executeSinglePass(
   if (allFilters.length > 0) {
     const wiredFilters = autoWireFilters(allFilters)
     cmd.filterComplex(wiredFilters)
+
+    // Map video: last video output (should be [out])
     cmd.map(wiredFilters[wiredFilters.length - 1].outputs?.[0] || 'out')
-    if (metadata.hasAudio) cmd.map('0:a')
+
+    // Map audio: find last audio filter output, fallback to 0:a
+    if (metadata.hasAudio) {
+      const lastAudioOutput = findLastAudioOutput(wiredFilters)
+      cmd.map(lastAudioOutput || '0:a')
+    }
   }
 
   cmd.output(outputPath, {
@@ -236,9 +243,19 @@ async function executeSinglePass(
     extra: allOutputOptions,
   })
 
+  // Debug: log the command for troubleshooting
+  try {
+    const args = cmd.build()
+    console.log(`[VideoEdit] FFmpeg single-pass command:\n  ffmpeg ${args.join(' ')}`)
+  } catch (e) {
+    console.error('[VideoEdit] Failed to build FFmpeg args:', e)
+  }
+
   const result = await cmd.execute(opts.timeoutMs || 300_000)
   if (result.code !== 0) {
-    throw new Error(`FFmpeg single-pass failed (code ${result.code}): ${result.stderr.toString('utf8').slice(0, 500)}`)
+    const stderr = result.stderr.toString('utf8')
+    console.error('[VideoEdit] FFmpeg stderr:', stderr.slice(0, 2000))
+    throw new Error(`FFmpeg single-pass failed (code ${result.code}): ${stderr.slice(0, 500)}`)
   }
 }
 
@@ -287,21 +304,68 @@ async function executeMultiPass(
 }
 
 /**
- * Auto-wire filters without explicit pads into a sequential chain:
- * [0:v] → filter1 → [f1] → filter2 → [f2] → ... → [out]
+ * Find the last audio output pad in wired filters.
+ * Audio filters output labels starting with 'a_' or 'noise_' or 'atempo_'.
+ */
+function findLastAudioOutput(filters: FFmpegFilter[]): string | null {
+  let lastAudio: string | null = null
+  const audioLabel = /^(a_|noise_|atempo_)/
+  for (const f of filters) {
+    for (const out of f.outputs || []) {
+      if (audioLabel.test(out)) lastAudio = out
+    }
+  }
+  return lastAudio
+}
+
+/**
+ * Auto-wire filters into a proper filter_complex chain.
+ *
+ * Tracks the "current video stream" label through the chain.
+ * - Filters without explicit inputs get the current stream as input.
+ * - Filters without explicit outputs get an auto-generated label.
+ * - Filters with explicit `[0:v]` inputs get replaced with the current stream.
+ * - The last filter always outputs `[out]`.
  */
 function autoWireFilters(filters: FFmpegFilter[]): FFmpegFilter[] {
   if (filters.length === 0) return filters
 
-  return filters.map((f, i) => {
-    // If already fully wired, leave as-is
-    if (f.inputs?.length && f.outputs?.length) return f
+  let currentStream = '0:v'
+  const wired: FFmpegFilter[] = []
 
-    const result = { ...f }
-    if (!f.inputs?.length) result.inputs = i === 0 ? ['0:v'] : [`f${i - 1}`]
-    if (!f.outputs?.length) result.outputs = i === filters.length - 1 ? ['out'] : [`f${i}`]
-    return result
-  })
+  for (let i = 0; i < filters.length; i++) {
+    const f = { ...filters[i] }
+    const isLast = i === filters.length - 1
+
+    // Determine inputs
+    if (!f.inputs?.length) {
+      // No explicit inputs → use current stream
+      f.inputs = [currentStream]
+    } else {
+      // Has explicit inputs → replace any [0:v] references with current stream
+      // (so blur-region's crop/overlay chains work after other plugins)
+      f.inputs = f.inputs.map(inp => inp === '0:v' ? currentStream : inp)
+    }
+
+    // Determine outputs
+    if (!f.outputs?.length) {
+      // No explicit outputs → auto-generate
+      f.outputs = isLast ? ['out'] : [`f${i}`]
+      currentStream = f.outputs[0]
+    } else {
+      // Has explicit outputs → the last output becomes current stream for next filter
+      currentStream = f.outputs[f.outputs.length - 1]
+    }
+
+    // If this is the last filter overall, ensure final output is [out]
+    if (isLast && f.outputs[f.outputs.length - 1] !== 'out') {
+      f.outputs = [...f.outputs.slice(0, -1), 'out']
+    }
+
+    wired.push(f)
+  }
+
+  return wired
 }
 
 function getExtension(filePath: string): string {

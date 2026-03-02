@@ -1,17 +1,17 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Electron</title>
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: local-thumb: https://*.tiktokcdn.com https://*.tiktokcdn-us.com https://p16-sign-sg.tiktokcdn.com https://p16-sign.tiktokcdn-us.com"
-    />
-  </head>
 
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <title>Bombo Repost</title>
+  <!-- CSP disabled for development — allows local file access, PixiJS unsafe-eval, etc. -->
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src * 'self' 'unsafe-inline' 'unsafe-eval' data: blob: file: local-thumb:; media-src * file: blob: data: local-thumb:; img-src * file: data: blob: local-thumb:; script-src * 'self' 'unsafe-inline' 'unsafe-eval'" />
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>

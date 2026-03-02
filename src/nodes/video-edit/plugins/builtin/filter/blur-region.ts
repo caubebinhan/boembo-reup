@@ -71,12 +71,21 @@ const blurRegion: VideoEditPlugin = {
       enableExpr = `between(t,${s},${e})`
     }
 
+    // Split stream: one copy for crop, one for overlay base
+    // Use '0:v' as placeholder — autoWireFilters replaces with actual current stream
+    filters.push({
+      filter: 'split',
+      options: {},
+      inputs: ['0:v'],
+      outputs: [`base_${key}`, `tocrop_${key}`],
+    })
+
     if (mode === 'pixelate') {
       // Pixelate: crop → scale down → scale up → overlay
       filters.push({
         filter: 'crop',
         options: { w, h, x, y },
-        inputs: ['0:v'],
+        inputs: [`tocrop_${key}`],
         outputs: [`region_${key}`],
       })
       filters.push({
@@ -96,7 +105,7 @@ const blurRegion: VideoEditPlugin = {
       filters.push({
         filter: 'overlay',
         options: overlayOpts,
-        inputs: ['0:v', `region_pix_${key}`],
+        inputs: [`base_${key}`, `region_pix_${key}`],
         outputs: [`out_${key}`],
       })
     } else {
@@ -104,7 +113,7 @@ const blurRegion: VideoEditPlugin = {
       filters.push({
         filter: 'crop',
         options: { w, h, x, y },
-        inputs: ['0:v'],
+        inputs: [`tocrop_${key}`],
         outputs: [`region_${key}`],
       })
       filters.push({
@@ -118,7 +127,7 @@ const blurRegion: VideoEditPlugin = {
       filters.push({
         filter: 'overlay',
         options: overlayOpts,
-        inputs: ['0:v', `region_blur_${key}`],
+        inputs: [`base_${key}`, `region_blur_${key}`],
         outputs: [`out_${key}`],
       })
     }

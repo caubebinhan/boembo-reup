@@ -96,21 +96,28 @@ export default async function execute(
       message: `Edited with ${result.appliedOperations.length} operation(s)`,
     }
   } catch (error: any) {
-    ctx.logger.error(`VideoEdit failed: ${error.message}`)
+    const msg = error.message || String(error)
+    ctx.logger.error(`VideoEdit failed: ${msg}`)
     ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'video_edit_1', 'video-edit:failed', {
-      videoId, error: error.message,
+      videoId, error: msg,
     })
 
     // Mark the video as failed so the UI shows the edit failure reason
     if (ctx.store?.updateVideo && video.platform_id) {
       ctx.store.updateVideo(video.platform_id, {
         status: 'failed',
-        data: { ...video, error: `Edit failed: ${error.message}` },
+        data: { ...video, error: `Edit failed: ${msg}` },
       })
       ctx.store.save()
     }
 
-    ctx.alert('warn', `Video edit failed: ${error.message}. Using original video.`)
-    return { data: input, message: `Edit failed: ${error.message}` }
+    // Hard fail — stop the pipeline for this video.
+    // Common cause: FFmpeg not installed → "ffmpeg_or_ffprobe_not_available"
+    const userMessage = msg.includes('ffmpeg_or_ffprobe_not_available')
+      ? 'FFmpeg is not installed. Please install FFmpeg and restart the app.'
+      : `Video edit failed: ${msg}`
+
+    ctx.alert('error', userMessage)
+    throw new Error(userMessage)
   }
 }

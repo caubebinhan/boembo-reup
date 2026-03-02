@@ -13,6 +13,7 @@ import { TroubleShottingPanel } from './components/TroubleShottingPanel'
 
 import { CampaignWizard } from './components/CampaignWizard'
 import { SplashScreen } from './components/SplashScreen'
+import { VideoEditorWindow } from './components/video-editor/VideoEditorWindow'
 
 // ── Workflow Picker Modal ──────────────────────────
 function WorkflowPicker({ onSelect, onClose }: { onSelect: (id: string) => void, onClose: () => void }) {
@@ -256,6 +257,11 @@ function AppContent() {
 }
 
 export default function App() {
+  // If this window was opened via #/video-editor hash, render the editor
+  if (window.location.hash === '#/video-editor') {
+    return <VideoEditorWindow />
+  }
+
   const [splashDone, setSplashDone] = useState(false)
 
   return (

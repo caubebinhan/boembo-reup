@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { PublishAccountService } from '../services/PublishAccountService'
 import { videoEditPluginRegistry } from '../../core/video-edit/VideoEditPluginRegistry'
 
@@ -19,6 +19,17 @@ export function setupWizardIPC() {
       console.error('[IPC] video-edit:get-plugin-metas error:', err)
       return []
     }
+  })
+
+  // File picker dialog for video editor
+  safeHandle('dialog:open-file', async (_event, opts?: { filters?: { name: string; extensions: string[] }[] }) => {
+    const parentWindow = BrowserWindow.getFocusedWindow() || undefined
+    const result = await dialog.showOpenDialog(parentWindow!, {
+      properties: ['openFile'],
+      filters: opts?.filters || [{ name: 'All Files', extensions: ['*'] }],
+    })
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
   })
 
   // Account management
@@ -56,6 +67,71 @@ export function setupWizardIPC() {
     console.log(`[IPC] account:delete — ${id}`)
     PublishAccountService.deleteAccount(id)
     return true
+  })
+
+  // ── Video Editor Window ─────────────────────────────
+  let _editorParentWin: BrowserWindow | null = null
+
+  safeHandle('video-editor:open', async (event, payload?: { data?: any }) => {
+    const { join } = require('node:path')
+    const { is } = require('@electron-toolkit/utils')
+    const parentWin = BrowserWindow.fromWebContents(event.sender)
+    _editorParentWin = parentWin
+
+    const editorWin = new BrowserWindow({
+      parent: parentWin || undefined,
+      width: 1400,
+      height: 900,
+      title: 'BOEMBO - Video Editor',
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.js'),
+        sandbox: false,
+        webSecurity: false, // Allow file:// video URLs
+      }
+    })
+
+    editorWin.on('closed', () => {
+      _editorParentWin = null
+    })
+
+    // Once the editor window loads, send initial data
+    editorWin.webContents.on('did-finish-load', () => {
+      editorWin.webContents.send('video-editor:init-data', payload?.data || {})
+    })
+
+    // Load the same renderer URL with #/video-editor hash route
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+      await editorWin.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/video-editor`)
+    } else {
+      await editorWin.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/video-editor' })
+    }
+  })
+
+  // Editor window calls this when user clicks "Done Editing"
+  safeHandle('video-editor:done', async (event, result: any) => {
+    // Forward result to parent window (the wizard)
+    if (_editorParentWin && !_editorParentWin.isDestroyed()) {
+      _editorParentWin.webContents.send('video-editor:done', result)
+    }
+    // Close the editor window
+    const editorWin = BrowserWindow.fromWebContents(event.sender)
+    if (editorWin && !editorWin.isDestroyed()) {
+      editorWin.close()
+    }
+    _editorParentWin = null
+    return { ok: true }
+  })
+
+  // Preview: run FFmpeg pipeline and return rendered output path
+  safeHandle('video-edit:preview', async (_event, payload: { videoPath: string; operations: any[] }) => {
+    const { executeVideoEditPipeline } = await import('@core/video-edit')
+    const result = await executeVideoEditPipeline({
+      inputPath: payload.videoPath,
+      operations: payload.operations,
+      onProgress: (msg) => console.log('[VideoEdit:Preview]', msg),
+    })
+    return { outputPath: result.outputPath, wasModified: result.wasModified }
   })
 
 }

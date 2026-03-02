@@ -37,13 +37,13 @@ interface CampaignDetailProps {
     onBack: () => void
 }
 
-const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
-    idle: { bg: 'bg-slate-100', text: 'text-slate-600', dot: 'bg-slate-400' },
-    active: { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500' },
-    paused: { bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
-    finished: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
-    needs_captcha: { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500' },
-    error: { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
+const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string; emoji: string }> = {
+    idle: { bg: 'bg-[#f5f3ee]', text: 'text-[#8a827c]', dot: 'bg-[#8a827c]', emoji: '💤' },
+    active: { bg: 'bg-[#d4e8d8]', text: 'text-[#2e7d32]', dot: 'bg-[#2e7d32]', emoji: '🌿' },
+    paused: { bg: 'bg-[#f9e3d3]', text: 'text-[#8e5a2b]', dot: 'bg-[#8e5a2b]', emoji: '☕' },
+    finished: { bg: 'bg-[#d6e4f0]', text: 'text-[#2e5a88]', dot: 'bg-[#2e5a88]', emoji: '🎉' },
+    needs_captcha: { bg: 'bg-[#f9e3d3]', text: 'text-[#8e5a2b]', dot: 'bg-[#8e5a2b]', emoji: '🧩' },
+    error: { bg: 'bg-[#f4dce0]', text: 'text-[#9e3d4d]', dot: 'bg-[#9e3d4d]', emoji: '🥀' },
 }
 
 export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
@@ -156,20 +156,21 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                             <p className="text-sm text-vintage-gray mt-1 opacity-80">{workflowId} • {new Date(campaign.created_at).toLocaleDateString()}</p>
                         </div>
                         <span className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-semibold ${ss.bg} ${ss.text}`}>
+                            <span>{ss.emoji}</span>
                             <span className={`w-1.5 h-1.5 rounded-full ${ss.dot} ${campaign.status === 'active' ? 'animate-pulse' : ''}`} />
                             {campaign.status}
                         </span>
                         {/* Inline status alert — shown next to the status badge */}
                         {statusMessage && (() => {
                             const alertStyle =
-                                campaign.status === 'error' ? 'bg-red-50 text-red-600 border-red-200' :
-                                    campaign.status === 'paused' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                        campaign.status === 'needs_captcha' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                            'bg-slate-50 text-slate-500 border-slate-200'
+                                campaign.status === 'error' ? 'bg-[#f4dce0] text-[#9e3d4d] border-[#e0a8b0]' :
+                                    campaign.status === 'paused' ? 'bg-[#f9e3d3] text-[#8e5a2b] border-[#e0b896]' :
+                                        campaign.status === 'needs_captcha' ? 'bg-[#f9e3d3] text-[#8e5a2b] border-[#e0b896]' :
+                                            'bg-[#f5f3ee] text-[#5c5551] border-[#e8e4db]'
                             const alertIcon =
-                                campaign.status === 'error' ? '⚠ ' :
-                                    campaign.status === 'paused' ? '⏸ ' :
-                                        campaign.status === 'needs_captcha' ? '🔒 ' : ''
+                                campaign.status === 'error' ? '🥀 ' :
+                                    campaign.status === 'paused' ? '☕ ' :
+                                        campaign.status === 'needs_captcha' ? '🧩 ' : ''
                             return (
                                 <span className={`text-xs px-2.5 py-1 rounded-full border font-medium max-w-[300px] truncate ${alertStyle}`} title={statusMessage}>
                                     {alertIcon}{statusMessage}
@@ -210,20 +211,23 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                         {['idle', 'finished', 'error'].includes(campaign.status) && (
                             <button
                                 onClick={() => handleAction('campaign:trigger', { id: campaign.id })}
-                                className="px-4 py-2 text-sm rounded-xl font-medium transition text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 flex items-center gap-1.5 cursor-pointer"
-                            >🚀 Run</button>
+                                className="px-4 py-2 text-sm rounded-full font-medium transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                style={{ background: '#d4e8d8', color: '#2e7d32', border: '1px solid #94c8a0' }}
+                            >🌿 Run</button>
                         )}
                         {campaign.status === 'active' && (
                             <button
                                 onClick={() => handleAction('campaign:pause', { id: campaign.id })}
-                                className="px-4 py-2 text-sm rounded-xl font-medium transition text-amber-700 border border-amber-300 bg-amber-50 hover:bg-amber-100 flex items-center gap-1.5 cursor-pointer"
-                            >⏸ Pause</button>
+                                className="px-4 py-2 text-sm rounded-full font-medium transition flex items-center gap-1.5 cursor-pointer"
+                                style={{ background: '#f9e3d3', color: '#8e5a2b', border: '1px solid #e0b896' }}
+                            >☕ Pause</button>
                         )}
                         {campaign.status === 'paused' && (
                             <button
                                 onClick={() => handleAction('campaign:resume', { id: campaign.id })}
-                                className="px-4 py-2 text-sm rounded-xl font-medium transition text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 flex items-center gap-1.5 cursor-pointer"
-                            >▶ Resume</button>
+                                className="px-4 py-2 text-sm rounded-full font-medium transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                style={{ background: '#d6e4f0', color: '#2e5a88', border: '1px solid #93b4d4' }}
+                            >🌿 Resume</button>
                         )}
                     </div>
                 </div>

@@ -79,15 +79,16 @@ const prnuDestroy: VideoEditPlugin = {
     const filters: FFmpegFilter[] = []
 
     // Step 1: Denoise — strip PRNU high-frequency noise
-    const DENOISE_PARAMS: Record<string, Record<string, any>> = {
-      light:  { luma_spatial: 3, chroma_spatial: 2, luma_tmp: 4, chroma_tmp: 3 },
-      medium: { luma_spatial: 5, chroma_spatial: 4, luma_tmp: 6, chroma_tmp: 5 },
-      strong: { luma_spatial: 8, chroma_spatial: 6, luma_tmp: 8, chroma_tmp: 6 },
+    // hqdn3d uses positional params: luma_spatial:chroma_spatial:luma_tmp:chroma_tmp
+    const DENOISE_PARAMS: Record<string, string> = {
+      light:  '3:2:4:3',
+      medium: '5:4:6:5',
+      strong: '8:6:8:6',
     }
 
     filters.push({
-      filter: 'hqdn3d',
-      options: DENOISE_PARAMS[strength] || DENOISE_PARAMS.medium,
+      filter: `hqdn3d=${DENOISE_PARAMS[strength] || DENOISE_PARAMS.medium}`,
+      options: {},
       outputs: [`dn_${key}`],
     })
 

@@ -1,14 +1,13 @@
 /**
- * Step3_VideoEdit — CapCut-style Video Editor (Wizard Step)
- * ─────────────────────────────────────────────────────────
- * Orchestrates: Toolbar (left) | Preview (center) | Properties (right) | Timeline (bottom)
- * Manages operation CRUD, video selection, and state sync between all sub-components.
+ * Step3_VideoEdit — Launcher
+ * ─────────────────────────
+ * In the wizard, this step just shows:
+ *   1. "Open Editor" button → opens a separate BrowserWindow
+ *   2. Summary of current edits (after editor returns)
+ *
+ * The full editor UI lives in VideoEditorWindow.tsx
  */
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { VideoCompositor } from './VideoCompositor'
-import { EditorTimeline } from './EditorTimeline'
-import { EditorToolbar } from './EditorToolbar'
-import { EditorProperties } from './EditorProperties'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 
 interface WizardStepProps {
     data: Record<string, any>
@@ -16,249 +15,195 @@ interface WizardStepProps {
 }
 
 interface PluginMeta {
-    id: string
-    name: string
-    group: string
-    icon: string
-    description: string
-    previewHint: string
-    defaultEnabled?: boolean
-    allowMultipleInstances?: boolean
-    addInstanceLabel?: string
-    recommended?: boolean
-    warning?: string
-    configSchema: any[]
+    id: string; name: string; group: string; icon: string
+    description: string; previewHint: string
+    defaultEnabled?: boolean; allowMultipleInstances?: boolean
+    addInstanceLabel?: string; recommended?: boolean
+    warning?: string; configSchema: any[]
 }
 
 interface VideoEditOperation {
-    id: string
-    pluginId: string
-    enabled: boolean
-    params: Record<string, any>
-    order: number
+    id: string; pluginId: string; enabled: boolean
+    params: Record<string, any>; order: number
 }
 
-function generateOpId(): string {
-    return `op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+// ── Vintage Pastel Colors ──
+export const V = {
+    bg: '#fcfbf8',
+    cream: '#f5f3ee',
+    beige: '#e8e4db',
+    card: '#ffffff',
+    charcoal: '#2c2a29',
+    textMuted: '#5c5551',
+    textDim: '#8a827c',
+    accent: '#7c3aed',
+    accentHover: '#6d28d9',
+    accentSoft: '#f3effe',
+    pastelPink: '#f4dce0',
+    pastelMint: '#d4e8d8',
+    pastelBlue: '#d6e4f0',
+    pastelPeach: '#f9e3d3',
+    preview: '#f0ede6',
 }
 
 export function Step3_VideoEdit({ data, updateData }: WizardStepProps) {
-    // ── Plugin metadata from backend ──────────────────
+    const api = (window as any).api
+    const [editorOpen, setEditorOpen] = useState(false)
     const [plugins, setPlugins] = useState<PluginMeta[]>([])
-    const [pluginsLoading, setPluginsLoading] = useState(true)
 
+    const operations: VideoEditOperation[] = useMemo(() => data.videoEditOperations || [], [data.videoEditOperations])
+    const enabledPluginIds: string[] = useMemo(() => data._enabledPluginIds || [], [data._enabledPluginIds])
+
+    // Load plugin metadata for summary display
     useEffect(() => {
-        console.log('[Step3_VideoEdit] Mounted — loading plugin metadata via IPC…')
-        const load = async () => {
-            try {
-                // @ts-ignore
-                const metas = await window.api?.invoke?.('video-edit:get-plugin-metas')
-                console.log(`[Step3_VideoEdit] Loaded ${metas?.length ?? 0} plugin(s):`, metas?.map?.((p: any) => p.id))
-                if (metas) setPlugins(metas)
-            } catch (e: any) {
-                console.error('[Step3_VideoEdit] Failed to load plugin metadata:', e?.message || e)
-            } finally {
-                setPluginsLoading(false)
-            }
-        }
-        load()
-    }, [])
+        api?.invoke?.('video-edit:get-plugin-metas')
+            .then((metas: PluginMeta[]) => { if (metas) setPlugins(metas) })
+            .catch(console.error)
+    }, [api])
 
-    // ── Operations (edits/effects/layers) ──────────────
-    const operations: VideoEditOperation[] = useMemo(
-        () => data.videoEditOperations || [],
-        [data.videoEditOperations]
-    )
-
-    const setOperations = useCallback((ops: VideoEditOperation[]) => {
-        updateData({ videoEditOperations: ops })
-    }, [updateData])
-
-    // ── Video source ──────────────────────────────────
-    const [videoSrc, setVideoSrc] = useState<string | null>(data._previewVideoSrc || null)
-    const [videoDuration, setVideoDuration] = useState(0)
-    const [currentTime, setCurrentTime] = useState(0)
-
-    // ── Selected operation ────────────────────────────
-    const [selectedOpId, setSelectedOpId] = useState<string | null>(null)
-
-    const selectedOp = useMemo(
-        () => operations.find(o => o.id === selectedOpId) || null,
-        [operations, selectedOpId]
-    )
-    const selectedPlugin = useMemo(
-        () => selectedOp ? plugins.find(p => p.id === selectedOp.pluginId) || null : null,
-        [selectedOp, plugins]
-    )
-
-    // ── Auto-add defaults on first load ───────────────
+    // Listen for editor results
     useEffect(() => {
-        if (operations.length > 0 || pluginsLoading) return
-        const defaults = plugins
-            .filter(p => p.defaultEnabled || p.recommended)
-            .map((p, i) => ({
-                id: generateOpId(),
-                pluginId: p.id,
-                enabled: true,
-                params: getDefaultParams(p),
-                order: i,
-            }))
-        if (defaults.length > 0) setOperations(defaults)
-    }, [plugins, pluginsLoading, operations.length, setOperations])
-
-    // ── Handlers ──────────────────────────────────────
-
-    const handleAddOperation = useCallback((pluginId: string) => {
-        const plugin = plugins.find(p => p.id === pluginId)
-        if (!plugin) return
-
-        const newOp: VideoEditOperation = {
-            id: generateOpId(),
-            pluginId,
-            enabled: true,
-            params: getDefaultParams(plugin),
-            order: operations.length,
-        }
-        const updated = [...operations, newOp]
-        setOperations(updated)
-        setSelectedOpId(newOp.id)
-    }, [plugins, operations, setOperations])
-
-    const handleUpdateParams = useCallback((opId: string, params: Record<string, any>) => {
-        setOperations(operations.map(o =>
-            o.id === opId ? { ...o, params } : o
-        ))
-    }, [operations, setOperations])
-
-    const handleToggleEnabled = useCallback((opId: string) => {
-        setOperations(operations.map(o =>
-            o.id === opId ? { ...o, enabled: !o.enabled } : o
-        ))
-    }, [operations, setOperations])
-
-    const handleRemoveOperation = useCallback((opId: string) => {
-        setOperations(operations.filter(o => o.id !== opId))
-        if (selectedOpId === opId) setSelectedOpId(null)
-    }, [operations, setOperations, selectedOpId])
-
-    const handlePositionChange = useCallback((opId: string, pos: { x: number; y: number }) => {
-        setOperations(operations.map(o =>
-            o.id === opId ? { ...o, params: { ...o.params, position: pos } } : o
-        ))
-    }, [operations, setOperations])
-
-    const handleTimeUpdate = useCallback((time: number, dur: number) => {
-        setCurrentTime(time)
-        setVideoDuration(dur)
-    }, [])
-
-    const handleSeek = useCallback((time: number) => {
-        setCurrentTime(time)
-        // VideoCompositor will pick this up via video.currentTime
-    }, [])
-
-    const handleUploadVideo = useCallback(async () => {
-        try {
-            // @ts-ignore
-            const result = await window.api?.invoke?.('dialog:open-file', {
-                filters: [{ name: 'Video', extensions: ['mp4', 'webm', 'mov', 'avi', 'mkv'] }]
-            })
+        const off = api?.on?.('video-editor:done', (result: any) => {
             if (result) {
-                const fileUrl = result.startsWith('file://') ? result : `file://${result.replace(/\\/g, '/')}`
-                setVideoSrc(fileUrl)
-                updateData({ _previewVideoSrc: fileUrl })
+                updateData({
+                    videoEditOperations: result.videoEditOperations || [],
+                    _enabledPluginIds: result._enabledPluginIds || [],
+                    _previewVideoSrc: result._previewVideoSrc || null,
+                })
             }
-        } catch (e) {
-            console.error('[Step3] Failed to open video:', e)
-        }
-    }, [updateData])
+            setEditorOpen(false)
+        })
+        return () => { if (typeof off === 'function') off() }
+    }, [api, updateData])
 
-    // ── Loading state ─────────────────────────────────
-    if (pluginsLoading) {
-        return (
-            <div className="flex items-center justify-center h-96">
-                <div className="flex flex-col items-center gap-3 animate-pulse">
-                    <div className="w-12 h-12 rounded-2xl bg-purple-600/20 flex items-center justify-center text-2xl">🎬</div>
-                    <span className="text-sm text-slate-400">Loading video editor...</span>
-                </div>
-            </div>
-        )
+    // Open editor window
+    const handleOpenEditor = useCallback(async () => {
+        setEditorOpen(true)
+        try {
+            await api?.invoke?.('video-editor:open', {
+                data: {
+                    videoEditOperations: data.videoEditOperations || [],
+                    _enabledPluginIds: data._enabledPluginIds || [],
+                    _previewVideoSrc: data._previewVideoSrc || null,
+                }
+            })
+        } catch (e) {
+            console.error('[Step3] Failed to open editor:', e)
+            setEditorOpen(false)
+        }
+    }, [api, data])
+
+    // Summary helpers
+    const enabledOps = useMemo(() => operations.filter(o => o.enabled), [operations])
+    const getPlugin = useCallback((id: string) => plugins.find(p => p.id === id), [plugins])
+
+    const groupedOps = useMemo(() => {
+        const groups: Record<string, { plugin: PluginMeta; ops: VideoEditOperation[] }[]> = {}
+        for (const op of enabledOps) {
+            const plugin = getPlugin(op.pluginId)
+            if (!plugin) continue
+            const g = plugin.group || 'other'
+            if (!groups[g]) groups[g] = []
+            const existing = groups[g].find(x => x.plugin.id === plugin.id)
+            if (existing) existing.ops.push(op)
+            else groups[g].push({ plugin, ops: [op] })
+        }
+        return groups
+    }, [enabledOps, getPlugin])
+
+    const groupIcons: Record<string, string> = {
+        'anti-detect': '🛡️', 'transform': '🔧', 'overlay': '🖼️', 'filter': '🎨', 'audio': '🔊',
     }
 
     return (
-        <div className="flex flex-col w-full h-full bg-slate-900 rounded-xl overflow-hidden" style={{ minHeight: 600 }}>
-            {/* ── Top: Toolbar + Preview + Properties ────── */}
-            <div className="flex flex-1 min-h-0">
-                {/* Left: Toolbar */}
-                <EditorToolbar plugins={plugins} onAddOperation={handleAddOperation} />
-
-                {/* Center: Preview */}
-                <div className="flex-1 flex flex-col items-center justify-center bg-slate-900 px-4 py-3 min-w-0">
-                    <VideoCompositor
-                        videoSrc={videoSrc}
-                        operations={operations}
-                        plugins={plugins}
-                        selectedOpId={selectedOpId}
-                        onPositionChange={handlePositionChange}
-                        onSelectOperation={setSelectedOpId}
-                        onTimeUpdate={handleTimeUpdate}
-                    />
-
-                    {/* Upload button if no video */}
-                    {!videoSrc && (
-                        <button
-                            onClick={handleUploadVideo}
-                            className="mt-4 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-xl transition cursor-pointer shadow-lg shadow-purple-600/30 flex items-center gap-2"
-                        >
-                            <span>📁</span> Upload Preview Video
-                        </button>
-                    )}
-
-                    {/* Controls below video */}
-                    {videoSrc && (
-                        <button
-                            onClick={handleUploadVideo}
-                            className="mt-2 text-[10px] text-slate-500 hover:text-slate-300 transition cursor-pointer"
-                        >
-                            Change video →
-                        </button>
-                    )}
-                </div>
-
-                {/* Right: Properties */}
-                <div className="w-[280px] shrink-0 border-l border-slate-700 overflow-hidden">
-                    <EditorProperties
-                        operation={selectedOp}
-                        plugin={selectedPlugin}
-                        onUpdateParams={handleUpdateParams}
-                        onToggleEnabled={handleToggleEnabled}
-                        onRemoveOperation={handleRemoveOperation}
-                    />
-                </div>
+        <div className="flex flex-col items-center justify-center py-12 px-8 gap-8 min-h-[400px]">
+            {/* Header */}
+            <div className="text-center">
+                <span className="text-5xl mb-4 block">🎬</span>
+                <h2 className="text-lg font-bold mb-1" style={{ color: V.charcoal }}>Video Editing</h2>
+                <p className="text-sm max-w-md mx-auto" style={{ color: V.textDim }}>
+                    Configure video editing operations that will be applied to every downloaded video before uploading.
+                </p>
             </div>
 
-            {/* ── Bottom: Timeline ────────────────────────── */}
-            <EditorTimeline
-                operations={operations}
-                plugins={plugins}
-                duration={videoDuration}
-                currentTime={currentTime}
-                selectedOpId={selectedOpId}
-                onSeek={handleSeek}
-                onSelectOperation={setSelectedOpId}
-            />
+            {/* Open Editor Button */}
+            <button
+                onClick={handleOpenEditor}
+                disabled={editorOpen}
+                className="px-8 py-4 rounded-2xl text-base font-bold cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                style={{
+                    background: editorOpen ? V.beige : `linear-gradient(135deg, ${V.accent}, ${V.accentHover})`,
+                    color: editorOpen ? V.textDim : '#fff',
+                    boxShadow: editorOpen ? 'none' : `0 4px 20px ${V.accent}44`,
+                }}
+            >
+                {editorOpen ? '⏳ Editor is open...' : '🎬 Open Video Editor'}
+            </button>
+            {editorOpen && (
+                <p className="text-[11px] animate-pulse" style={{ color: V.accent }}>
+                    A new window has opened. Edit your video settings there and click "Done Editing" when finished.
+                </p>
+            )}
+
+            {/* Edit Summary */}
+            {enabledOps.length > 0 && (
+                <div className="w-full max-w-lg"
+                    style={{ background: V.card, border: `1px solid ${V.beige}`, borderRadius: 16, padding: '20px 24px' }}>
+                    <h3 className="text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2"
+                        style={{ color: V.textDim }}>
+                        ✅ Current Edit Configuration
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                            style={{ background: V.pastelMint, color: '#2e7d32' }}>
+                            {enabledOps.length} operation{enabledOps.length !== 1 ? 's' : ''}
+                        </span>
+                    </h3>
+
+                    <div className="flex flex-col gap-2">
+                        {Object.entries(groupedOps).map(([group, items]) => (
+                            <div key={group}>
+                                <div className="flex items-center gap-1.5 mb-1">
+                                    <span className="text-xs">{groupIcons[group] || '📦'}</span>
+                                    <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: V.textDim }}>{group}</span>
+                                </div>
+                                <div className="flex flex-col gap-1 ml-5">
+                                    {items.map(({ plugin, ops }) => (
+                                        <div key={plugin.id}
+                                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+                                            style={{ background: V.cream }}>
+                                            <span className="text-sm">{plugin.icon}</span>
+                                            <span className="text-[11px] font-semibold flex-1" style={{ color: V.charcoal }}>
+                                                {plugin.name}
+                                            </span>
+                                            {ops.length > 1 && (
+                                                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold"
+                                                    style={{ background: V.pastelBlue, color: '#1565c0' }}>
+                                                    ×{ops.length}
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* No edits yet */}
+            {enabledOps.length === 0 && !editorOpen && (
+                <div className="text-center py-4">
+                    <p className="text-[11px]" style={{ color: V.textDim }}>
+                        No edits configured yet. Open the editor to add video editing operations.
+                    </p>
+                </div>
+            )}
+
+            {/* Plugin count */}
+            {enabledPluginIds.length > 0 && (
+                <p className="text-[10px]" style={{ color: V.textDim }}>
+                    🧩 {enabledPluginIds.length} plugin{enabledPluginIds.length !== 1 ? 's' : ''} enabled
+                </p>
+            )}
         </div>
     )
-}
-
-// ── Helpers ───────────────────────────────────────────
-
-function getDefaultParams(plugin: PluginMeta): Record<string, any> {
-    const params: Record<string, any> = {}
-    for (const field of plugin.configSchema || []) {
-        if (field.default !== undefined) {
-            params[field.key] = field.default
-        }
-    }
-    return params
 }

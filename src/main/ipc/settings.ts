@@ -59,6 +59,17 @@ export function setupSettingsIPC() {
     return inspectDbSchema()
   })
 
+  // ── Video Edit Plugins ──────────────────────────────
+
+  ipcMain.handle('settings:get-enabled-plugins', async () => {
+    return AppSettingsService.getEnabledPlugins()
+  })
+
+  ipcMain.handle('settings:set-enabled-plugins', async (_event, ids: string[]) => {
+    AppSettingsService.setEnabledPlugins(ids || [])
+    return { success: true }
+  })
+
   ipcMain.handle('settings:sentry-oauth-status', async () => {
     return SentryOAuthService.getStatus()
   })

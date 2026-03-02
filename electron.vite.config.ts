@@ -20,7 +20,12 @@ export default defineConfig({
         ...sharedAlias,
         '@renderer':  resolve('src/renderer/src'),
         '@workflows': resolve('src/workflows'),
-      }
+      },
+      conditions: ['browser', 'import', 'module', 'default'],
+    },
+    optimizeDeps: {
+      include: ['pixi.js/unsafe-eval'],
+      exclude: [],
     },
     plugins: [react()]
   }

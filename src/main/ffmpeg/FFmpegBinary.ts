@@ -2,9 +2,29 @@
  * FFmpeg Binary Utilities (Shared)
  * ─────────────────────────────────
  * Shared helpers for resolving, checking, and spawning FFmpeg/FFprobe binaries.
- * Refactored from MediaSimilarity.ts to be reusable across the codebase.
+ * Auto-configures paths from bundled @ffmpeg-installer packages on first load.
  */
 import { spawn } from 'node:child_process'
+
+// ── Auto-setup from bundled binaries ──
+// Sets FFMPEG_PATH / FFPROBE_PATH if not already set by user
+try {
+  if (!process.env.FFMPEG_PATH) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg')
+    process.env.FFMPEG_PATH = ffmpegInstaller.path
+    console.log(`[FFmpeg] Auto-configured from bundled: ${ffmpegInstaller.path}`)
+  }
+} catch { /* @ffmpeg-installer not available, fall back to system ffmpeg */ }
+
+try {
+  if (!process.env.FFPROBE_PATH) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ffprobeInstaller = require('@ffprobe-installer/ffprobe')
+    process.env.FFPROBE_PATH = ffprobeInstaller.path
+    console.log(`[FFprobe] Auto-configured from bundled: ${ffprobeInstaller.path}`)
+  }
+} catch { /* @ffprobe-installer not available, fall back to system ffprobe */ }
 
 export interface CommandResult {
   code: number | null
@@ -17,7 +37,7 @@ const AVAILABILITY_CACHE_TTL = 5 * 60_000 // 5 minutes
 
 /**
  * Resolve absolute/system path for ffmpeg or ffprobe binary.
- * Honors FFMPEG_PATH / FFPROBE_PATH env vars (useful for bundled binaries).
+ * Honors FFMPEG_PATH / FFPROBE_PATH env vars (auto-set from bundled binaries above).
  */
 export function resolveBinary(name: 'ffmpeg' | 'ffprobe'): string {
   if (name === 'ffmpeg') return process.env.FFMPEG_PATH || 'ffmpeg'
