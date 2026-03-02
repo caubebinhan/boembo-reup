@@ -1,15 +1,18 @@
 import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 import { failGracefully, setVideoStatus } from '@core/nodes/NodeHelpers'
+import { VIDEO_STATUS } from './constants'
 import { VideoPublisher } from '@main/tiktok/publisher/VideoPublisher'
 import { selectPublishAccount } from '@main/tiktok/publisher/PublishAccountResolver'
 import { settingsRepo } from '@main/db/repositories/SettingsRepo'
 import {
   captionPreview,
+  claimPublishSlot,
   computeQuickFileFingerprint as computeFileFingerprint,
   findExactDuplicatePublishHistory as findDuplicatePublishHistory,
   hashCaption,
   insertPublishHistoryRecord,
+  removePublishClaim,
   updatePublishHistoryRecord,
 } from '@main/tiktok/publisher/dedup/PublishDedupStore'
 
@@ -125,6 +128,33 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     return { action: 'continue', data: null, message: msg }
   }
 
+  // ── Claim publish slot (race-condition guard) ──
+  let claimId: string | undefined
+  try {
+    const claim = claimPublishSlot({
+      accountId: account.id,
+      sourcePlatformId: sourcePlatformId,
+      fileFingerprint,
+      campaignId: ctx.campaign_id,
+      sourceLocalPath: video.local_path,
+    })
+    if (!claim.claimed) {
+      const msg = `Publish slot already claimed for @${account.username} — skipping (race-condition guard)`
+      ctx.logger.info(msg)
+      setVideoStatus(ctx, video.platform_id, 'duplicate')
+      ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:publish-status', {
+        videoId: video.platform_id, status: 'duplicate',
+        accountUsername: account.username, matchedBy: 'claim_row',
+        message: msg,
+      })
+      return { action: 'continue', data: null, message: msg }
+    }
+    claimId = claim.id
+  } catch (err: any) {
+    // If claim insertion fails for unexpected reasons, proceed without claim guard
+    ctx.logger.error(`Claim insert failed (proceeding without guard): ${err?.message || err}`)
+  }
+
   // ── Publish via Playwright ──
   const publisher = new VideoPublisher()
   const publishStartedAt = Date.now()
@@ -139,6 +169,8 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     })
   } catch (err: any) {
     // Unexpected crash during publish (browser crash, OOM, network drop mid-session, etc.)
+    // Remove claim so retries can re-claim
+    if (claimId) removePublishClaim(claimId)
     return failGracefully(ctx, INSTANCE_ID, video.platform_id, 'publish_crash',
       `Publisher crashed unexpectedly: ${err?.message || err}`, {
         description: video.description, author: video.author,
@@ -146,6 +178,9 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   }
 
   if (!result.success) {
+    // Publish failed — remove claim so retries can re-claim
+    if (claimId) removePublishClaim(claimId)
+
     if (result.warning) ctx.logger.info(`Publish warning: ${result.warning}`)
     if (result.debugArtifacts) {
       ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'publish:debug', {
@@ -164,15 +199,15 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       return { action: 'continue', data: { ...video, status: 'captcha' } }
     }
 
-    // ── Violation ──
+    // ── Violation → publish_failed ──
     if (result.errorType === 'violation') {
       ctx.logger.info(`Content violation for video ${video.platform_id} - skipping`)
       ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'violation:detected', {
         videoId: video.platform_id, error: result.error, debugArtifacts: result.debugArtifacts,
         description: video.description, author: video.author,
       })
-      setVideoStatus(ctx, video.platform_id, 'violation')
-      return { action: 'continue', data: { ...video, status: 'violation' } }
+      setVideoStatus(ctx, video.platform_id, VIDEO_STATUS.PUBLISH_FAILED)
+      return { action: 'continue', data: { ...video, status: VIDEO_STATUS.PUBLISH_FAILED } }
     }
 
     // ── Session expired ──
@@ -211,14 +246,24 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   const isVerificationIncomplete = !!(result.verificationIncomplete || result.publishStatus === 'verification_incomplete')
 
   // Wrap post-publish DB operations in try-catch so a DB error doesn't lose the publish
-  let publishHistoryId: string | undefined
+  let publishHistoryId: string | undefined = claimId
   try {
-    publishHistoryId = insertPublishHistoryRecord({
-      accountId: account.id, accountUsername: account.username, campaignId: ctx.campaign_id,
-      sourcePlatformId, sourceLocalPath: video.local_path, fileFingerprint, captionHash,
-      captionPreview: captionShort, publishedVideoId: result.videoId, publishedUrl: result.videoUrl,
-      status: result.isReviewing ? 'under_review' : 'published', mediaSignature,
-    })
+    if (claimId) {
+      // Update the claim row to final status (row was already inserted before upload)
+      updatePublishHistoryRecord(claimId, {
+        status: result.isReviewing ? 'under_review' : 'published',
+        publishedVideoId: result.videoId,
+        publishedUrl: result.videoUrl, mediaSignature,
+      })
+    } else {
+      // No claim row — fallback to direct insert
+      publishHistoryId = insertPublishHistoryRecord({
+        accountId: account.id, accountUsername: account.username, campaignId: ctx.campaign_id,
+        sourcePlatformId, sourceLocalPath: video.local_path, fileFingerprint, captionHash,
+        captionPreview: captionShort, publishedVideoId: result.videoId, publishedUrl: result.videoUrl,
+        status: result.isReviewing ? 'under_review' : 'published', mediaSignature,
+      }) || undefined
+    }
   } catch (err: any) {
     ctx.logger.error(`Failed to insert publish history record: ${err?.message || err}`)
     // Don't fail the publish — the video was already uploaded successfully

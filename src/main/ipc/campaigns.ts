@@ -41,13 +41,15 @@ export function setupCampaignIPC() {
     return doc
   })
 
-  //  Campaign Delete 
+  //  Campaign Delete (cascade: jobs, async_tasks, execution_logs)
   ipcMain.handle(IPC_CHANNELS.CAMPAIGN_DELETE, async (_event, { id }) => {
-    campaignRepo.delete(id)
-    // Clean up execution_logs
-    try {
-      db.prepare('DELETE FROM execution_logs WHERE campaign_id = ?').run(id)
-    } catch { /* non-critical */ }
+    const deleteCascade = db.transaction((campaignId: string) => {
+      db.prepare('DELETE FROM jobs WHERE campaign_id = ?').run(campaignId)
+      db.prepare('DELETE FROM async_tasks WHERE campaign_id = ?').run(campaignId)
+      db.prepare('DELETE FROM execution_logs WHERE campaign_id = ?').run(campaignId)
+      campaignRepo.delete(campaignId)
+    })
+    deleteCascade(id)
     return true
   })
 
@@ -148,12 +150,32 @@ export function setupCampaignIPC() {
   //  Node Progress 
   ipcMain.handle('campaign:get-node-progress', async (_event, { id }) => {
     return db.prepare(`
-      SELECT instance_id, message
+      SELECT e.instance_id, e.message
+      FROM execution_logs e
+      INNER JOIN (
+        SELECT instance_id, MAX(created_at) as max_ts
+        FROM execution_logs
+        WHERE campaign_id = ? AND event = 'node:progress'
+        GROUP BY instance_id
+      ) latest ON e.instance_id = latest.instance_id AND e.created_at = latest.max_ts
+      WHERE e.campaign_id = ? AND e.event = 'node:progress'
+    `).all(id, id)
+  })
+
+  //  Per-Video Event History 
+  ipcMain.handle('campaign:get-video-events', async (_event, { campaignId, videoId, limit }) => {
+    return db.prepare(`
+      SELECT event, message, data_json as data, created_at
       FROM execution_logs
-      WHERE campaign_id = ? AND event = 'node:progress'
-      GROUP BY instance_id
-      HAVING created_at = MAX(created_at)
-    `).all(id)
+      WHERE campaign_id = ?
+        AND (
+          json_extract(data_json, '$.videoId') = ?
+          OR json_extract(data_json, '$.platform_id') = ?
+          OR message LIKE ?
+        )
+      ORDER BY created_at ASC
+      LIMIT ?
+    `).all(campaignId, videoId, videoId, `%${videoId}%`, limit || 100)
   })
 
   //  Update campaign params (merge) 
@@ -179,7 +201,7 @@ export function setupCampaignIPC() {
       const videos = store.videos
       if (videos.length === 0) return { success: true, message: 'No videos to reschedule' }
 
-      const TERMINAL = ['published', 'failed', 'violation']
+      const TERMINAL = ['published', 'failed', 'publish_failed']
       let cursor = Date.now()
       let queueIdx = 0
       for (let i = 0; i < videos.length; i++) {

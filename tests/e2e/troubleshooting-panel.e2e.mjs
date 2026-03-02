@@ -1,51 +1,18 @@
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import http from 'node:http'
-import os from 'node:os'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import test from 'node:test'
-import { chromium } from 'playwright'
+import { _electron as electron } from 'playwright'
 import { e2eCaseGroups, e2eCaseIndex } from './cases/index.mjs'
-import {
-  TROUBLESHOOTING_PANEL_FIXTURE_ACCOUNTS,
-  TROUBLESHOOTING_PANEL_FIXTURE_CASES,
-  TROUBLESHOOTING_PANEL_FIXTURE_SOURCE_CANDIDATES,
-  TROUBLESHOOTING_PANEL_FIXTURE_VIDEO_CANDIDATES,
-  TROUBLESHOOTING_PANEL_FIXTURE_WORKFLOWS,
-  TROUBLESHOOTING_PANEL_FIXTURE_RUNS,
-} from './cases/troubleshooting/fixtures.mjs'
 
-let browser
-let page
-let server
-let baseUrl
+const require = createRequire(import.meta.url)
+const electronExecutable = require('electron')
+const mainEntry = path.resolve(process.cwd(), 'out', 'main', 'index.js')
+const dbLogRoot = path.resolve(process.cwd(), '.test-db', 'e2e-cases')
+const latestDbFile = path.resolve(dbLogRoot, 'LATEST_DB_PATHS.txt')
 
 const onlyCaseId = process.env.TEST_CASE_ID?.trim()
-const rawHeadless = String(process.env.E2E_HEADLESS ?? '1').toLowerCase()
-const headless = !['0', 'false', 'no', 'off'].includes(rawHeadless)
-const runtimeEnv = (() => {
-  const platform = process.platform
-  const arch = process.arch
-  const isWindows = platform === 'win32'
-  const isMacAppleSilicon = platform === 'darwin' && arch === 'arm64'
-  const isMacIntel = platform === 'darwin' && arch === 'x64'
-  const runtimeLabel = isWindows
-    ? 'windows'
-    : isMacAppleSilicon
-      ? 'macos-arm64'
-      : isMacIntel
-        ? 'macos-x64'
-        : `${platform}-${arch}`
-
-  const tempRoot = os.tmpdir()
-  return {
-    platform,
-    arch,
-    runtimeLabel,
-    dbPath: path.join(tempRoot, `boembo-e2e-${runtimeLabel}.db`),
-    storagePath: tempRoot,
-  }
-})()
 
 if (onlyCaseId && !e2eCaseIndex.has(onlyCaseId)) {
   test(`[missing-case] ${onlyCaseId}`, () => {
@@ -53,195 +20,72 @@ if (onlyCaseId && !e2eCaseIndex.has(onlyCaseId)) {
   })
 }
 
-test.before(async () => {
-  const rootDir = path.join(process.cwd(), 'out', 'renderer')
-  server = http.createServer((req, res) => {
-    const requestPath = (req.url || '/').split('?')[0]
-    const normalizedPath = requestPath === '/' ? '/index.html' : requestPath
-    const targetPath = path.join(rootDir, normalizedPath)
-    const safePath = targetPath.startsWith(rootDir) ? targetPath : path.join(rootDir, 'index.html')
+function toSafeSlug(value) {
+  return String(value || 'case').replace(/[^a-zA-Z0-9._-]/g, '_')
+}
 
-    if (!fs.existsSync(safePath) || fs.statSync(safePath).isDirectory()) {
-      res.writeHead(404)
-      res.end('Not Found')
-      return
-    }
+function createDbPathForCase(caseId) {
+  const runToken = `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2, 9)}`
+  return path.resolve(dbLogRoot, `${toSafeSlug(caseId)}-${runToken}.db`)
+}
 
-    const ext = path.extname(safePath).toLowerCase()
-    const contentType = {
-      '.html': 'text/html; charset=utf-8',
-      '.js': 'application/javascript; charset=utf-8',
-      '.css': 'text/css; charset=utf-8',
-      '.svg': 'image/svg+xml',
-      '.png': 'image/png',
-      '.jpg': 'image/jpeg',
-      '.jpeg': 'image/jpeg',
-      '.webp': 'image/webp',
-    }[ext] || 'application/octet-stream'
-
-    res.writeHead(200, { 'Content-Type': contentType })
-    fs.createReadStream(safePath).pipe(res)
+function appendLatestDbLog(caseId, dbPath) {
+  mkdirSync(dbLogRoot, { recursive: true })
+  writeFileSync(latestDbFile, `[${new Date().toISOString()}] ${caseId} => ${dbPath}\n`, {
+    encoding: 'utf8',
+    flag: 'a',
   })
+}
 
-  await new Promise(resolve => {
-    server.listen(0, '127.0.0.1', () => resolve())
-  })
-  const addr = server.address()
-  baseUrl = `http://127.0.0.1:${addr.port}`
+async function openTroubleshootingTab(page) {
+  const debugButton = page.getByRole('button', { name: /debug/i })
+  await debugButton.waitFor({ state: 'visible', timeout: 120_000 })
+  await debugButton.click()
+  await page.getByText('Test Cases').waitFor({ state: 'visible', timeout: 60_000 })
+}
 
-  browser = await chromium.launch({ headless })
-  page = await browser.newPage()
-
-  await page.addInitScript(
-    ({ fixtureCases, fixtureRuns, fixtureWorkflows, fixtureAccounts, fixtureVideos, fixtureSources, runtime }) => {
-      const listeners = new Map()
-      const clone = (value) => JSON.parse(JSON.stringify(value))
-      const emit = (channel, payload) => {
-        const callbacks = listeners.get(channel)
-        if (!callbacks) return
-        for (const callback of callbacks) {
-          try {
-            callback(payload)
-          } catch {}
-        }
-      }
-      const state = {
-        cases: clone(fixtureCases),
-        runs: clone(fixtureRuns),
-        workflows: clone(fixtureWorkflows),
-        accounts: clone(fixtureAccounts),
-        videos: clone(fixtureVideos),
-        sources: clone(fixtureSources),
-      }
-
-      const api = {
-        invoke: async (channel, payload) => {
-          if (channel === 'campaign:list') return []
-          if (channel === 'settings:db-info') return { dbPath: runtime.dbPath, runtime: { platform: runtime.platform, arch: runtime.arch } }
-          if (channel === 'settings:inspect-schema') {
-            return { healthy: true, tables: ['campaigns', 'jobs', 'execution_logs'], indexes: [] }
-          }
-          if (channel === 'healthcheck:storage') return { ok: true, freeMB: 4096, path: runtime.storagePath }
-          if (channel === 'healthcheck:services') return { ok: true, services: [] }
-
-          if (channel === 'troubleshooting:list-cases') return clone(state.cases)
-          if (channel === 'troubleshooting:list-workflows') return clone(state.workflows)
-          if (channel === 'troubleshooting:list-runs') return clone(state.runs)
-          if (channel === 'account:list') return clone(state.accounts)
-
-          if (channel === 'troubleshooting:list-video-candidates') {
-            const workflowId = payload?.workflowId
-            const videos = workflowId
-              ? state.videos.filter((item) => item.workflowId === workflowId)
-              : state.videos
-            return clone(videos)
-          }
-          if (channel === 'troubleshooting:list-source-candidates') {
-            const workflowId = payload?.workflowId
-            const sources = workflowId
-              ? state.sources.filter((item) => item.workflowId === workflowId)
-              : state.sources
-            return clone(sources)
-          }
-
-          if (channel === 'troubleshooting:run-case') {
-            const caseId = payload?.caseId
-            const caseDef = state.cases.find((entry) => entry.id === caseId)
-            if (!caseDef) throw new Error(`Unknown fixture case: ${caseId}`)
-            if (caseDef.implemented === false) throw new Error(`Case not implemented in fixture: ${caseId}`)
-            const now = Date.now()
-            const run = {
-              id: `fixture-run-${now}-${Math.random().toString(36).slice(2, 7)}`,
-              caseId,
-              title: `${caseDef.title} (Fixture Run)`,
-              status: 'passed',
-              startedAt: now,
-              endedAt: now + 100,
-              summary: `Synthetic pass for ${caseDef.id}`,
-              workflowId: caseDef.workflowId,
-              workflowVersion: caseDef.workflowVersion,
-              category: caseDef.category,
-              group: caseDef.group,
-              tags: caseDef.tags || [],
-              level: caseDef.level,
-              logs: [{ ts: now, level: 'info', line: `Fixture run executed for ${caseDef.id}` }],
-              logStats: { total: 1, info: 1, warn: 0, error: 0 },
-              result: {
-                success: true,
-                runtime: payload?.runtime || {},
-              },
-            }
-            state.runs.unshift(run)
-            emit('troubleshooting:run-update', { record: clone(run) })
-            return clone(run)
-          }
-
-          if (channel === 'troubleshooting:send-run-to-sentry') {
-            return {
-              success: true,
-              eventId: '25e5a8f780d24a58b0d7d6c8a2c10a55',
-              sentry: {
-                verificationEnabled: true,
-                strictRequired: false,
-                verified: true,
-                message: 'Sentry event verified on staging.',
-                eventUrl: 'https://sentry.io/organizations/acme/issues/1/events/25e5a8f780d24a58b0d7d6c8a2c10a55/',
-                issueSearchUrl: 'https://sentry.io/organizations/acme/issues/?query=event.id%3A25e5a8f780d24a58b0d7d6c8a2c10a55',
-                eventApiUrl: 'https://sentry.io/api/0/projects/acme/staging/events/25e5a8f780d24a58b0d7d6c8a2c10a55/',
-                attempts: 2,
-                elapsedMs: 540,
-              },
-            }
-          }
-          if (channel === 'troubleshooting:clear-runs') {
-            state.runs = []
-            return { success: true }
-          }
-          return null
-        },
-        on: (channel, callback) => {
-          if (!listeners.has(channel)) listeners.set(channel, new Set())
-          listeners.get(channel).add(callback)
-          return () => {
-            listeners.get(channel)?.delete(callback)
-          }
-        },
-        removeAllListeners: () => listeners.clear(),
-      }
-      Object.defineProperty(window, 'api', {
-        configurable: true,
-        enumerable: true,
-        value: api,
-      })
-    },
-    {
-      fixtureCases: TROUBLESHOOTING_PANEL_FIXTURE_CASES,
-      fixtureRuns: TROUBLESHOOTING_PANEL_FIXTURE_RUNS,
-      fixtureWorkflows: TROUBLESHOOTING_PANEL_FIXTURE_WORKFLOWS,
-      fixtureAccounts: TROUBLESHOOTING_PANEL_FIXTURE_ACCOUNTS,
-      fixtureVideos: TROUBLESHOOTING_PANEL_FIXTURE_VIDEO_CANDIDATES,
-      fixtureSources: TROUBLESHOOTING_PANEL_FIXTURE_SOURCE_CANDIDATES,
-      runtime: runtimeEnv,
-    }
-  )
-
-  await page.goto(baseUrl)
-  await page.getByRole('button', { name: /debug/i }).click()
-  await page.getByText('Test Cases').waitFor()
-})
-
-test.after(async () => {
-  if (browser) await browser.close()
-  if (server) {
-    await new Promise(resolve => server.close(() => resolve()))
+async function launchAppForCase(caseId) {
+  if (!existsSync(mainEntry)) {
+    throw new Error(`Missing Electron build output: ${mainEntry}. Run "electron-vite build" first.`)
   }
-})
+
+  const dbPath = createDbPathForCase(caseId)
+  appendLatestDbLog(caseId, dbPath)
+  console.log(`[test-db] [${caseId}] Using isolated DB: ${dbPath}`)
+
+  const requestedHeadless = process.env.E2E_HEADLESS?.trim()
+  const launchEnv = {
+    ...process.env,
+    NODE_ENV: process.env.NODE_ENV || 'test',
+    REPOST_IO_DB_PATH: dbPath,
+    E2E_HEADLESS: requestedHeadless || '1',
+  }
+  // npm/node test may export this flag, which forces electron.exe to run as plain node.
+  delete launchEnv.ELECTRON_RUN_AS_NODE
+
+  const app = await electron.launch({
+    executablePath: electronExecutable,
+    args: [mainEntry],
+    timeout: 120_000,
+    env: launchEnv,
+  })
+
+  const page = await app.firstWindow()
+  await page.setViewportSize({ width: 1600, height: 980 })
+  await openTroubleshootingTab(page)
+  return { app, page, dbPath }
+}
 
 for (const group of e2eCaseGroups) {
   for (const caseDef of group.cases) {
     const register = onlyCaseId && onlyCaseId !== caseDef.id ? test.skip : test
     register(`[${group.id}] [${caseDef.id}] ${caseDef.title}`, async () => {
-      await caseDef.run({ page, assert })
+      const { app, page } = await launchAppForCase(caseDef.id)
+      try {
+        await caseDef.run({ page, assert })
+      } finally {
+        await app.close()
+      }
     })
   }
 }

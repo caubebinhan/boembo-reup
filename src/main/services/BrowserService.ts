@@ -79,7 +79,14 @@ class BrowserService {
         })
         this.browser = this.context.browser()
       } catch (err: any) {
-        console.warn('[BrowserService] Persistent profile launch failed; falling back to clean context:', err?.message || err)
+        const msg = err?.message || String(err)
+        // Clean up the verbose Playwright log wrapper which often includes mojibake from taskkill
+        const cleanMsg = msg.split('\nBrowser logs:')[0] || msg
+        console.warn(
+          '[BrowserService] Persistent profile launch failed; falling back to clean context.\n' +
+          '        LÝ DO PHỔ BIẾN: Trình duyệt Edge đang mở! Vui lòng đóng hoàn toàn Edge (bao gồm cả chạy nền / tắt Startup boost) nếu muốn dùng profile.\n' +
+          '        Error:', cleanMsg
+        )
         this.browser = await chromium.launch({
           headless,
           executablePath: runtime.executablePath,

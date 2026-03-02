@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 interface Source {
     type: 'channel' | 'keyword'
     name: string
@@ -47,12 +47,15 @@ export function Step2_Sources({ data, updateData }: Step2Props) {
         }
     }, [sources, updateData])
 
+    const [scanError, setScanError] = useState<string | null>(null)
+
     const handleScanClick = async () => {
+        setScanError(null)
         try {
             // @ts-ignore
             await window.api.invoke('open-scanner-window')
-        } catch (e) {
-            console.error(e)
+        } catch (e: any) {
+            setScanError(e?.message || 'Failed to open scanner. Please try again.')
         }
     }
 
@@ -78,6 +81,18 @@ export function Step2_Sources({ data, updateData }: Step2Props) {
                     </div>
                 )}
             </div>
+
+            {/* Scan error banner */}
+            {scanError && (
+                <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl px-4 py-3 text-sm flex items-start gap-2 animate-slide-up">
+                    <span className="shrink-0">⚠️</span>
+                    <div>
+                        <p className="font-semibold">Scanner failed to open</p>
+                        <p className="text-red-500 text-xs mt-0.5">{scanError}</p>
+                    </div>
+                    <button className="ml-auto text-red-400 hover:text-red-600" onClick={() => setScanError(null)}>✕</button>
+                </div>
+            )}
 
             {/* EMPTY STATE */}
             {sources.length === 0 ? (

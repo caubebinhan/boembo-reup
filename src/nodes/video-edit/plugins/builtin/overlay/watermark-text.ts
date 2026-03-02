@@ -14,6 +14,7 @@ const watermarkText: VideoEditPlugin = {
   description: 'Add text overlay on video',
   allowMultipleInstances: true,
   addInstanceLabel: 'Add another text',
+  previewHint: 'overlay-text',
 
   configSchema: [
     {

@@ -3,6 +3,7 @@ import {
   getSelectOptionValuesByAnchorOption,
   getSelectStateByAnchorOption,
   resetWorkflowVersionFilters,
+  runHistoryButtons,
   setSelectValueByAnchorOption,
 } from './helpers.mjs'
 
@@ -186,9 +187,9 @@ export const workflowVersionFilterCase = {
     await page.getByText('Fixture TikTok v2 Browser E2E', { exact: true }).waitFor({ state: 'visible' })
     assert.equal(await page.getByText('Fixture E2E Publish Path', { exact: true }).count(), 0)
 
-    await page.locator('button.w-full.text-left.rounded-lg.border.px-3.py-2:has-text("Fixture V2 Failed Run")').first().waitFor({ state: 'visible' })
-    await page.locator('button.w-full.text-left.rounded-lg.border.px-3.py-2:has-text("Fixture V2 Passed No Logs")').first().waitFor({ state: 'visible' })
-    assert.equal(await page.locator('button.w-full.text-left.rounded-lg.border.px-3.py-2:has-text("Fixture Publish Failed Run")').count(), 0)
+    await runHistoryButtons(page).filter({ hasText: 'Fixture V2 Failed Run' }).first().waitFor({ state: 'visible' })
+    await runHistoryButtons(page).filter({ hasText: 'Fixture V2 Passed No Logs' }).first().waitFor({ state: 'visible' })
+    assert.equal(await runHistoryButtons(page).filter({ hasText: 'Fixture Publish Failed Run' }).count(), 0)
   },
 }
 

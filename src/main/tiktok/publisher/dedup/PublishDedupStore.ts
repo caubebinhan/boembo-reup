@@ -31,7 +31,9 @@ export async function computeQuickFileFingerprint(filePath: string): Promise<str
       const size = Number(stat.size || 0)
       const sampleBytes = 512 * 1024
       const hash = createHash('sha256')
-      hash.update(`v1|size:${size}|mtime:${Math.round(Number(stat.mtimeMs || 0))}`)
+      // Content-stable: size + head/tail bytes only (no mtime — avoids
+      // false negatives when the same file is re-downloaded).
+      hash.update(`v2|size:${size}`)
 
       const headLen = Math.min(sampleBytes, size)
       if (headLen > 0) {
@@ -48,7 +50,7 @@ export async function computeQuickFileFingerprint(filePath: string): Promise<str
         hash.update(tail.subarray(0, tailRes.bytesRead))
       }
 
-      return `fp1:${hash.digest('hex')}`
+      return `fp2:${hash.digest('hex')}`
     } finally {
       await fh.close().catch(() => {})
     }
@@ -108,7 +110,7 @@ export function insertPublishHistoryRecord(payload: {
   captionPreview?: string
   publishedVideoId?: string
   publishedUrl?: string
-  status: 'under_review' | 'published'
+  status: 'uploading' | 'under_review' | 'published'
   duplicateReason?: string
   mediaSignature?: MediaSignature | null
 }): string | null {
@@ -161,4 +163,27 @@ export function updatePublishHistoryRecord(recordId: string | null, patch: {
     }
     publishHistoryRepo.patch(recordId, updates)
   } catch {}
+}
+
+/**
+ * Atomically claim a publish slot before uploading.
+ * Returns { claimed: false } if another active record already exists for
+ * the same (account_id, source_platform_id) or (account_id, file_fingerprint).
+ */
+export function claimPublishSlot(payload: {
+  accountId: string
+  sourcePlatformId?: string
+  fileFingerprint?: string
+  campaignId?: string
+  sourceLocalPath?: string
+}): { claimed: boolean; id: string } {
+  return publishHistoryRepo.claimForPublish({
+    id: randomUUID(),
+    ...payload,
+  })
+}
+
+/** Remove a claim row on publish failure so retries can re-claim. */
+export function removePublishClaim(claimId: string): void {
+  publishHistoryRepo.removeClaim(claimId)
 }

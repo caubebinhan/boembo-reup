@@ -9,6 +9,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PipelineVisualizer } from '@renderer/detail/shared/PipelineVisualizer'
 import type { WorkflowDetailProps } from '@renderer/detail/WorkflowDetailRegistry'
+import { getStatusUI, mapDbStatus } from '@nodes/tiktok-publisher/constants'
+import { VideoHistory } from '@renderer/components/detail/VideoHistory'
 
 const fmt = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
@@ -27,7 +29,7 @@ interface TikTokVideo {
     local_path?: string
     caption?: string
     published_url?: string
-    status: 'queued' | 'scanned' | 'downloading' | 'downloaded' | 'captioned' | 'publishing' | 'published' | 'verification_incomplete' | 'failed' | 'captcha' | 'violation' | 'skipped' | 'processing' | 'under_review' | 'verifying_publish' | 'duplicate'
+    status: 'queued' | 'scanned' | 'downloading' | 'downloaded' | 'captioned' | 'publishing' | 'published' | 'verification_incomplete' | 'failed' | 'captcha' | 'publish_failed' | 'skipped' | 'processing' | 'under_review' | 'verifying_publish' | 'duplicate' | 'pending_approval'
     error?: string
     statusMessage?: string
     reviewRetry?: { attempts?: number; maxRetries?: number; nextRetryAt?: number; predictedReviewMs?: number; actualReviewMs?: number }
@@ -97,7 +99,7 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                     local_path: v.local_path,
                     caption: meta?.generated_caption || meta?.description || '',
                     published_url: v.publish_url,
-                    status: mapDbStatus(v.status),
+                    status: mapDbStatusLocal(v.status),
                     error: undefined,
                     scheduledAt: v.scheduled_for || undefined,
                     queueIndex: v.queue_index ?? undefined,
@@ -114,7 +116,7 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                 queuedCount: videos.filter(v => v.status === 'queued').length,
                 downloadedCount: videos.filter(v => ['downloaded', 'captioned', 'publishing', 'published', 'verification_incomplete'].includes(v.status)).length,
                 publishedCount: videos.filter(v => ['published', 'verification_incomplete'].includes(v.status)).length,
-                failedCount: videos.filter(v => v.status === 'failed').length,
+                failedCount: videos.filter(v => ['failed', 'publish_failed'].includes(v.status)).length,
                 publishFailedCount: videos.filter(v => v.status === 'failed' && v.local_path).length,
                 captchaCount: videos.filter(v => v.status === 'captcha').length,
                 activeVideoId: prev.activeVideoId,
@@ -137,7 +139,7 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
             } else if (ev.event === 'captcha:detected') {
                 setState(prev => ({ ...prev, videos: prev.videos.map(v => v.platform_id === ev.data?.videoId ? { ...v, status: 'captcha' as const } : v), captchaCount: prev.captchaCount + 1 }))
             } else if (ev.event === 'violation:detected') {
-                setState(prev => ({ ...prev, videos: prev.videos.map(v => v.platform_id === ev.data?.videoId ? { ...v, status: 'violation' as const, error: ev.data?.error } : v) }))
+                setState(prev => ({ ...prev, videos: prev.videos.map(v => v.platform_id === ev.data?.videoId ? { ...v, status: 'publish_failed' as const, error: ev.data?.error } : v) }))
             } else if (ev.event === 'video:published') {
                 rebuild()
             } else if (ev.event === 'video:publish-status') {
@@ -176,35 +178,13 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
     return state
 }
 
-function mapDbStatus(dbStatus: string): TikTokVideo['status'] {
-    const map: Record<string, TikTokVideo['status']> = {
-        queued: 'queued', pending: 'queued', scanned: 'scanned', processing: 'downloading',
-        downloaded: 'downloaded', published: 'published', verification_incomplete: 'verification_incomplete',
-        under_review: 'under_review', verifying_publish: 'verifying_publish', duplicate: 'duplicate',
-        failed: 'failed', verified: 'published', captcha: 'captcha', violation: 'violation', skipped: 'skipped',
-    }
-    return map[dbStatus] || 'queued'
+function mapDbStatusLocal(dbStatus: string): TikTokVideo['status'] {
+    return mapDbStatus(dbStatus) as TikTokVideo['status']
 }
 
 // ── UI Constants ──────────────────────────────────
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    queued: { label: 'QUEUED', color: '#ca8a04', bg: '#fefce8', border: '#fde047' },
-    scanned: { label: 'SCANNED', color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
-    downloading: { label: 'DOWNLOADING', color: '#2563eb', bg: '#eff6ff', border: '#93c5fd' },
-    downloaded: { label: 'DOWNLOADED', color: '#0891b2', bg: '#ecfeff', border: '#67e8f9' },
-    captioned: { label: 'CAPTIONED', color: '#0284c7', bg: '#f0f9ff', border: '#7dd3fc' },
-    publishing: { label: 'PUBLISHING', color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
-    published: { label: 'PUBLISHED', color: '#059669', bg: '#ecfdf5', border: '#6ee7b7' },
-    verification_incomplete: { label: 'VERIFY ?', color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
-    under_review: { label: 'UNDER REVIEW', color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
-    verifying_publish: { label: 'VERIFYING', color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
-    duplicate: { label: 'DUPLICATE', color: '#ea580c', bg: '#fff7ed', border: '#fdba74' },
-    failed: { label: 'FAILED', color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
-    captcha: { label: '⚠️ CAPTCHA', color: '#ea580c', bg: '#fff7ed', border: '#fdba74' },
-    violation: { label: 'VIOLATION', color: '#dc2626', bg: '#fef2f2', border: '#fca5a5' },
-    skipped: { label: 'SKIPPED', color: '#6b7280', bg: '#f9fafb', border: '#d1d5db' },
-    processing: { label: 'PROCESSING', color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
-}
+// Status UI config is imported from '@nodes/tiktok-publisher/constants'
+// Use getStatusUI(status) for dynamic lookup with graceful fallback
 
 const PHASE_UI: Record<string, { label: string; icon: string; color: string }> = {
     idle: { label: 'Sẵn sàng', icon: '⏸', color: '#94a3b8' },
@@ -234,8 +214,9 @@ function MiniProgressRing({ percent, color }: { percent: number; color: string }
 // ── Video Card ──────────────────────────────────
 function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: number; campaignId: string }) {
     const api = (window as any).api
-    const sc = STATUS_CONFIG[video.status] || STATUS_CONFIG.queued
+    const sc = getStatusUI(video.status)
     const isActive = video.isActive
+    const [historyExpanded, setHistoryExpanded] = useState(false)
     const scheduledTime = video.scheduledAt ? new Date(video.scheduledAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : null
     const tiktokSourceUrl = video.platform_id ? `https://www.tiktok.com/@${video.author || '_'}/video/${video.platform_id}` : null
 
@@ -332,6 +313,24 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
                         )}
                     </div>
                 </div>
+
+                {/* History toggle button */}
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
+                    <button
+                        onClick={() => setHistoryExpanded(prev => !prev)}
+                        className="text-[10px] text-slate-400 hover:text-purple-600 transition cursor-pointer flex items-center gap-1"
+                    >
+                        <span style={{ transform: historyExpanded ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 150ms' }}>▶</span>
+                        {historyExpanded ? 'Hide history' : 'Show history'}
+                    </button>
+                </div>
+
+                {/* Expandable history */}
+                <VideoHistory
+                    campaignId={campaignId}
+                    videoId={video.platform_id}
+                    isExpanded={historyExpanded}
+                />
             </div>
         </div>
     )

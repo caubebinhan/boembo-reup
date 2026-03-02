@@ -31,7 +31,16 @@ protocol.registerSchemesAsPrivileged([
 // Sentry (production DSN if configured)
 initSentry()
 
+// Expose Chrome DevTools Protocol port for debugging (set E2E_CDP_PORT=9222 to enable)
+const cdpPort = process.env.E2E_CDP_PORT?.trim()
+if (cdpPort) {
+  app.commandLine.appendSwitch('remote-debugging-port', cdpPort)
+  console.log(`[CDP] Remote debugging enabled on port ${cdpPort}`)
+}
+
 function createWindow(): void {
+  const headlessFlag = String(process.env.E2E_HEADLESS || '').trim().toLowerCase()
+  const isE2EHeadless = headlessFlag === '1' || headlessFlag === 'true'
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -53,7 +62,7 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    if (!isE2EHeadless) mainWindow.show()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {

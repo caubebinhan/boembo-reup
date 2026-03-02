@@ -81,7 +81,7 @@ export async function resetWorkflowVersionFilters(page) {
  * @param {string} workflowId
  */
 export async function clickWorkflowCatalogCard(page, workflowId) {
-  const card = page.locator(`button:has-text("${workflowId}"):has-text("runnable=")`).first()
+  const card = page.locator(`[data-testid="workflow-card"][data-workflow-id="${workflowId}"]`).first()
   await card.waitFor({ state: 'visible' })
   await card.click()
 }
@@ -91,7 +91,7 @@ export async function clickWorkflowCatalogCard(page, workflowId) {
  * @param {string} runTitle
  */
 export async function selectRunByTitle(page, runTitle) {
-  const button = page.locator(`button.w-full.text-left.rounded-lg.border.px-3.py-2:has-text("${runTitle}")`).first()
+  const button = page.locator('[data-testid="run-history-item"]').filter({ hasText: runTitle }).first()
   await button.waitFor({ state: 'visible' })
   await button.click()
 }
@@ -100,7 +100,7 @@ export async function selectRunByTitle(page, runTitle) {
  * @param {import('playwright').Page} page
  */
 export function runHistoryButtons(page) {
-  return page.locator('button.w-full.text-left.rounded-lg.border.px-3.py-2')
+  return page.locator('[data-testid="run-history-item"]')
 }
 
 /**
@@ -110,9 +110,17 @@ export function runHistoryButtons(page) {
 export async function waitForRunHistoryCountAtLeast(page, expectedMinimum) {
   await page.waitForFunction(
     (nextMin) => {
-      const buttons = document.querySelectorAll('button.w-full.text-left.rounded-lg.border.px-3.py-2')
+      const buttons = document.querySelectorAll('[data-testid="run-history-item"]')
       return buttons.length >= nextMin
     },
     expectedMinimum
   )
+}
+
+/**
+ * @param {import('playwright').Page} page
+ * @param {string} caseId
+ */
+export function runCaseButtonByCaseId(page, caseId) {
+  return page.locator(`[data-testid="run-case-button"][data-case-id="${caseId}"]`).first()
 }

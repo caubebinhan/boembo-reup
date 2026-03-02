@@ -31,7 +31,6 @@ export function failGracefully(
   if (platformId && platformId !== 'unknown') {
     try {
       ctx.store.updateVideo(platformId, { status: 'failed' })
-      ctx.store.increment('failed')
       ctx.store.save()
     } catch (err) {
       ctx.logger.error(`[failGracefully] Could not update video status`, err)
@@ -80,9 +79,6 @@ export function setVideoStatus(
 ) {
   try {
     ctx.store.updateVideo(platformId, { status, publish_url: publishUrl || undefined })
-    if (status === 'published') ctx.store.increment('published')
-    else if (status === 'failed') ctx.store.increment('failed')
-    else if (status === 'verification_incomplete') ctx.store.increment('verification_incomplete' as any)
     ctx.store.save()
   } catch (err) {
     ctx.logger.error(`Failed to update video status to ${status}`, err)

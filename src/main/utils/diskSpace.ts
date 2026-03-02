@@ -27,7 +27,7 @@ function getFreeDiskSpaceWindows(targetPath: string): number {
     // Try PowerShell first (more reliable than wmic which is deprecated)
     const output = execSync(
       `powershell -NoProfile -Command "(Get-PSDrive ${drive}).Free"`,
-      { encoding: 'utf8', timeout: 5000 }
+      { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }
     )
     const freeBytes = Number.parseInt(output.trim(), 10)
     if (Number.isFinite(freeBytes) && freeBytes > 0) {
@@ -38,7 +38,7 @@ function getFreeDiskSpaceWindows(targetPath: string): number {
     try {
       const output = execSync(
         `wmic logicaldisk where "DeviceID='${drive}:'" get FreeSpace /value`,
-        { encoding: 'utf8', timeout: 5000 }
+        { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }
       )
       const match = output.match(/FreeSpace=(\d+)/)
       if (match) {

@@ -36,8 +36,8 @@ export function CampaignCard({ campaign, onAction }: CampaignCardProps) {
     if (CustomCard) {
         return (
             <Suspense fallback={
-                <div className="bg-white border border-slate-200 rounded-xl p-5 animate-pulse shadow-sm">
-                    <span className="text-slate-300">Loading...</span>
+                <div className="bg-vintage-white border border-vintage-border rounded-2xl p-6 animate-pulse shadow-sm">
+                    <span className="text-vintage-gray">Loading...</span>
                 </div>
             }>
                 <CustomCard campaign={campaign} onAction={onAction} />
@@ -61,8 +61,8 @@ function YamlDrivenCard({ campaign, onAction, workflowId }: CampaignCardProps & 
 
     if (loading || !descriptor?.campaign_card) {
         return (
-            <div className="bg-white border border-slate-200 rounded-xl p-5 flex items-center justify-center animate-pulse shadow-sm">
-                <span className="text-slate-300">Loading...</span>
+            <div className="bg-vintage-white border border-vintage-border rounded-2xl p-6 flex items-center justify-center animate-pulse shadow-sm">
+                <span className="text-vintage-gray">Loading...</span>
             </div>
         )
     }
@@ -70,7 +70,7 @@ function YamlDrivenCard({ campaign, onAction, workflowId }: CampaignCardProps & 
     const { campaign_card, card_actions = [] } = descriptor
     const subtitle = evaluateExpression(campaign_card.subtitle_expr, evalCtx, 'Campaign')
 
-    let badge = { label: '• Unknown', color: '#6b7280', bg: 'rgba(107,114,128,0.1)', blink: false }
+    let badge = { label: '• Unknown', color: 'var(--ev-c-gray-2)', bg: 'var(--ev-c-gray-3)', blink: false }
     if (campaign_card.status_badges) {
         for (const b of campaign_card.status_badges) {
             if (evaluateExpression(b.condition, evalCtx, false)) {
@@ -82,7 +82,7 @@ function YamlDrivenCard({ campaign, onAction, workflowId }: CampaignCardProps & 
 
     const stats = (campaign_card.stats || []).map((s: any) => {
         const value = evaluateExpression(s.value_expr, evalCtx, 0)
-        const color = s.color_expr ? evaluateExpression(s.color_expr, { ...evalCtx, value }, '#94a3b8') : '#94a3b8'
+        const color = s.color_expr ? evaluateExpression(s.color_expr, { ...evalCtx, value }, 'var(--ev-c-gray-2)') : 'var(--ev-c-gray-2)'
         const show = s.show_if ? evaluateExpression(s.show_if, evalCtx, true) : true
         return { ...s, value, color, show }
     }).filter((s: any) => s.show)
@@ -97,37 +97,36 @@ function YamlDrivenCard({ campaign, onAction, workflowId }: CampaignCardProps & 
             tabIndex={0}
             onClick={() => onAction('campaign:view-details', { id: campaign.id })}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onAction('campaign:view-details', { id: campaign.id }) }}
-            className="bg-white border border-slate-200 rounded-xl p-5 hover:border-purple-300 hover:shadow-lg transition-all cursor-pointer flex flex-col gap-3 relative overflow-hidden group shadow-sm"
+            className="bg-vintage-white border border-vintage-border rounded-2xl p-6 hover:border-pastel-mint hover:shadow-lg transition-all duration-300 cursor-pointer flex flex-col gap-4 relative overflow-hidden group shadow-sm hover:-translate-y-1"
         >
-            <div className="flex justify-between items-start pt-1">
-                <h3 className="font-bold text-lg text-slate-800 group-hover:text-purple-700 transition">{campaign.name}</h3>
+            <div className="flex justify-between items-start">
+                <h3 className="font-semibold text-xl text-vintage-charcoal group-hover:text-blue-900 transition-colors">{campaign.name}</h3>
                 <div
-                    className={`text-xs font-bold px-2.5 py-1 rounded-full ${badge.blink ? 'animate-pulse' : ''}`}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full ${badge.blink ? 'animate-pulse' : ''} shadow-sm`}
                     style={{ backgroundColor: badge.bg, color: badge.color }}
                 >{badge.label}</div>
             </div>
 
-            <div className="text-sm text-slate-400">{subtitle}</div>
+            <div className="text-sm text-vintage-gray leading-relaxed">{subtitle}</div>
 
-            <div className="flex items-center text-sm gap-2 mt-1">
-                {stats.map((stat: any, idx: number) => (
-                    <div key={stat.key} className="flex items-center" title={stat.label}>
-                        <span className="mr-1.5">{stat.icon}</span>
+            <div className="flex items-center text-sm gap-3 mt-1">
+                {stats.map((stat: any) => (
+                    <div key={stat.key} className="flex items-center bg-vintage-cream px-3 py-1.5 rounded-lg border border-vintage-border" title={stat.label}>
+                        <span className="mr-2 opacity-70">{stat.icon}</span>
                         <span className="font-medium" style={{ color: stat.color }}>{stat.value}</span>
-                        {idx < stats.length - 1 && <span className="text-slate-200 mx-2">|</span>}
                     </div>
                 ))}
             </div>
 
             {/* Action buttons — stop propagation so click doesn't navigate */}
             {actions.length > 0 && (
-                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+                <div className="flex items-center gap-3 mt-4 pt-4 border-t border-vintage-border/50">
                     <div className="flex-1" />
                     {actions.map((act: any) => {
-                        let cls = "px-4 py-1.5 text-sm rounded-lg font-medium transition cursor-pointer"
-                        if (act.style === 'primary') cls += " text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm"
-                        else if (act.style === 'danger') cls += " text-red-500 border border-red-200 hover:bg-red-50"
-                        else cls += " text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                        let cls = "px-5 py-2 text-sm rounded-full font-medium transition-all duration-200 cursor-pointer active:scale-95 shadow-sm hover:shadow"
+                        if (act.style === 'primary') cls += " text-vintage-charcoal bg-pastel-mint cursor-pointer hover:bg-[#c3dac6]"
+                        else if (act.style === 'danger') cls += " text-[#a84a4a] border border-[#e2b5b5] bg-[#faebeb] hover:bg-[#f2d8d8]"
+                        else cls += " text-vintage-charcoal bg-vintage-cream hover:bg-vintage-border/40 border border-transparent hover:border-vintage-border"
                         return (
                             <button key={act.key || act.label} onClick={(e) => {
                                 e.stopPropagation()

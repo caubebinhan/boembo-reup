@@ -39,7 +39,6 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       local_thumbnail: video.local_thumbnail || undefined,
     },
   })
-  ctx.store.increment('downloaded')
   ctx.store.save()
 
   ctx.logger.info(`Downloaded: ${result.filePath}${result.description ? ' (caption updated)' : ''}`)

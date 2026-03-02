@@ -55,8 +55,6 @@ export function patchVideoStatus(campaignId: string, videoId: string, status: st
     const store = campaignRepo.tryOpen(campaignId)
     if (!store) return
     store.updateVideo(videoId, { status, publish_url: publishUrl || undefined })
-    if (status === 'published') store.increment('published')
-    else if (status === 'verification_incomplete') store.increment('verification_incomplete' as any)
     store.save()
   } catch (err) {
     console.error(`[PublishVerifyHandler] Failed to patch video ${videoId} to ${status}:`, err)
@@ -84,7 +82,23 @@ export const publishVerifyHandler: AsyncTaskHandler = {
       publishStartedAtSec, caption, initialStatus: _initialStatus,
     } = task.payload
 
+    // Skip execution if campaign is paused
+    const campaign = campaignRepo.findById(campaignId)
+    if (!campaign || campaign.status === 'paused' || campaign.status === 'archived') {
+      ExecutionLogger.emitNodeEvent(campaignId, 'publisher_1', 'video:publish-status', {
+        videoId,
+        status: 'verifying_publish',
+        message: `Campaign is ${campaign?.status || 'missing'}, pausing verification task...`,
+      })
+      return {
+        action: 'reschedule',
+        nextRunAt: Date.now() + 60_000, // Recheck in 1 min
+        patchState: { lastError: `Campaign ${campaign?.status}` },
+      }
+    }
+
     // Load FRESH account (cookies may have been updated since task was created)
+
     const account = accountRepo.findById(accountId)
     if (!account) {
       return { action: 'fail', error: `Account ${accountId} not found` }

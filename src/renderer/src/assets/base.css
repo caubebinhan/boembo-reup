@@ -1,32 +1,51 @@
 :root {
+  /* Vintage Light Palette */
   --ev-c-white: #ffffff;
-  --ev-c-white-soft: #f8f8f8;
-  --ev-c-white-mute: #f2f2f2;
+  --ev-c-white-soft: #fcfbf8;
+  /* Soft warm white */
+  --ev-c-white-mute: #f5f3ee;
+  /* Muted cream */
 
-  --ev-c-black: #1b1b1f;
-  --ev-c-black-soft: #222222;
-  --ev-c-black-mute: #282828;
+  /* Deep Vintage Accents (replacing blacks/grays) */
+  --ev-c-black: #2c2a29;
+  /* Soft charcoal */
+  --ev-c-black-soft: #383533;
+  --ev-c-black-mute: #4a4644;
 
-  --ev-c-gray-1: #515c67;
-  --ev-c-gray-2: #414853;
-  --ev-c-gray-3: #32363f;
+  /* Accent Grays / Beiges */
+  --ev-c-gray-1: #6b635e;
+  --ev-c-gray-2: #8a827c;
+  --ev-c-gray-3: #e8e4db;
+  /* Light beige for borders/backgrounds */
 
-  --ev-c-text-1: rgba(255, 255, 245, 0.86);
-  --ev-c-text-2: rgba(235, 235, 245, 0.6);
-  --ev-c-text-3: rgba(235, 235, 245, 0.38);
+  /* Text Colors */
+  --ev-c-text-1: #2c2a29;
+  /* Main text: charcoal */
+  --ev-c-text-2: #5c5551;
+  /* Muted text: warm gray */
+  --ev-c-text-3: #8a827c;
+  /* Placeholder text */
 
+  /* Pastel Accents */
+  --ev-c-pastel-pink: #f4dce0;
+  --ev-c-pastel-mint: #d4e8d8;
+  --ev-c-pastel-blue: #d6e4f0;
+  --ev-c-pastel-peach: #f9e3d3;
+
+  /* Button defaults */
   --ev-button-alt-border: transparent;
   --ev-button-alt-text: var(--ev-c-text-1);
   --ev-button-alt-bg: var(--ev-c-gray-3);
   --ev-button-alt-hover-border: transparent;
   --ev-button-alt-hover-text: var(--ev-c-text-1);
-  --ev-button-alt-hover-bg: var(--ev-c-gray-2);
+  --ev-button-alt-hover-bg: #dcd8ce;
 }
 
 :root {
-  --color-background: var(--ev-c-black);
-  --color-background-soft: var(--ev-c-black-soft);
-  --color-background-mute: var(--ev-c-black-mute);
+  /* Use warm white for main background */
+  --color-background: var(--ev-c-white-soft);
+  --color-background-soft: var(--ev-c-white-mute);
+  --color-background-mute: var(--ev-c-gray-3);
 
   --color-text: var(--ev-c-text-1);
 }

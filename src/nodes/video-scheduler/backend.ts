@@ -82,13 +82,11 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     return record
   })
 
-  // Count by status
-  const queuedCount = scheduledVideos.filter(v => v.status === 'queued').length
+  // Count pending_approval for logging
   const pendingCount = scheduledVideos.filter(v => v.status === 'pending_approval').length
 
-  // Save to campaign document
-  ctx.store.setVideos(scheduledVideos)
-  ctx.store.setCounter('queued', queuedCount)
+  // Save to campaign document (merge — preserves status of already-processed videos)
+  ctx.store.upsertVideos(scheduledVideos)
   ctx.store.save()
 
   if (pendingCount > 0) {

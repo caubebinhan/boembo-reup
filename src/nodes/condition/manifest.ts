@@ -15,7 +15,7 @@ const manifest: NodeManifest = {
         label: 'Expression',
         type: 'string',
         required: true,
-        description: 'JS expression on `data`. E.g. "data.status === \'violation\'"',
+        description: 'JS expression on `data`. E.g. "data.status === \'publish_failed\'"',
         default: 'data.status === "published"',
       },
     ],

@@ -2,6 +2,8 @@
 import { IPC_CHANNELS } from '@shared/ipc-types'
 
 export function setupScannerIPC() {
+  // Guard against HMR double-registration in dev mode
+  ipcMain.removeHandler(IPC_CHANNELS.SCANNER_OPEN_WINDOW)
   ipcMain.handle(IPC_CHANNELS.SCANNER_OPEN_WINDOW, async (event) => {
     const parentWin = BrowserWindow.fromWebContents(event.sender)
     

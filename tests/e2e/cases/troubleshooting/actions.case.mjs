@@ -1,6 +1,7 @@
 import {
   clickWorkflowCatalogCard,
   resetWorkflowVersionFilters,
+  runCaseButtonByCaseId,
   runHistoryButtons,
   setSelectValueByAnchorOption,
   waitForRunHistoryCountAtLeast,
@@ -30,7 +31,7 @@ export const runCaseAddsHistoryEntryCase = {
 
     await page.waitForFunction(
       (expectedMin) => {
-        const buttons = document.querySelectorAll('button.w-full.text-left.rounded-lg.border.px-3.py-2')
+        const buttons = document.querySelectorAll('[data-testid="run-history-item"]')
         return buttons.length >= expectedMin
       },
       beforeCount + 1
@@ -190,5 +191,89 @@ export const refreshMaintainsRunHistoryCase = {
     await page.getByRole('button', { name: 'Refresh' }).waitFor({ state: 'visible' })
     const afterCount = await runHistoryButtons(page).count()
     assert.equal(afterCount, beforeCount)
+  },
+}
+
+/** @type {import('../types.mjs').E2ECaseDefinition} */
+export const runCaseFailureMessageCase = {
+  id: 'e2e.troubleshooting.actions.run-case-failure-shows-error-message',
+  suite: 'e2e',
+  group: 'troubleshooting-panel',
+  title: 'Run case failure shows error message banner and clears busy state',
+  meta: {
+    objective: 'Ensure run-case IPC failure is surfaced to users and does not leave the case stuck in running state.',
+    labels: ['ui', 'actions', 'run-case', 'error'],
+    investigationHints: [
+      'Injected failure path uses troubleshooting:test:set-behavior -> failRunCase.',
+      'Run button should go back to "Run" after error.',
+    ],
+  },
+  run: async ({ page, assert }) => {
+    await resetWorkflowVersionFilters(page)
+    await page.evaluate(() => window.api.invoke('troubleshooting:test:set-behavior', { failRunCase: true }))
+    const runButton = runCaseButtonByCaseId(page, 'fixture.case.e2e.publish-path')
+    await runButton.waitFor({ state: 'visible' })
+    await runButton.click()
+
+    const errorBanner = page.getByText('Run failed: Injected run-case failure')
+    await errorBanner.waitFor({ state: 'visible' })
+    assert.equal(await errorBanner.isVisible(), true)
+    assert.equal(await runButton.textContent(), 'Run')
+  },
+}
+
+/** @type {import('../types.mjs').E2ECaseDefinition} */
+export const clearLogsFailureMessageCase = {
+  id: 'e2e.troubleshooting.actions.clear-logs-failure-shows-error-message',
+  suite: 'e2e',
+  group: 'troubleshooting-panel',
+  title: 'Clear Logs failure shows error message banner',
+  meta: {
+    objective: 'Ensure clear-runs IPC failure is visible to user.',
+    labels: ['ui', 'actions', 'clear-logs', 'error'],
+    investigationHints: [
+      'Injected failure path uses troubleshooting:test:set-behavior -> failClearRuns.',
+      'Run history should remain unchanged after failed clear.',
+    ],
+  },
+  run: async ({ page, assert }) => {
+    await resetWorkflowVersionFilters(page)
+    const beforeCount = await runHistoryButtons(page).count()
+    await page.evaluate(() => window.api.invoke('troubleshooting:test:set-behavior', { failClearRuns: true }))
+    const clearButton = page.getByRole('button', { name: 'Clear Logs' })
+    await clearButton.waitFor({ state: 'visible' })
+    await clearButton.click()
+
+    const errorBanner = page.getByText('Clear failed: Injected clear-runs failure')
+    await errorBanner.waitFor({ state: 'visible' })
+    assert.equal(await errorBanner.isVisible(), true)
+    assert.equal(await runHistoryButtons(page).count(), beforeCount)
+  },
+}
+
+/** @type {import('../types.mjs').E2ECaseDefinition} */
+export const refreshLoadFailureMessageCase = {
+  id: 'e2e.troubleshooting.actions.refresh-load-failure-shows-error-message',
+  suite: 'e2e',
+  group: 'troubleshooting-panel',
+  title: 'Refresh shows load error when case catalog fetch fails',
+  meta: {
+    objective: 'Ensure load() errors are surfaced in top error banner.',
+    labels: ['ui', 'actions', 'refresh', 'error'],
+    investigationHints: [
+      'Injected failure path uses troubleshooting:test:set-behavior -> failListCases.',
+      'Refresh should keep panel interactive after error.',
+    ],
+  },
+  run: async ({ page, assert }) => {
+    await resetWorkflowVersionFilters(page)
+    await page.evaluate(() => window.api.invoke('troubleshooting:test:set-behavior', { failListCases: true }))
+    const refreshButton = page.getByRole('button', { name: 'Refresh' })
+    await refreshButton.waitFor({ state: 'visible' })
+    await refreshButton.click()
+
+    const errorBanner = page.getByText('Load failed: Injected list-cases failure')
+    await errorBanner.waitFor({ state: 'visible' })
+    assert.equal(await errorBanner.isVisible(), true)
   },
 }

@@ -5,42 +5,53 @@ import type { AsyncTaskDocument } from '@core/async-tasks/types'
 /**
  * Async Task Repository — background polling task queue.
  *
- * Uses atomic claim/lease mechanism to prevent duplicate execution.
- * Deduplication via unique partial index on dedupe_key for active tasks.
+ * Index columns are the single source of truth for query-able fields.
+ * data_json stores only non-indexed fields.
  */
 export class AsyncTaskRepo extends BaseRepo<AsyncTaskDocument> {
   constructor() {
     super('async_tasks')
   }
 
+  protected override indexedColumnMap(): Record<string, string> {
+    return {
+      task_type: 'taskType',
+      status: 'status',
+      dedupe_key: 'dedupeKey',
+      concurrency_key: 'concurrencyKey',
+      campaign_id: 'campaignId',
+      owner_key: 'ownerKey',
+      worker_id: 'workerId',
+      next_run_at: 'nextRunAt',
+      lease_until: 'leaseUntil',
+      attempt: 'attempt',
+    }
+  }
+
+  /** Column list for SELECT queries that need merge */
+  private get _cols() {
+    return 'data_json, task_type, status, dedupe_key, concurrency_key, campaign_id, owner_key, worker_id, next_run_at, lease_until, attempt'
+  }
+
   // ── Atomic Claim ────────────────────────────────
-  /**
-   * Claim due tasks with concurrency check BEFORE claim.
-   *
-   * 1. SELECT candidates where status='pending' AND next_run_at <= now
-   * 2. Filter by concurrency limit (count running tasks per concurrencyKey)
-   * 3. CAS UPDATE: SET status='claimed', attempt+1, lease — only if still 'pending'
-   */
   claimDue(limit: number, workerId: string, leaseMs: number): AsyncTaskDocument[] {
     return db.transaction(() => {
       const now = Date.now()
-      // Over-fetch to account for concurrency filtering
       const candidates = db.prepare(`
-        SELECT id, data_json, concurrency_key FROM async_tasks
+        SELECT id, ${this._cols} FROM async_tasks
         WHERE status = 'pending' AND next_run_at <= ?
         ORDER BY next_run_at ASC
         LIMIT ?
-      `).all(now, limit * 3) as { id: string; data_json: string; concurrency_key: string | null }[]
+      `).all(now, limit * 3) as Record<string, any>[]
 
       const claimed: AsyncTaskDocument[] = []
       const concurrencyCounts = new Map<string, number>()
 
       for (const row of candidates) {
         if (claimed.length >= limit) break
-        const doc = JSON.parse(row.data_json) as AsyncTaskDocument
+        const doc = this.mergeIndexedFields(JSON.parse(row.data_json), row)
         const key = doc.concurrencyKey
 
-        // Concurrency check BEFORE claiming
         if (key) {
           if (!concurrencyCounts.has(key)) {
             const result = db.prepare(`
@@ -54,7 +65,7 @@ export class AsyncTaskRepo extends BaseRepo<AsyncTaskDocument> {
           concurrencyCounts.set(key, concurrencyCounts.get(key)! + 1)
         }
 
-        // CAS: only claim if still pending
+        // CAS: only claim if still pending — update index columns directly
         const updated = db.prepare(`
           UPDATE async_tasks
           SET status = 'claimed', worker_id = ?, lease_until = ?,
@@ -63,14 +74,11 @@ export class AsyncTaskRepo extends BaseRepo<AsyncTaskDocument> {
         `).run(workerId, now + leaseMs, now, row.id)
 
         if (updated.changes > 0) {
-          // Reflect in returned doc
           doc.status = 'claimed'
           doc.attempt = (doc.attempt || 0) + 1
           doc.workerId = workerId
           doc.leaseUntil = now + leaseMs
           doc.updatedAt = now
-          // Sync index columns
-          this.syncIndexColumns(doc)
           claimed.push(doc)
         }
       }
@@ -80,7 +88,6 @@ export class AsyncTaskRepo extends BaseRepo<AsyncTaskDocument> {
 
   // ── Lease ───────────────────────────────────────
 
-  /** Reclaim tasks with expired leases (crash recovery) */
   reclaimExpiredLeases(): number {
     const now = Date.now()
     const result = db.prepare(`
@@ -91,7 +98,6 @@ export class AsyncTaskRepo extends BaseRepo<AsyncTaskDocument> {
     return result.changes
   }
 
-  /** Extend lease for a running task */
   extendLease(taskId: string, workerId: string, extraMs: number): boolean {
     const now = Date.now()
     const result = db.prepare(`
@@ -104,19 +110,14 @@ export class AsyncTaskRepo extends BaseRepo<AsyncTaskDocument> {
 
   // ── Status Updates ──────────────────────────────
 
-  /** Transition claimed → running */
   markRunning(taskId: string): void {
     const now = Date.now()
     db.prepare(`
       UPDATE async_tasks SET status = 'running', updated_at = ?
       WHERE id = ? AND status = 'claimed'
     `).run(now, taskId)
-    // Also sync index
-    const doc = this.findById(taskId)
-    if (doc) this.syncIndexColumns(doc)
   }
 
-  /** Apply decision result to task */
   applyDecision(
     taskId: string,
     status: AsyncTaskDocument['status'],
@@ -160,31 +161,26 @@ export class AsyncTaskRepo extends BaseRepo<AsyncTaskDocument> {
 
   findByCampaign(campaignId: string): AsyncTaskDocument[] {
     const rows = db.prepare(`
-      SELECT data_json FROM async_tasks WHERE campaign_id = ? ORDER BY created_at DESC
-    `).all(campaignId) as { data_json: string }[]
-    return rows.map(r => JSON.parse(r.data_json))
+      SELECT ${this._cols} FROM async_tasks WHERE campaign_id = ? ORDER BY created_at DESC
+    `).all(campaignId) as Record<string, any>[]
+    return rows.map(r => this.mergeIndexedFields(JSON.parse(r.data_json), r))
   }
 
   findByOwnerKey(ownerKey: string): AsyncTaskDocument[] {
     const rows = db.prepare(`
-      SELECT data_json FROM async_tasks WHERE owner_key = ? ORDER BY created_at DESC
-    `).all(ownerKey) as { data_json: string }[]
-    return rows.map(r => JSON.parse(r.data_json))
+      SELECT ${this._cols} FROM async_tasks WHERE owner_key = ? ORDER BY created_at DESC
+    `).all(ownerKey) as Record<string, any>[]
+    return rows.map(r => this.mergeIndexedFields(JSON.parse(r.data_json), r))
   }
 
   // ── Dedupe-Aware Insert ─────────────────────────
 
-  /**
-   * Insert task if no active task with same dedupeKey exists.
-   * Uses UNIQUE partial index for atomicity.
-   */
   insertIfNotExists(doc: AsyncTaskDocument): { taskId: string; created: boolean } {
     return db.transaction(() => {
       try {
         this.save(doc)
         return { taskId: doc.id, created: true }
       } catch (err: any) {
-        // UNIQUE constraint violation on dedupe_key → already exists
         if (String(err?.message || '').includes('UNIQUE constraint failed')) {
           const existing = db.prepare(`
             SELECT id FROM async_tasks
@@ -200,7 +196,6 @@ export class AsyncTaskRepo extends BaseRepo<AsyncTaskDocument> {
 
   // ── Cleanup ─────────────────────────────────────
 
-  /** Remove old completed/failed/timed_out/cancelled tasks */
   pruneOld(maxAgeMs: number): number {
     const cutoff = Date.now() - maxAgeMs
     const result = db.prepare(`
@@ -209,24 +204,6 @@ export class AsyncTaskRepo extends BaseRepo<AsyncTaskDocument> {
         AND updated_at < ?
     `).run(cutoff)
     return result.changes
-  }
-
-  // ── Index Column Sync ───────────────────────────
-
-  protected override syncIndexColumns(doc: AsyncTaskDocument): void {
-    db.prepare(`
-      UPDATE async_tasks SET
-        task_type = ?, status = ?, dedupe_key = ?,
-        concurrency_key = ?, campaign_id = ?, owner_key = ?,
-        worker_id = ?, next_run_at = ?, lease_until = ?,
-        attempt = ?
-      WHERE id = ?
-    `).run(
-      doc.taskType, doc.status, doc.dedupeKey,
-      doc.concurrencyKey ?? null, doc.campaignId ?? null, doc.ownerKey ?? null,
-      doc.workerId ?? null, doc.nextRunAt, doc.leaseUntil ?? null,
-      doc.attempt, doc.id
-    )
   }
 }
 

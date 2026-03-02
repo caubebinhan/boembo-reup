@@ -12,7 +12,7 @@ import { videoEditPluginRegistry } from '@core/video-edit'
 
 export function setup() {
   // ── Video Edit Plugins (auto-loaded from registry) ────
-  ipcMain.handle('video-edit:get-plugins', () => {
+  ipcMain.handle('video-edit:get-plugin-metas', () => {
     return videoEditPluginRegistry.getPluginMetas()
   })
 

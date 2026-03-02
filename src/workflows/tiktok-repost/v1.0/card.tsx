@@ -19,7 +19,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
 
     // ── Live state from IPC events ──
     const [liveMsg, setLiveMsg] = useState<string | null>(null)
-    const [alerts, setAlerts] = useState<{ type: 'captcha' | 'violation' | 'error'; message: string }[]>([])
+    const [alerts, setAlerts] = useState<{ type: 'captcha' | 'publish_failed' | 'error'; message: string }[]>([])
 
     useEffect(() => {
         const api = (window as any).api
@@ -41,13 +41,14 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                     return [...prev, { type: 'captcha', message: 'CAPTCHA detected — needs resolve' }]
                 })
             } else if (ev.event === 'violation:detected') {
-                setAlerts(prev => [...prev, { type: 'violation', message: ev.data?.error || 'Violation detected' }])
+                setAlerts(prev => [...prev, { type: 'publish_failed', message: ev.data?.error || 'Publish failed — content violation' }])
             }
         })
 
         // Clear live message when campaign finishes/pauses
         const offStatus = api.on?.('campaigns-updated', () => {
-            // Polling will update campaign prop, clear stale live messages
+            // Clear stale live messages when campaign state changes externally
+            setLiveMsg(null)
         })
 
         return () => {
@@ -66,7 +67,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
 
     // Clear live message if campaign is idle/finished
     useEffect(() => {
-        if (campaign.status === 'idle' || campaign.status === 'finished') {
+        if (['idle', 'finished', 'paused', 'error'].includes(campaign.status)) {
             setLiveMsg(null)
         }
     }, [campaign.status])
@@ -191,10 +192,10 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                 <div className="mt-2 flex flex-col gap-1">
                     {alerts.map((alert, i) => (
                         <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-medium ${alert.type === 'captcha' ? 'bg-orange-50 text-orange-700 border border-orange-200'
-                            : alert.type === 'violation' ? 'bg-red-50 text-red-600 border border-red-200'
+                            : alert.type === 'publish_failed' ? 'bg-red-50 text-red-600 border border-red-200'
                                 : 'bg-amber-50 text-amber-700 border border-amber-200'
                             }`}>
-                            <span>{alert.type === 'captcha' ? '⚠️' : alert.type === 'violation' ? '🚫' : '⚡'}</span>
+                            <span>{alert.type === 'captcha' ? '⚠️' : alert.type === 'publish_failed' ? '🚫' : '⚡'}</span>
                             <span className="truncate">{alert.message}</span>
                         </div>
                     ))}

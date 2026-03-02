@@ -101,6 +101,15 @@ export default async function execute(
       videoId, error: error.message,
     })
 
+    // Mark the video as failed so the UI shows the edit failure reason
+    if (ctx.store?.updateVideo && video.platform_id) {
+      ctx.store.updateVideo(video.platform_id, {
+        status: 'failed',
+        data: { ...video, error: `Edit failed: ${error.message}` },
+      })
+      ctx.store.save()
+    }
+
     ctx.alert('warn', `Video edit failed: ${error.message}. Using original video.`)
     return { data: input, message: `Edit failed: ${error.message}` }
   }

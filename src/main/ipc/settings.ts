@@ -6,6 +6,7 @@ import { browserService } from '../services/BrowserService'
 import { cleanDbSchema, getDbPath, inspectDbSchema } from '../db/Database'
 import { SentryOAuthService } from '../services/SentryOAuthService'
 import { getFreeDiskSpaceMB } from '../utils/diskSpace'
+import { flowLoader } from '@core/flow/FlowLoader'
 
 export function setupSettingsIPC() {
   ipcMain.handle('browser:scan-local', async () => {
@@ -125,7 +126,6 @@ export function setupSettingsIPC() {
 
   // ── Workflow-aware service health checks ──────────
   ipcMain.handle('healthcheck:services', async () => {
-    const { flowLoader } = require('../../core/flow/FlowLoader')
     const flows = flowLoader.getAll()
 
     // Collect unique service URLs from all workflow definitions

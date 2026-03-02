@@ -2,6 +2,8 @@ import {
   clickWorkflowCatalogCard,
   getSelectStateByAnchorOption,
   resetWorkflowVersionFilters,
+  runCaseButtonByCaseId,
+  selectRunByTitle,
   setManualRuntimePickersEnabled,
   setSelectValueByAnchorOption,
 } from './helpers.mjs'
@@ -217,5 +219,45 @@ export const manualSeedSummaryWithoutManualPickersCase = {
     const seedText = page.getByText('Auto random seed (tiktok-repost):')
     await seedText.waitFor({ state: 'visible' })
     assert.equal(await seedText.isVisible(), true)
+  },
+}
+
+/** @type {import('../types.mjs').E2ECaseDefinition} */
+export const manualPickersRuntimePayloadCase = {
+  id: 'e2e.troubleshooting.manual-pickers-runtime-payload-forwarded-to-run',
+  suite: 'e2e',
+  group: 'troubleshooting-panel',
+  title: 'Manual picker + seed selections are forwarded into run-case runtime payload',
+  meta: {
+    objective: 'Ensure operator-selected account/video/source/seed values are passed to troubleshooting:run-case.',
+    labels: ['ui', 'manual-pickers', 'runtime', 'payload'],
+    investigationHints: [
+      'Run fixture.case.e2e.publish-path after selecting manual pickers.',
+      'Result payload JSON should contain runtime accountId/video/source/randomSeed.',
+    ],
+  },
+  run: async ({ page, assert }) => {
+    await resetWorkflowVersionFilters(page)
+    await setManualRuntimePickersEnabled(page, true)
+    await clickWorkflowCatalogCard(page, 'tiktok-repost')
+
+    await page.getByPlaceholder('Auto Random Seed (optional)').fill('seed-e2e-runtime')
+    assert.equal(await setSelectValueByAnchorOption(page, 'Debug Account: Auto Select', 'acc-fixture-1'), true)
+    assert.equal(await setSelectValueByAnchorOption(page, 'Debug Video (tiktok-repost): Auto Select', 'video-fixture-1'), true)
+    assert.equal(await setSelectValueByAnchorOption(page, 'Debug Source (tiktok-repost): Auto Random', 'source-fixture-1'), true)
+
+    const runButton = runCaseButtonByCaseId(page, 'fixture.case.e2e.publish-path')
+    await runButton.waitFor({ state: 'visible' })
+    await runButton.click()
+
+    await selectRunByTitle(page, 'Fixture E2E Publish Path (Fixture Run)')
+    const runtimeJson = page.locator('pre').filter({ hasText: '"runtime"' }).first()
+    await runtimeJson.waitFor({ state: 'visible' })
+    const text = await runtimeJson.textContent()
+    assert.ok(text)
+    assert.equal(text.includes('"accountId": "acc-fixture-1"'), true)
+    assert.equal(text.includes('"videoPlatformId": "vid_v1_001"'), true)
+    assert.equal(text.includes('"sourceName": "@fixture_channel"'), true)
+    assert.equal(text.includes('"randomSeed": "seed-e2e-runtime"'), true)
   },
 }

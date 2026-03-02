@@ -4,18 +4,29 @@ import type { JobDocument } from '../models/Job'
 import * as crypto from 'node:crypto'
 
 /**
- * Job Repository  - engine job queue.
+ * Job Repository — engine job queue.
  *
- * Jobs need cross-campaign queries (findPending for engine tick),
- * so we keep index columns (status, campaign_id, scheduled_at)
- * alongside data_json for indexed lookups.
+ * Index columns (status, campaign_id, scheduled_at) are the single source
+ * of truth — NOT duplicated in data_json.
  */
 export class JobRepository extends BaseRepo<JobDocument> {
   constructor() {
     super('jobs')
   }
 
-  //  Create shorthand 
+  protected override indexedColumnMap(): Record<string, string> {
+    return {
+      status: 'status',
+      campaign_id: 'campaign_id',
+      scheduled_at: 'scheduled_at',
+    }
+  }
+
+  private get _cols() {
+    return 'data_json, status, campaign_id, scheduled_at'
+  }
+
+  // Create shorthand
   createJob(partial: Omit<JobDocument, 'id' | 'created_at' | 'updated_at' | 'status'> & { status?: string }): string {
     const now = Date.now()
     const doc: JobDocument = {
@@ -29,25 +40,25 @@ export class JobRepository extends BaseRepo<JobDocument> {
     return doc.id
   }
 
-  //  Engine tick: cross-campaign pending query 
+  // Engine tick: cross-campaign pending query
   findPending(limit = 10): JobDocument[] {
     const now = Date.now()
     const rows = db
       .prepare(
-        `SELECT data_json FROM jobs
+        `SELECT ${this._cols} FROM jobs
          WHERE status = 'pending' AND scheduled_at <= ?
          ORDER BY scheduled_at ASC LIMIT ?`
       )
-      .all(now, limit) as { data_json: string }[]
-    return rows.map(r => JSON.parse(r.data_json))
+      .all(now, limit) as Record<string, any>[]
+    return rows.map(r => this.mergeIndexedFields(JSON.parse(r.data_json), r))
   }
 
-  //  By campaign 
+  // By campaign
   findByCampaign(campaignId: string): JobDocument[] {
     const rows = db
-      .prepare(`SELECT data_json FROM jobs WHERE campaign_id = ? ORDER BY created_at DESC`)
-      .all(campaignId) as { data_json: string }[]
-    return rows.map(r => JSON.parse(r.data_json))
+      .prepare(`SELECT ${this._cols} FROM jobs WHERE campaign_id = ? ORDER BY created_at DESC`)
+      .all(campaignId) as Record<string, any>[]
+    return rows.map(r => this.mergeIndexedFields(JSON.parse(r.data_json), r))
   }
 
   countPendingForCampaign(campaignId: string): number {
@@ -60,7 +71,7 @@ export class JobRepository extends BaseRepo<JobDocument> {
     return row?.cnt ?? 0
   }
 
-  //  Status update 
+  // Status update
   updateStatus(id: string, status: string, error?: string): void {
     const doc = this.findById(id)
     if (!doc) return
@@ -73,25 +84,18 @@ export class JobRepository extends BaseRepo<JobDocument> {
     this.save(doc)
   }
 
-  //  Reset stuck jobs 
+  // Reset stuck jobs
   resetRunningJobs(): JobDocument[] {
     const rows = db
-      .prepare(`SELECT data_json FROM jobs WHERE status = 'running'`)
-      .all() as { data_json: string }[]
-    const jobs = rows.map(r => JSON.parse(r.data_json) as JobDocument)
+      .prepare(`SELECT ${this._cols} FROM jobs WHERE status = 'running'`)
+      .all() as Record<string, any>[]
+    const jobs = rows.map(r => this.mergeIndexedFields(JSON.parse(r.data_json), r))
     for (const job of jobs) {
       job.status = 'pending'
       job.updated_at = Date.now()
       this.save(job)
     }
     return jobs
-  }
-
-  //  Sync index columns alongside data_json 
-  protected override syncIndexColumns(doc: JobDocument): void {
-    db.prepare(
-      `UPDATE jobs SET status = ?, campaign_id = ?, scheduled_at = ? WHERE id = ?`
-    ).run(doc.status, doc.campaign_id, doc.scheduled_at, doc.id)
   }
 }
 

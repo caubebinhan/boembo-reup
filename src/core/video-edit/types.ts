@@ -82,6 +82,25 @@ export interface FFmpegCommand {
 
 export type PluginGroup = 'transform' | 'overlay' | 'filter' | 'audio' | 'anti-detect'
 
+/**
+ * Preview hint — tells the editor canvas how to render this plugin's effect.
+ * Every plugin should declare this so the UI knows what to show.
+ *
+ * - 'overlay-image': draggable image sprite (watermark, logo)
+ * - 'overlay-text': draggable text label with font/color
+ * - 'crop-guide': dashed rectangle showing crop region
+ * - 'blur-region': translucent rectangle for blur area
+ * - 'transform': visual indicator (resize arrows, rotation)
+ * - 'none': no canvas representation (anti-detect, audio, codec)
+ */
+export type PreviewHintType =
+  | 'overlay-image'
+  | 'overlay-text'
+  | 'crop-guide'
+  | 'blur-region'
+  | 'transform'
+  | 'none'
+
 export interface VideoEditPlugin {
   /** Unique plugin ID (e.g. 'builtin.rotate') */
   id: string
@@ -103,6 +122,12 @@ export interface VideoEditPlugin {
   recommended?: boolean
   /** Warning text shown when user enables this plugin (e.g. "Alters original audio") */
   warning?: string
+  /**
+   * How this plugin renders on the editor canvas.
+   * Defaults to 'none' if not specified. Plugins that affect
+   * visual output should declare a hint so the compositor can show a preview.
+   */
+  previewHint?: PreviewHintType
 
   /** Config schema — used to auto-render wizard UI form */
   configSchema: PluginConfigField[]

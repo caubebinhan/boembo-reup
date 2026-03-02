@@ -111,10 +111,10 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
 
     if (loading || !campaign) {
         return (
-            <div className="flex-1 flex items-center justify-center bg-slate-50">
+            <div className="flex-1 flex items-center justify-center bg-vintage-white">
                 <div className="flex flex-col items-center gap-3">
-                    <div className="w-8 h-8 border-3 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
-                    <span className="text-slate-400 text-sm">Loading campaign...</span>
+                    <div className="w-8 h-8 border-3 border-pastel-pink border-t-pastel-mint rounded-full animate-spin" />
+                    <span className="text-vintage-gray text-sm">Loading campaign...</span>
                 </div>
             </div>
         )
@@ -141,19 +141,19 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
     const WorkflowDetail = getWorkflowDetailComponent(workflowId, campaign?.workflow_version)
 
     return (
-        <div className="flex-1 flex flex-col h-screen bg-slate-50 text-slate-900 overflow-hidden">
+        <div className="flex-1 flex flex-col h-screen bg-vintage-white text-vintage-charcoal overflow-hidden">
             {/* HEADER */}
-            <div className="border-b border-slate-200 bg-white/80 backdrop-blur-xl z-10 shadow-sm">
-                <div className="px-6 pt-4 pb-3 flex items-center justify-between">
+            <div className="border-b border-vintage-border bg-vintage-white/80 backdrop-blur-xl z-10 shadow-sm">
+                <div className="px-8 pt-5 pb-4 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <button onClick={onBack} className="text-slate-400 hover:text-slate-700 transition p-1.5 rounded-lg hover:bg-slate-100 cursor-pointer">
+                        <button onClick={onBack} className="text-vintage-gray hover:text-vintage-charcoal transition p-2 rounded-full hover:bg-vintage-cream cursor-pointer border border-transparent hover:border-vintage-border">
                             <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                                 <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                         </button>
                         <div>
-                            <h2 className="text-xl font-bold text-slate-900">{campaign.name}</h2>
-                            <p className="text-xs text-slate-400 mt-0.5">{workflowId} • {new Date(campaign.created_at).toLocaleDateString()}</p>
+                            <h2 className="text-2xl font-semibold text-vintage-charcoal">{campaign.name}</h2>
+                            <p className="text-sm text-vintage-gray mt-1 opacity-80">{workflowId} • {new Date(campaign.created_at).toLocaleDateString()}</p>
                         </div>
                         <span className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-semibold ${ss.bg} ${ss.text}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${ss.dot} ${campaign.status === 'active' ? 'animate-pulse' : ''}`} />
@@ -230,12 +230,12 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
 
                 {/* Header stats */}
                 {headerStats.length > 0 && (
-                    <div className="px-6 pb-3 flex items-center gap-6">
+                    <div className="px-8 pb-4 flex items-center gap-6">
                         {headerStats.map((stat: any) => (
-                            <div key={stat.key} className="flex items-center gap-2">
-                                <span className="text-sm">{stat.icon}</span>
-                                <span className="text-xs text-slate-400">{stat.label}</span>
-                                <span className="text-sm font-bold text-slate-800">{stat.value_expr ? evaluateExpression(stat.value_expr, evalCtx, 0) : 0}</span>
+                            <div key={stat.key} className="flex items-center gap-2 bg-vintage-cream px-3 py-1.5 rounded-lg border border-vintage-border/50">
+                                <span className="text-sm opacity-80">{stat.icon}</span>
+                                <span className="text-xs text-vintage-gray font-medium uppercase tracking-wider">{stat.label}</span>
+                                <span className="text-sm font-semibold text-vintage-charcoal">{stat.value_expr ? evaluateExpression(stat.value_expr, evalCtx, 0) : 0}</span>
                             </div>
                         ))}
                     </div>
@@ -243,13 +243,13 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
             </div>
 
             {/* CONTENT — Per-workflow detail or fallback */}
-            <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="flex-1 overflow-y-auto px-8 py-8">
                 <DetailErrorBoundary workflowId={workflowId}>
                     {WorkflowDetail ? (
                         <Suspense fallback={
                             <div className="flex items-center justify-center py-12">
-                                <div className="flex items-center gap-3 text-slate-400">
-                                    <div className="w-5 h-5 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+                                <div className="flex items-center gap-3 text-vintage-gray">
+                                    <div className="w-5 h-5 border-2 border-pastel-pink border-t-pastel-mint rounded-full animate-spin" />
                                     Loading detail view...
                                 </div>
                             </div>
@@ -257,7 +257,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                             <WorkflowDetail campaignId={campaignId} campaign={campaign} workflowId={workflowId} />
                         </Suspense>
                     ) : (
-                        <div className="text-slate-400 text-sm text-center py-12">
+                        <div className="text-vintage-gray text-sm text-center py-12 bg-vintage-cream/50 rounded-2xl border border-vintage-border">
                             No detail view registered for workflow "{workflowId}"
                         </div>
                     )}

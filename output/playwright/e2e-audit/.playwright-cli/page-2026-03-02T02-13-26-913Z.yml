@@ -1,0 +1,22 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - img "Bombo Repost" [ref=e5]
+    - heading "Bombo Repost" [level=1] [ref=e6]
+    - paragraph [ref=e7]: Multi-platform video automation
+  - generic [ref=e11]:
+    - generic [ref=e12]:
+      - generic [ref=e13]: ○
+      - generic [ref=e15]:
+        - generic [ref=e16]: 🗄️
+        - generic [ref=e17]: Database Connection
+    - generic [ref=e18]:
+      - generic [ref=e19]: ○
+      - generic [ref=e21]:
+        - generic [ref=e22]: 🔍
+        - generic [ref=e23]: Database Integrity
+    - generic [ref=e24]:
+      - generic [ref=e25]: ○
+      - generic [ref=e27]:
+        - generic [ref=e28]: 💾
+        - generic [ref=e29]: Storage Space
+  - paragraph [ref=e31]: v1.0 · Health Check

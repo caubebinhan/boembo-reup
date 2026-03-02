@@ -11,6 +11,7 @@ const crop: VideoEditPlugin = {
   group: 'transform',
   icon: '✂️',
   description: 'Crop video by dimensions or aspect ratio',
+  previewHint: 'crop-guide',
 
   configSchema: [
     {

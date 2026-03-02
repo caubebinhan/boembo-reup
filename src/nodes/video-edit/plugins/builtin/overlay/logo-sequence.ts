@@ -13,6 +13,7 @@ const logoSequence: VideoEditPlugin = {
   icon: '🎞️',
   description: 'Show image at specific timestamps with different positions',
   allowMultipleInstances: false,
+  previewHint: 'overlay-image',
 
   configSchema: [
     {

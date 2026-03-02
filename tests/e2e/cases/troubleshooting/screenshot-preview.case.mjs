@@ -1,3 +1,5 @@
+import { resetWorkflowVersionFilters, selectRunByTitle } from './helpers.mjs'
+
 /** @type {import('../types.mjs').E2ECaseDefinition} */
 export const screenshotPreviewCase = {
   id: 'e2e.troubleshooting.artifact.screenshot-preview-visible',
@@ -13,6 +15,8 @@ export const screenshotPreviewCase = {
     ],
   },
   run: async ({ page, assert }) => {
+    await resetWorkflowVersionFilters(page)
+    await selectRunByTitle(page, 'Fixture Publish Failed Run')
     const artifactImage = page.locator('img[data-artifact-kind="image"]').first()
     await artifactImage.waitFor({ state: 'visible' })
     const src = await artifactImage.getAttribute('src')

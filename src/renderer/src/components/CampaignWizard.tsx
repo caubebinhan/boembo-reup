@@ -1,8 +1,49 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, Component, ReactNode } from 'react'
 import { WizardStepper } from './WizardStepper'
 import { getWizardSteps, workflowWizardRegistry } from '../wizard/workflowWizardRegistry'
 import { WizardStepConfig } from '../wizard/WizardStepTypes'
 import { FormField, TextInput } from '../wizard/shared'
+
+// ── Error Boundary for wizard step content ──────────
+interface EBState { hasError: boolean; error: Error | null }
+class WizardStepErrorBoundary extends Component<{ children: ReactNode; stepId: string; onSkip?: () => void }, EBState> {
+    state: EBState = { hasError: false, error: null }
+    static getDerivedStateFromError(error: Error) { return { hasError: true, error } }
+    componentDidCatch(error: Error, info: any) {
+        console.error(`[WizardStepErrorBoundary] Crash in step "${this.props.stepId}":`, error, info)
+    }
+    componentDidUpdate(prevProps: { stepId: string }) {
+        if (prevProps.stepId !== this.props.stepId) {
+            this.setState({ hasError: false, error: null })
+        }
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="flex flex-col items-center justify-center h-96 gap-4">
+                    <div className="text-5xl">⚠️</div>
+                    <h3 className="text-lg font-bold text-slate-700">This step failed to load</h3>
+                    <p className="text-sm text-slate-400 max-w-md text-center">
+                        {this.state.error?.message || 'An unexpected error occurred.'}
+                    </p>
+                    <div className="flex gap-3 mt-2">
+                        <button
+                            onClick={() => this.setState({ hasError: false, error: null })}
+                            className="px-4 py-2 text-sm rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-medium transition cursor-pointer"
+                        >Retry</button>
+                        {this.props.onSkip && (
+                            <button
+                                onClick={this.props.onSkip}
+                                className="px-4 py-2 text-sm rounded-xl border border-slate-300 text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+                            >Skip this step →</button>
+                        )}
+                    </div>
+                </div>
+            )
+        }
+        return this.props.children
+    }
+}
 
 interface CampaignWizardProps {
     onClose: () => void
@@ -86,8 +127,11 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
     }, [workflowSteps])
 
     // ── Handlers ───────────────────────────────
-    const handleNext = () => {
+    const handleNext = async () => {
         setStepError(null)
+        const nextIdx = currentStepIndex + 1
+        const nextStepId = nextIdx <= workflowSteps.length ? workflowSteps[nextIdx - 1]?.id : 'done'
+        console.log(`[CampaignWizard] handleNext — currentStep=${currentStepIndex}, nextStep=${nextIdx} (${nextStepId})`)
 
         if (isStep0) {
             if (!campaignName.trim()) {
@@ -108,15 +152,22 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
             // Validate current workflow step
             const currentStep = workflowSteps[workflowStepIndex]
             if (currentStep?.validate) {
-                const error = currentStep.validate(stepData)
-                if (error) {
-                    setStepError(error)
+                try {
+                    const error = currentStep.validate(stepData)
+                    if (error) {
+                        setStepError(error)
+                        return
+                    }
+                } catch (err: any) {
+                    setStepError(`Validation error: ${err?.message || String(err)}`)
                     return
                 }
             }
         }
 
         if (!isLastStep) {
+            const targetStep = workflowSteps[currentStepIndex] // workflowStepIndex after +1
+            console.log(`[CampaignWizard] Advancing to step ${currentStepIndex + 1} → "${targetStep?.title || 'N/A'}" (${targetStep?.id || 'N/A'})`)
             setDirection('next')
             setCurrentStepIndex(prev => prev + 1)
         }
@@ -239,15 +290,20 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-            <div className="bg-white w-[860px] max-h-[90vh] flex flex-col rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-white w-[860px] h-[90vh] flex flex-col rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
                 {/* Stepper */}
                 <div className="border-b border-slate-200 bg-slate-50 shrink-0">
                     <WizardStepper steps={stepperSteps} currentIndex={currentStepIndex} />
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-8 min-h-[400px] bg-white">
-                    {isStep0 ? renderStep0() : renderWorkflowStep()}
+                {/* Content — fills remaining height, scrolls internally */}
+                <div className="flex-1 overflow-y-auto p-8 bg-white">
+                    <WizardStepErrorBoundary
+                        stepId={isStep0 ? 'setup' : workflowSteps[workflowStepIndex]?.id || 'unknown'}
+                        onSkip={!isLastStep ? () => { setDirection('next'); setCurrentStepIndex(prev => prev + 1) } : undefined}
+                    >
+                        {isStep0 ? renderStep0() : renderWorkflowStep()}
+                    </WizardStepErrorBoundary>
 
                     {/* Error banner */}
                     {stepError && (

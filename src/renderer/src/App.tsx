@@ -24,43 +24,43 @@ function WorkflowPicker({ onSelect, onClose }: { onSelect: (id: string) => void,
   }, [])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-      <div className="bg-white w-[500px] rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-800">Choose Workflow</h2>
-          <p className="text-xs text-slate-400 mt-1">Select a workflow template for your campaign</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-vintage-charcoal/20 backdrop-blur-sm">
+      <div className="bg-vintage-white w-[500px] rounded-2xl shadow-xl border border-vintage-border overflow-hidden">
+        <div className="px-6 py-4 border-b border-vintage-border bg-vintage-cream/50">
+          <h2 className="text-xl font-medium text-vintage-charcoal">Choose Workflow</h2>
+          <p className="text-sm text-vintage-gray mt-1">Select a workflow template for your campaign</p>
         </div>
 
         <div className="p-4 space-y-2 max-h-[400px] overflow-y-auto">
           {flows.length === 0 && (
-            <div className="text-slate-400 text-center py-8">No workflows available</div>
+            <div className="text-vintage-gray text-center py-8">No workflows available</div>
           )}
           {flows.map(flow => (
             <button
               key={flow.id}
               onClick={() => onSelect(flow.id)}
-              className="w-full text-left p-4 rounded-xl border border-slate-200 hover:border-purple-400 hover:bg-purple-50 transition group cursor-pointer"
+              className="w-full text-left p-4 rounded-xl border border-vintage-border hover:border-pastel-blue hover:bg-pastel-blue/20 transition-all duration-300 group cursor-pointer shadow-sm hover:shadow"
             >
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{flow.icon || '📋'}</span>
+              <div className="flex items-center gap-4">
+                <span className="text-3xl bg-vintage-cream p-2 rounded-lg">{flow.icon || '📋'}</span>
                 <div className="flex-1">
-                  <div className="font-semibold text-slate-800 group-hover:text-purple-700 transition">
+                  <div className="font-medium text-vintage-charcoal group-hover:text-blue-900 transition-colors">
                     {flow.name}
                   </div>
-                  <div className="text-xs text-slate-400 mt-0.5">
+                  <div className="text-sm text-vintage-gray mt-1 leading-relaxed">
                     {flow.description || flow.id}
                   </div>
                 </div>
-                <span className="text-slate-300 group-hover:text-purple-500 transition">→</span>
+                <span className="text-vintage-border group-hover:text-pastel-blue transition-colors">→</span>
               </div>
             </button>
           ))}
         </div>
 
-        <div className="px-6 py-3 border-t border-slate-100 flex justify-end">
+        <div className="px-6 py-4 border-t border-vintage-border bg-vintage-cream/50 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm text-slate-400 hover:text-slate-700 transition cursor-pointer"
+            className="px-5 py-2 rounded-lg text-sm font-medium text-vintage-gray hover:text-vintage-charcoal hover:bg-vintage-border/50 transition-colors cursor-pointer"
           >
             Cancel
           </button>
@@ -179,16 +179,17 @@ function AppContent() {
   }
 
   return (
-    <div className="flex w-full h-screen bg-slate-50 overflow-hidden">
+    <div className="flex w-full h-screen bg-vintage-white overflow-hidden font-[Inter]">
       <Toaster
         theme="light"
         position="top-right"
         toastOptions={{
           style: {
-            background: '#ffffff',
-            border: '1px solid #e2e8f0',
-            color: '#1e293b',
-            fontSize: '13px',
+            background: 'var(--ev-c-white-soft)',
+            border: '1px solid var(--ev-c-gray-3)',
+            color: 'var(--ev-c-black)',
+            fontSize: '14px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
           },
         }}
         richColors
@@ -200,9 +201,9 @@ function AppContent() {
           onBack={() => setSelectedCampaignId(null)}
         />
       ) : (
-        <div className="flex-1 flex flex-col min-w-0 bg-slate-50">
-          <div className="px-6 pt-4 pb-2 border-b border-slate-200 bg-white">
-            <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+        <div className="flex-1 flex flex-col min-w-0 bg-vintage-white">
+          <div className="px-8 pt-6 pb-4 border-b border-vintage-border bg-vintage-white z-10">
+            <div className="inline-flex rounded-full bg-vintage-cream p-1 shadow-inner">
               {(['campaigns', 'settings', 'troubleshooting'] as const).map(tab => {
                 const labels = { campaigns: '📋 Campaigns', settings: '⚙️ Settings', troubleshooting: '🔧 Debug' }
                 const active = homeTab === tab
@@ -210,14 +211,14 @@ function AppContent() {
                   <button
                     key={tab}
                     onClick={() => setHomeTab(tab)}
-                    className={`relative px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer ${active
-                      ? 'bg-white text-purple-700 border border-purple-200 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-700 hover:bg-white/70'
+                    className={`relative px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 cursor-pointer ${active
+                      ? 'bg-white text-vintage-charcoal shadow-sm'
+                      : 'text-vintage-gray hover:text-vintage-charcoal hover:bg-black/5'
                       }`}
                   >
                     {labels[tab]}
                     {active && (
-                      <span className="absolute -bottom-[5px] left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-purple-500" />
+                      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-4 h-1 rounded-t-full bg-pastel-mint opacity-80" />
                     )}
                   </button>
                 )

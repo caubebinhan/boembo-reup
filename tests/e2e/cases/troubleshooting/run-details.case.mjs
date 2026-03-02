@@ -350,3 +350,117 @@ export const noLogsStateCase = {
     await page.getByRole('button', { name: 'Close' }).click()
   },
 }
+
+/** @type {import('../types.mjs').E2ECaseDefinition} */
+export const sentryPendingVerificationMessageCase = {
+  id: 'e2e.troubleshooting.run-details.sentry-pending-verification-message',
+  suite: 'e2e',
+  group: 'troubleshooting-panel',
+  title: 'Sentry pending verification path shows warning-style message',
+  meta: {
+    objective: 'Ensure pending verification response is communicated clearly after send-to-sentry.',
+    labels: ['ui', 'run-details', 'sentry', 'verification'],
+    investigationHints: [
+      'Injected mode: troubleshooting:test:set-behavior sentryMode=unverified.',
+      'Banner should say "Sent but not verified yet".',
+    ],
+  },
+  run: async ({ page, assert }) => {
+    await resetWorkflowVersionFilters(page)
+    await page.evaluate(() => window.api.invoke('troubleshooting:test:set-behavior', { sentryMode: 'unverified' }))
+    await selectRunByTitle(page, 'Fixture Publish Failed Run')
+    await page.getByRole('button', { name: 'Send To Sentry' }).click()
+    const infoBanner = page.getByText('Sent but not verified yet for fixture.case.e2e.publish-path.')
+    await infoBanner.waitFor({ state: 'visible' })
+    assert.equal(await infoBanner.isVisible(), true)
+    assert.equal(await page.getByText('lastError: Verification timeout (injected)').isVisible(), true)
+  },
+}
+
+/** @type {import('../types.mjs').E2ECaseDefinition} */
+export const sentryVerificationDisabledMessageCase = {
+  id: 'e2e.troubleshooting.run-details.sentry-verification-disabled-message',
+  suite: 'e2e',
+  group: 'troubleshooting-panel',
+  title: 'Sentry verification-disabled path shows explicit message',
+  meta: {
+    objective: 'Ensure users can distinguish disabled verification mode from verified mode.',
+    labels: ['ui', 'run-details', 'sentry', 'verification'],
+    investigationHints: [
+      'Injected mode: troubleshooting:test:set-behavior sentryMode=disabled.',
+      'Banner should contain "verification disabled".',
+    ],
+  },
+  run: async ({ page, assert }) => {
+    await resetWorkflowVersionFilters(page)
+    await page.evaluate(() => window.api.invoke('troubleshooting:test:set-behavior', { sentryMode: 'disabled' }))
+    await selectRunByTitle(page, 'Fixture Publish Failed Run')
+    await page.getByRole('button', { name: 'Send To Sentry' }).click()
+    const infoBanner = page.getByText('Sent run fixture.case.e2e.publish-path to Sentry (verification disabled).')
+    await infoBanner.waitFor({ state: 'visible' })
+    assert.equal(await infoBanner.isVisible(), true)
+  },
+}
+
+/** @type {import('../types.mjs').E2ECaseDefinition} */
+export const sentrySendFailureMessageCase = {
+  id: 'e2e.troubleshooting.run-details.sentry-send-failure-shows-error-message',
+  suite: 'e2e',
+  group: 'troubleshooting-panel',
+  title: 'Sentry send failure shows error banner',
+  meta: {
+    objective: 'Ensure send-to-sentry transport errors are surfaced to the operator.',
+    labels: ['ui', 'run-details', 'sentry', 'error'],
+    investigationHints: [
+      'Injected mode: troubleshooting:test:set-behavior sentryMode=fail.',
+      'Banner should include injected failure reason.',
+    ],
+  },
+  run: async ({ page, assert }) => {
+    await resetWorkflowVersionFilters(page)
+    await page.evaluate(() => window.api.invoke('troubleshooting:test:set-behavior', { sentryMode: 'fail' }))
+    await selectRunByTitle(page, 'Fixture Publish Failed Run')
+    await page.getByRole('button', { name: 'Send To Sentry' }).click()
+    const errorBanner = page.getByText('Send to Sentry failed: Injected sentry failure')
+    await errorBanner.waitFor({ state: 'visible' })
+    assert.equal(await errorBanner.isVisible(), true)
+  },
+}
+
+/** @type {import('../types.mjs').E2ECaseDefinition} */
+export const liveLogEventUpdatesStatsCase = {
+  id: 'e2e.troubleshooting.logs.live-event-updates-log-panel-and-stats',
+  suite: 'e2e',
+  group: 'troubleshooting-panel',
+  title: 'Live troubleshooting:log event updates log panel and counters',
+  meta: {
+    objective: 'Ensure real-time log event listener updates selected run details without refresh.',
+    labels: ['ui', 'logs', 'events', 'run-details'],
+    investigationHints: [
+      'Emit synthetic troubleshooting:log event targeting fixture-run-failed-v1.',
+      'Verify new line appears and summary stats increment.',
+    ],
+  },
+  run: async ({ page, assert }) => {
+    await resetWorkflowVersionFilters(page)
+    await selectRunByTitle(page, 'Fixture Publish Failed Run')
+    await page.evaluate(() => window.api.invoke('troubleshooting:test:emit-log', {
+      runId: 'fixture-run-failed-v1',
+      entry: {
+        ts: Date.now(),
+        level: 'warn',
+        line: 'Injected live log line',
+      },
+    }))
+
+    const injectedLine = page.getByText('Injected live log line')
+    await injectedLine.waitFor({ state: 'visible' })
+    assert.equal(await injectedLine.isVisible(), true)
+
+    const statsRow = page.locator('div:has-text("Logs: total=")').first()
+    const statsText = await statsRow.textContent()
+    assert.ok(statsText)
+    assert.equal(statsText.includes('total=13'), true)
+    assert.equal(statsText.includes('warn=3'), true)
+  },
+}

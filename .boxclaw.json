@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "mcp": {
+    "sqlite": {
+      "version": "1.0.0",
+      "installedAt": "2026-03-02T01:28:34.570Z"
+    }
+  },
+  "skill": {
+    "data-engineer": {
+      "version": "1.0.0",
+      "installedAt": "2026-03-02T01:29:16.843Z"
+    },
+    "qa-test-engineer": {
+      "version": "1.0.0",
+      "installedAt": "2026-03-02T01:29:32.017Z"
+    },
+    "security-engineer": {
+      "version": "1.0.0",
+      "installedAt": "2026-03-02T01:29:46.571Z"
+    }
+  }
+}

@@ -41,21 +41,21 @@ export function CampaignList({ onOpenWizard, onAction }: CampaignListProps) {
     }
 
     return (
-        <div className="flex-1 overflow-y-auto bg-slate-50 p-6 h-full text-slate-800">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-slate-800">All Campaigns ({campaigns.length})</h1>
+        <div className="flex-1 overflow-y-auto bg-vintage-white p-8 h-full text-vintage-charcoal">
+            <div className="flex justify-between items-center mb-8">
+                <h1 className="text-3xl font-medium text-vintage-charcoal">All Campaigns ({campaigns.length})</h1>
                 <button
                     onClick={onOpenWizard}
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-xl font-medium transition shadow-lg shadow-purple-200 cursor-pointer"
+                    className="bg-pastel-peach hover:bg-[#ebd5c5] text-vintage-charcoal px-6 py-2.5 rounded-full font-medium transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 cursor-pointer active:scale-95"
                 >
-                    + New
+                    + New Campaign
                 </button>
             </div>
 
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-4">
                 {campaigns.length === 0 ? (
-                    <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-slate-200 shadow-sm">
-                        <p>No campaigns yet. Click + New to get started.</p>
+                    <div className="text-center py-16 text-vintage-gray bg-vintage-cream/50 rounded-2xl border border-vintage-border shadow-sm">
+                        <p className="text-lg">No campaigns yet. Click + New Campaign to get started.</p>
                     </div>
                 ) : (
                     campaigns.map(camp => (

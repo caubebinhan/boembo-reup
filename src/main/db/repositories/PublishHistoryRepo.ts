@@ -5,12 +5,21 @@ import type { PublishHistoryDocument } from '../models/PublishHistory'
 /**
  * Publish History Repository — cross-account dedup.
  *
- * Keeps index columns (account_id, source_platform_id, file_fingerprint, status)
- * for efficient dedup lookups without scanning all documents.
+ * Index columns (account_id, source_platform_id, file_fingerprint, status)
+ * are the single source of truth — NOT duplicated in data_json.
  */
 export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
   constructor() {
     super('publish_history')
+  }
+
+  protected override indexedColumnMap(): Record<string, string> {
+    return {
+      account_id: 'account_id',
+      source_platform_id: 'source_platform_id',
+      file_fingerprint: 'file_fingerprint',
+      status: 'status',
+    }
   }
 
   // ── Indexed lookups ─────────────────────────
@@ -18,12 +27,14 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
   findByAccountAndSource(accountId: string, platformId: string): PublishHistoryDocument | null {
     const row = db
       .prepare(
-        `SELECT data_json FROM publish_history
+        `SELECT data_json, account_id, source_platform_id, file_fingerprint, status
+         FROM publish_history
          WHERE account_id = ? AND source_platform_id = ?
          ORDER BY updated_at DESC LIMIT 1`
       )
-      .get(accountId, platformId) as { data_json: string } | undefined
-    return row ? (JSON.parse(row.data_json) as PublishHistoryDocument) : null
+      .get(accountId, platformId) as Record<string, any> | undefined
+    if (!row) return null
+    return this.mergeIndexedFields(JSON.parse(row.data_json), row)
   }
 
   findByAccountAndFingerprint(
@@ -32,21 +43,24 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
   ): PublishHistoryDocument | null {
     const row = db
       .prepare(
-        `SELECT data_json FROM publish_history
+        `SELECT data_json, account_id, source_platform_id, file_fingerprint, status
+         FROM publish_history
          WHERE account_id = ? AND file_fingerprint = ?
          ORDER BY updated_at DESC LIMIT 1`
       )
-      .get(accountId, fingerprint) as { data_json: string } | undefined
-    return row ? (JSON.parse(row.data_json) as PublishHistoryDocument) : null
+      .get(accountId, fingerprint) as Record<string, any> | undefined
+    if (!row) return null
+    return this.mergeIndexedFields(JSON.parse(row.data_json), row)
   }
 
   findByAccount(accountId: string, limit = 200): PublishHistoryDocument[] {
     const rows = db
       .prepare(
-        `SELECT data_json FROM publish_history WHERE account_id = ? ORDER BY updated_at DESC LIMIT ?`
+        `SELECT data_json, account_id, source_platform_id, file_fingerprint, status
+         FROM publish_history WHERE account_id = ? ORDER BY updated_at DESC LIMIT ?`
       )
-      .all(accountId, limit) as { data_json: string }[]
-    return rows.map((r) => JSON.parse(r.data_json) as PublishHistoryDocument)
+      .all(accountId, limit) as Record<string, any>[]
+    return rows.map((r) => this.mergeIndexedFields(JSON.parse(r.data_json), r))
   }
 
   // ── Combined dedup lookup (OR match on source_platform_id OR file_fingerprint) ──
@@ -69,27 +83,30 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
 
     const row = db
       .prepare(
-        `SELECT data_json FROM publish_history
+        `SELECT data_json, account_id, source_platform_id, file_fingerprint, status
+         FROM publish_history
          WHERE account_id = ?
-           AND COALESCE(status, json_extract(data_json, '$.status')) IN ('under_review', 'published')
+           AND status IN ('uploading', 'under_review', 'published')
            AND (${clauses.join(' OR ')})
          ORDER BY updated_at DESC LIMIT 1`
       )
-      .get(accountId, ...params) as { data_json: string } | undefined
-    return row ? (JSON.parse(row.data_json) as PublishHistoryDocument) : null
+      .get(accountId, ...params) as Record<string, any> | undefined
+    if (!row) return null
+    return this.mergeIndexedFields(JSON.parse(row.data_json), row)
   }
 
   // ── Candidates for AV similarity matching ──
   findCandidates(accountId: string, limit = 25): PublishHistoryDocument[] {
     const rows = db
       .prepare(
-        `SELECT data_json FROM publish_history
+        `SELECT data_json, account_id, source_platform_id, file_fingerprint, status
+         FROM publish_history
          WHERE account_id = ?
-           AND COALESCE(status, json_extract(data_json, '$.status')) IN ('under_review', 'published')
+           AND status IN ('uploading', 'under_review', 'published')
          ORDER BY updated_at DESC LIMIT ?`
       )
-      .all(accountId, Math.max(1, Math.min(200, limit))) as { data_json: string }[]
-    return rows.map((r) => JSON.parse(r.data_json) as PublishHistoryDocument)
+      .all(accountId, Math.max(1, Math.min(200, limit))) as Record<string, any>[]
+    return rows.map((r) => this.mergeIndexedFields(JSON.parse(r.data_json), r))
   }
 
   // ── Partial update (merge into existing document) ──
@@ -100,19 +117,56 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
     this.save(doc)
   }
 
-  // ── Index columns sync ──────────────────────
-  protected override syncIndexColumns(doc: PublishHistoryDocument): void {
+  /**
+   * Atomically claim a publish slot using INSERT OR IGNORE.
+   * If the unique partial index rejects the insert (another active row exists),
+   * returns { claimed: false } — preventing race-condition duplicate uploads.
+   */
+  claimForPublish(payload: {
+    id: string
+    accountId: string
+    sourcePlatformId?: string
+    fileFingerprint?: string
+    campaignId?: string
+    sourceLocalPath?: string
+  }): { claimed: boolean; id: string } {
+    const now = Date.now()
+
+    // Build data_json WITHOUT indexed fields (they go to columns only)
+    const jsonDoc = {
+      id: payload.id,
+      platform: 'tiktok',
+      source_local_path: payload.sourceLocalPath,
+      campaign_id: payload.campaignId,
+      media_signature: null,
+      created_at: now,
+      updated_at: now,
+    }
+
+    const result = db
+      .prepare(
+        `INSERT OR IGNORE INTO publish_history
+           (id, data_json, account_id, source_platform_id, file_fingerprint, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 'uploading', ?, ?)`
+      )
+      .run(
+        payload.id,
+        JSON.stringify(jsonDoc),
+        payload.accountId,
+        payload.sourcePlatformId || null,
+        payload.fileFingerprint || null,
+        now,
+        now,
+      )
+
+    return { claimed: result.changes > 0, id: payload.id }
+  }
+
+  /** Remove a claim row (e.g. on publish failure, so retries can re-claim) */
+  removeClaim(id: string): void {
     db.prepare(
-      `UPDATE publish_history
-       SET account_id = ?, source_platform_id = ?, file_fingerprint = ?, status = ?
-       WHERE id = ?`
-    ).run(
-      doc.account_id,
-      doc.source_platform_id || null,
-      doc.file_fingerprint || null,
-      doc.status || null,
-      doc.id
-    )
+      `DELETE FROM publish_history WHERE id = ? AND status = 'uploading'`
+    ).run(id)
   }
 }
 

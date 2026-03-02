@@ -54,6 +54,7 @@ class VideoEditPluginRegistryImpl {
       addInstanceLabel: p.addInstanceLabel,
       recommended: p.recommended,
       warning: p.warning,
+      previewHint: p.previewHint || 'none',
       configSchema: p.configSchema,
     }))
   }

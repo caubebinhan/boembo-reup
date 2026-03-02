@@ -15,6 +15,7 @@ const watermarkImage: VideoEditPlugin = {
   description: 'Add image watermark / logo overlay',
   allowMultipleInstances: true,
   addInstanceLabel: 'Add another watermark',
+  previewHint: 'overlay-image',
 
   configSchema: [
     {

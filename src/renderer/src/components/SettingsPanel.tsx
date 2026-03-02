@@ -62,20 +62,20 @@ export function SettingsPanel() {
   const [tab, setTab] = useState<SettingsTab>('browser')
 
   return (
-    <div className="flex-1 flex bg-gray-900 h-full text-white overflow-hidden">
+    <div className="flex-1 flex bg-vintage-white h-full text-vintage-charcoal overflow-hidden font-[Inter]">
       {/* Sidebar */}
-      <div className="w-56 shrink-0 border-r border-gray-800/60 bg-gray-950/50 p-3 flex flex-col gap-1">
-        <p className="text-[10px] uppercase tracking-widest text-gray-600 px-3 pt-2 pb-2">Settings</p>
+      <div className="w-64 shrink-0 border-r border-vintage-border bg-vintage-cream/30 p-4 flex flex-col gap-2">
+        <p className="text-xs font-semibold uppercase tracking-widest text-vintage-gray px-4 pt-3 pb-2 opacity-70">Settings</p>
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${tab === t.id
-                ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/40'
+            className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 cursor-pointer ${tab === t.id
+              ? 'bg-vintage-white text-vintage-charcoal border border-vintage-border shadow-sm shadow-vintage-border/20'
+              : 'text-vintage-gray hover:text-vintage-charcoal hover:bg-vintage-border/30 border border-transparent'
               }`}
           >
-            <span className="text-base">{t.icon}</span>
+            <span className={`text-lg px-2 py-1 rounded-lg ${tab === t.id ? 'bg-pastel-blue/30' : 'bg-transparent'}`}>{t.icon}</span>
             {t.label}
           </button>
         ))}
@@ -297,61 +297,61 @@ function BrowserSection({ api }: { api: any }) {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight">Browser & Automation</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Browser, profile, and locale for publish automation. Platform: <span className="font-mono text-cyan-400">{scan.platform}</span>
+          <h2 className="text-2xl font-semibold tracking-tight text-vintage-charcoal">Browser & Automation</h2>
+          <p className="text-sm text-vintage-gray mt-1 flex items-center gap-2">
+            Browser, profile, and locale for publish automation. Platform: <span className="font-mono text-xs bg-pastel-blue/30 px-2 py-0.5 rounded border border-pastel-blue/50 text-vintage-charcoal">{scan.platform}</span>
           </p>
         </div>
         <button onClick={load} disabled={loading}
-          className="px-3 py-2 rounded-lg border border-gray-700 text-sm hover:border-cyan-400 hover:text-cyan-300 transition disabled:opacity-50">
+          className="px-4 py-2 rounded-xl border border-vintage-border bg-vintage-cream text-sm font-medium hover:border-pastel-blue hover:bg-pastel-blue/10 transition-colors disabled:opacity-50 cursor-pointer">
           {loading ? 'Scanning...' : 'Rescan'}
         </button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
-          <label className="block text-[11px] uppercase tracking-wider text-gray-500 mb-2">Locale</label>
+      <div className="grid gap-5 md:grid-cols-2">
+        <div className="rounded-2xl border border-vintage-border bg-vintage-cream/40 p-5 shadow-sm">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-vintage-gray mb-3 opacity-80">Locale</label>
           <input value={locale} onChange={(e) => setLocale(e.target.value)} placeholder="en-US"
-            className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-sm outline-none focus:border-cyan-500" />
-          <p className="text-xs text-gray-500 mt-2">Affects Playwright locale, Accept-Language, Chromium --lang.</p>
+            className="w-full rounded-xl bg-white border border-vintage-border px-4 py-2.5 text-sm outline-none focus:border-pastel-blue focus:ring-2 focus:ring-pastel-blue/30 transition-all font-mono" />
+          <p className="text-xs text-vintage-gray mt-3 opacity-80">Affects Playwright locale, Accept-Language, Chromium --lang.</p>
         </div>
-        <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
-          <label className="block text-[11px] uppercase tracking-wider text-gray-500 mb-2">Browser</label>
+        <div className="rounded-2xl border border-vintage-border bg-vintage-cream/40 p-5 shadow-sm">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-vintage-gray mb-3 opacity-80">Browser</label>
           <select value={selectedBrowserId} onChange={(e) => {
             setSelectedBrowserId(e.target.value)
             const next = scan.browsers.find(b => b.id === e.target.value)
             setSelectedProfileDirectory(next?.profiles?.[0]?.directory || '')
-          }} className="w-full rounded-lg bg-gray-950 border border-gray-800 px-3 py-2 text-sm outline-none focus:border-cyan-500">
+          }} className="w-full rounded-xl bg-white border border-vintage-border px-4 py-2.5 text-sm outline-none focus:border-pastel-blue focus:ring-2 focus:ring-pastel-blue/30 transition-all">
             {scan.browsers.length === 0 && <option value="">No supported browsers found</option>}
             {scan.browsers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
-          {selectedBrowser && <p className="text-xs text-gray-500 mt-2 break-all">{selectedBrowser.executablePath}</p>}
+          {selectedBrowser && <p className="text-xs text-vintage-gray mt-3 break-all font-mono opacity-80">{selectedBrowser.executablePath}</p>}
         </div>
       </div>
 
-      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-[11px] uppercase tracking-wider text-gray-500">Profiles</p>
-          <span className="text-xs text-gray-500">{selectedBrowser?.profiles.length || 0} found</span>
+      <div className="rounded-2xl border border-vintage-border bg-vintage-cream/40 p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-vintage-gray opacity-80">Profiles</p>
+          <span className="text-xs font-medium text-vintage-charcoal bg-white border border-vintage-border px-2 py-1 rounded-md shadow-sm">{selectedBrowser?.profiles.length || 0} found</span>
         </div>
         {!selectedBrowser ? (
-          <div className="text-sm text-gray-500 py-4">Select a browser first.</div>
+          <div className="text-sm text-vintage-gray py-6 text-center border-2 border-dashed border-vintage-border rounded-xl">Select a browser first.</div>
         ) : selectedBrowser.profiles.length === 0 ? (
-          <div className="text-sm text-gray-500 py-4">No profiles for this browser.</div>
+          <div className="text-sm text-vintage-gray py-6 text-center border-2 border-dashed border-vintage-border rounded-xl">No profiles for this browser.</div>
         ) : (
-          <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[280px] overflow-y-auto pr-2 scrollbar-thin">
             {selectedBrowser.profiles.map(profile => {
               const active = profile.directory === selectedProfileDirectory
               return (
                 <button key={profile.id} onClick={() => setSelectedProfileDirectory(profile.directory)}
-                  className={`w-full text-left rounded-lg border px-3 py-2 transition ${active ? 'border-cyan-500 bg-cyan-500/10' : 'border-gray-800 bg-gray-950 hover:border-gray-700'
+                  className={`w-full text-left rounded-xl border px-4 py-3 transition-all duration-200 cursor-pointer ${active ? 'border-pastel-blue bg-pastel-blue/20 shadow-sm' : 'border-vintage-border bg-white hover:border-pastel-blue/50 hover:bg-pastel-blue/5'
                     }`}>
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-4">
                     <div>
-                      <div className="text-sm font-medium">{profile.displayName}</div>
-                      <div className="text-[11px] text-gray-600 break-all mt-0.5">{profile.path}</div>
+                      <div className="text-sm font-semibold text-vintage-charcoal">{profile.displayName}</div>
+                      <div className="text-[11px] text-vintage-gray break-all mt-1 opacity-80 font-mono">{profile.path}</div>
                     </div>
-                    {active && <span className="text-[10px] uppercase tracking-wider text-cyan-300">Selected</span>}
+                    {active && <span className="text-[10px] uppercase font-bold tracking-widest text-[#5c7c99] bg-white px-2 py-1 rounded shadow-sm">Selected</span>}
                   </div>
                 </button>
               )
@@ -360,12 +360,12 @@ function BrowserSection({ api }: { api: any }) {
         )}
       </div>
 
-      <div className="rounded-xl border border-gray-800 bg-gray-900/40 p-4 flex items-center justify-between gap-4">
-        <div className="min-h-[20px] text-sm">
-          {message && <span className={message.startsWith('Saved') ? 'text-green-400' : 'text-red-400'}>{message}</span>}
+      <div className="rounded-2xl border border-vintage-border bg-vintage-cream/40 p-5 flex items-center justify-between gap-4 shadow-sm">
+        <div className="min-h-[20px] text-sm font-medium">
+          {message && <span className={message.startsWith('Saved') ? 'text-green-700 bg-green-100 px-3 py-1 rounded-md' : 'text-red-700 bg-red-100 px-3 py-1 rounded-md'}>{message}</span>}
         </div>
         <button onClick={save} disabled={saving || loading}
-          className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-medium transition disabled:opacity-50">
+          className="px-6 py-2.5 rounded-full bg-pastel-blue hover:bg-[#c2dcf0] text-vintage-charcoal text-sm font-semibold shadow-sm hover:shadow transition-all disabled:opacity-50 cursor-pointer active:scale-95">
           {saving ? 'Saving...' : 'Save Browser Settings'}
         </button>
       </div>
@@ -379,8 +379,8 @@ function BrowserSection({ api }: { api: any }) {
             </p>
           </div>
           <span className={`text-xs px-2 py-1 rounded border ${sentryStatus?.connected
-              ? 'text-green-300 border-green-500/40 bg-green-500/10'
-              : 'text-gray-300 border-gray-700 bg-gray-800/30'
+            ? 'text-green-300 border-green-500/40 bg-green-500/10'
+            : 'text-gray-300 border-gray-700 bg-gray-800/30'
             }`}>
             {sentryStatus?.connected ? 'Connected' : 'Not Connected'}
           </span>

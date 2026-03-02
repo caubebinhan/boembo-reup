@@ -12,7 +12,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   const SKIP_STATUSES = [
     'published', 'verified', 'downloaded',
     'under_review', 'verification_incomplete',
-    'duplicate', 'captcha', 'violation', 'failed',
+    'duplicate', 'captcha', 'publish_failed', 'failed',
   ]
   const existing = ctx.store.findVideo(video.platform_id)
   if (existing && SKIP_STATUSES.includes(existing.status)) {
