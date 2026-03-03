@@ -152,7 +152,11 @@ function resolveTextPosition(
   padding: number,
 ): { x: string; y: string } {
   if (typeof position === 'object' && position.x != null) {
-    return { x: String(position.x), y: String(position.y) }
+    // Canvas sends % values — use FFmpeg expressions to convert at render time
+    return {
+      x: `w*${position.x}/100`,
+      y: `h*${position.y}/100`,
+    }
   }
 
   const p = String(position || 'bottom-center')

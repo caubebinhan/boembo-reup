@@ -43,6 +43,7 @@ export const IPC_CHANNELS = {
   VIDEO_EDIT_GET_PLUGIN_METAS: 'video-edit:get-plugin-metas',
   VIDEO_EDIT_GET_DEFAULTS: 'video-edit:get-defaults',
   VIDEO_EDIT_PREVIEW: 'video-edit:preview',
+  VIDEO_EDIT_PREVIEW_PROGRESS: 'video-edit:preview-progress',
   VIDEO_EDITOR_OPEN: 'video-editor:open',
   VIDEO_EDITOR_DONE: 'video-editor:done',
   VIDEO_EDITOR_INIT_DATA: 'video-editor:init-data',

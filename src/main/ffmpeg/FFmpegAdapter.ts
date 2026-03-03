@@ -6,7 +6,7 @@
  */
 import { probeVideo as ffprobeVideo } from '@main/ffmpeg/FFmpegProbe'
 import { resolveBinary as resolveBinaryFn, runBinary, ensureFfmpegAvailable } from '@main/ffmpeg/FFmpegBinary'
-import type { VideoProcessor, VideoMetadata, CommandResult } from '@core/video-edit/ports'
+import type { VideoProcessor, VideoMetadata, CommandResult, ExecuteCommandOptions } from '@core/video-edit/ports'
 import { CodedError } from '@core/errors/CodedError'
 
 class FFmpegVideoProcessor implements VideoProcessor {
@@ -26,9 +26,20 @@ class FFmpegVideoProcessor implements VideoProcessor {
     }
   }
 
-  async execute(binary: 'ffmpeg' | 'ffprobe', args: string[], timeoutMs = 300_000): Promise<CommandResult> {
+  async execute(
+    binary: 'ffmpeg' | 'ffprobe',
+    args: string[],
+    timeoutOrOptions: number | ExecuteCommandOptions = 300_000,
+  ): Promise<CommandResult> {
     const binPath = this.resolveBinary(binary)
-    const result = await runBinary(binPath, args, timeoutMs)
+    const opts: ExecuteCommandOptions = typeof timeoutOrOptions === 'number'
+      ? { timeoutMs: timeoutOrOptions }
+      : timeoutOrOptions
+    const result = await runBinary(binPath, args, {
+      timeoutMs: opts.timeoutMs ?? 300_000,
+      onStdoutLine: opts.onStdoutLine,
+      onStderrLine: opts.onStderrLine,
+    })
     return {
       code: result.code ?? -1,
       stdout: result.stdout?.toString?.('utf8') ?? '',

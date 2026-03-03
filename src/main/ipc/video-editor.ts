@@ -96,20 +96,43 @@ export function setupVideoEditorIPC() {
   })
 
   // Preview: run FFmpeg pipeline and return rendered output path
-  safeHandle(IPC_CHANNELS.VIDEO_EDIT_PREVIEW, async (_event, payload: { videoPath: string; operations: any[] }) => {
+  safeHandle(IPC_CHANNELS.VIDEO_EDIT_PREVIEW, async (
+    event,
+    payload: { videoPath: string; operations: any[]; requestId?: string; timeoutMs?: number },
+  ) => {
+    const requestId = payload?.requestId || `preview_${Date.now().toString(36)}`
+    const trace: Array<{ ts: number; level: 'info' | 'error'; stage: string; message: string }> = []
+
+    const emit = (level: 'info' | 'error', message: string, stage = 'runtime') => {
+      const row = { ts: Date.now(), level, stage, message }
+      trace.push(row)
+      event.sender.send(IPC_CHANNELS.VIDEO_EDIT_PREVIEW_PROGRESS, { ...row, requestId })
+      if (level === 'error') console.error(`[VideoEdit:Preview:${requestId}] ${message}`)
+      else console.log(`[VideoEdit:Preview:${requestId}] ${message}`)
+    }
+
     try {
+      emit('info', 'Preparing preview render...', 'start')
       const { executeVideoEditPipeline } = await import('@core/video-edit')
       const { ffmpegProcessor } = await import('@main/ffmpeg/FFmpegAdapter')
       const result = await executeVideoEditPipeline({
         inputPath: payload.videoPath,
         processor: ffmpegProcessor,
         operations: payload.operations,
-        onProgress: (msg) => console.log('[VideoEdit:Preview]', msg),
+        timeoutMs: payload?.timeoutMs || 180_000,
+        onProgress: (msg) => emit('info', msg, 'pipeline'),
       })
-      return { outputPath: result.outputPath, wasModified: result.wasModified }
+      emit('info', `Preview done (${result.totalDurationMs}ms)`)
+      return {
+        outputPath: result.outputPath,
+        wasModified: result.wasModified,
+        requestId,
+        trace,
+      }
     } catch (err: any) {
-      console.error('[VideoEdit:Preview] Pipeline failed:', err?.message || err)
-      return { error: err?.message || String(err), outputPath: null, wasModified: false }
+      const message = err?.message || String(err)
+      emit('error', `Pipeline failed: ${message}`, 'error')
+      return { error: message, outputPath: null, wasModified: false, requestId, trace }
     }
   })
 }

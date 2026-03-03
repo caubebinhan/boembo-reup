@@ -147,7 +147,11 @@ function resolvePosition(
 ): { x: string | number; y: string | number } {
   // Custom x/y from drag
   if (typeof position === 'object' && position.x != null) {
-    return { x: position.x, y: position.y }
+    // Canvas sends % values, convert to pixel coordinates
+    return {
+      x: Math.round((position.x / 100) * _videoW),
+      y: Math.round((position.y / 100) * _videoH),
+    }
   }
 
   const p = String(position || 'bottom-right')

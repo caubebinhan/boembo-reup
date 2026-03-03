@@ -64,6 +64,23 @@ interface ResolvedOperation {
   plugin: VideoEditPlugin
 }
 
+function parseFfmpegProgressLine(line: string): string | null {
+  const trimmed = line.trim()
+  if (!trimmed) return null
+  if (!trimmed.includes('time=') && !trimmed.includes('speed=')) return null
+
+  const time = /time=([0-9:.]+)/.exec(trimmed)?.[1]
+  const speed = /speed=\s*([0-9.]+x)/.exec(trimmed)?.[1]
+  const fps = /fps=\s*([0-9.]+)/.exec(trimmed)?.[1]
+  if (!time && !speed && !fps) return null
+
+  const parts = ['Rendering']
+  if (time) parts.push(`t=${time}`)
+  if (speed) parts.push(`speed=${speed}`)
+  if (fps) parts.push(`fps=${fps}`)
+  return parts.join(' · ')
+}
+
 /**
  * Execute the video edit pipeline.
  */
@@ -225,17 +242,19 @@ async function executeSinglePass(
   for (const inp of additionalInputPaths) args.push('-i', inp)
 
   // Build the filter_complex chain
+  let wiredFilters: VideoFilter[] = []
+  let lastAudioOutput: string | null = null
   if (allFilters.length > 0) {
-    const wiredFilters = autoWireFilters(allFilters)
+    wiredFilters = autoWireFilters(allFilters)
     const filterStr = buildFilterComplexString(wiredFilters)
     args.push('-filter_complex', filterStr)
 
     // Map video
-    const lastVideoOut = wiredFilters[wiredFilters.length - 1].outputs?.[0] || 'out'
-    args.push('-map', `[${lastVideoOut}]`)
+    const lastVideoOut = findLastVideoOutput(wiredFilters)
+    args.push('-map', lastVideoOut ? `[${lastVideoOut}]` : '0:v')
 
     // Map audio
-    const lastAudioOutput = findLastAudioOutput(wiredFilters)
+    lastAudioOutput = findLastAudioOutput(wiredFilters)
     if (lastAudioOutput) {
       args.push('-map', `[${lastAudioOutput}]`)
     } else {
@@ -245,7 +264,7 @@ async function executeSinglePass(
 
   // Output options
   args.push('-c:v', 'libx264', '-preset', 'medium', '-movflags', '+faststart')
-  if (!allFilters.length || !findLastAudioOutput(allFilters.length > 0 ? autoWireFilters(allFilters) : [])) {
+  if (!allFilters.length || !lastAudioOutput) {
     args.push('-c:a', 'aac')
   }
   args.push(...allOutputOptions, outputPath)
@@ -253,7 +272,22 @@ async function executeSinglePass(
   // Debug
   console.log(`[VideoEdit] FFmpeg single-pass command:\n  ffmpeg ${args.join(' ')}`)
 
-  const result = await processor.execute('ffmpeg', args, opts.timeoutMs || 300_000)
+  let lastProgressEmitAt = 0
+  let lastProgressMsg = ''
+  const result = await processor.execute('ffmpeg', args, {
+    timeoutMs: opts.timeoutMs || 300_000,
+    onStderrLine: (line) => {
+      const progress = parseFfmpegProgressLine(line)
+      if (!progress) return
+      const now = Date.now()
+      if (progress === lastProgressMsg && now - lastProgressEmitAt < 1500) return
+      if (now - lastProgressEmitAt < 800) return
+      lastProgressEmitAt = now
+      lastProgressMsg = progress
+      opts.onProgress?.(progress)
+    },
+  })
+  opts.onProgress?.(`Single-pass exit code: ${result.code}`)
   if (result.code !== 0) {
     console.error('[VideoEdit] FFmpeg stderr:', result.stderr.slice(0, 2000))
     /** @throws DG-610 — FFmpeg single-pass encoding returned non-zero */
@@ -302,7 +336,22 @@ async function executeMultiPass(
 
     args.push('-c:v', 'libx264', '-c:a', 'aac', '-preset', 'medium', '-movflags', '+faststart', stepOutput)
 
-    const result = await processor.execute('ffmpeg', args, opts.timeoutMs || 300_000)
+    let lastProgressEmitAt = 0
+    let lastProgressMsg = ''
+    const result = await processor.execute('ffmpeg', args, {
+      timeoutMs: opts.timeoutMs || 300_000,
+      onStderrLine: (line) => {
+        const progress = parseFfmpegProgressLine(line)
+        if (!progress) return
+        const now = Date.now()
+        if (progress === lastProgressMsg && now - lastProgressEmitAt < 1500) return
+        if (now - lastProgressEmitAt < 800) return
+        lastProgressEmitAt = now
+        lastProgressMsg = progress
+        opts.onProgress?.(`[${plugin.id}] ${progress}`)
+      },
+    })
+    opts.onProgress?.(`[${plugin.id}] exit code: ${result.code}`)
     if (result.code !== 0) {
       /** @throws DG-612 — Multi-pass step N failed during pipeline execution */
       throw new CodedError('DG-612', `FFmpeg multi-pass step ${i} failed: ${result.stderr.slice(0, 500)}`)
@@ -316,13 +365,25 @@ async function executeMultiPass(
  */
 function findLastAudioOutput(filters: VideoFilter[]): string | null {
   let lastAudio: string | null = null
-  const audioLabel = /^(a_|noise_|atempo_)/
   for (const f of filters) {
     for (const out of f.outputs || []) {
-      if (audioLabel.test(out)) lastAudio = out
+      if (isLikelyAudioLabel(out)) lastAudio = out
     }
   }
   return lastAudio
+}
+
+/**
+ * Find the last video output pad in wired filters.
+ */
+function findLastVideoOutput(filters: VideoFilter[]): string | null {
+  let lastVideo: string | null = null
+  for (const f of filters) {
+    for (const out of f.outputs || []) {
+      if (!isLikelyAudioLabel(out)) lastVideo = out
+    }
+  }
+  return lastVideo
 }
 
 /**
@@ -331,34 +392,86 @@ function findLastAudioOutput(filters: VideoFilter[]): string | null {
 function autoWireFilters(filters: VideoFilter[]): VideoFilter[] {
   if (filters.length === 0) return filters
 
-  let currentStream = '0:v'
+  let currentVideoStream = '0:v'
+  let currentAudioStream = '0:a'
   const wired: VideoFilter[] = []
 
   for (let i = 0; i < filters.length; i++) {
     const f = { ...filters[i] }
-    const isLast = i === filters.length - 1
+    const mediaType = inferFilterMediaType(f)
 
     if (!f.inputs?.length) {
-      f.inputs = [currentStream]
+      if (NO_INPUT_SOURCE_FILTERS.has(baseFilterName(f.filter))) {
+        f.inputs = []
+      } else {
+        f.inputs = [mediaType === 'audio' ? currentAudioStream : currentVideoStream]
+      }
     } else {
-      f.inputs = f.inputs.map(inp => inp === '0:v' ? currentStream : inp)
+      f.inputs = f.inputs.map((inp) => {
+        if (inp === '0:v') return currentVideoStream
+        if (inp === '0:a' || inp === '0:a?') return currentAudioStream
+        return inp
+      })
     }
 
     if (!f.outputs?.length) {
-      f.outputs = isLast ? ['out'] : [`f${i}`]
-      currentStream = f.outputs[0]
+      f.outputs = [mediaType === 'audio' ? `a_f${i}` : `f${i}`]
     } else {
-      currentStream = f.outputs[f.outputs.length - 1]
+      f.outputs = [...f.outputs]
     }
 
-    if (isLast && f.outputs[f.outputs.length - 1] !== 'out') {
-      f.outputs = [...f.outputs.slice(0, -1), 'out']
-    }
+    const lastOut = f.outputs[f.outputs.length - 1]
+    if (mediaType === 'audio') currentAudioStream = lastOut
+    else currentVideoStream = lastOut
 
     wired.push(f)
   }
 
   return wired
+}
+
+const AUDIO_FILTERS = new Set([
+  'asetrate',
+  'aresample',
+  'atempo',
+  'highpass',
+  'lowpass',
+  'afade',
+  'volume',
+  'amix',
+  'anoisesrc',
+])
+
+const NO_INPUT_SOURCE_FILTERS = new Set([
+  'anoisesrc',
+])
+
+function baseFilterName(name: string): string {
+  const base = name.split('=')[0]?.trim()
+  return base || name
+}
+
+function isLikelyAudioLabel(label: string): boolean {
+  if (label.includes(':a')) return true
+  if (label.includes(':v')) return false
+  return /^(a_|noise_|atempo_|af_|amix_)/.test(label)
+}
+
+function inferFilterMediaType(filter: VideoFilter): 'audio' | 'video' {
+  const filterName = baseFilterName(filter.filter)
+  if (AUDIO_FILTERS.has(filterName)) return 'audio'
+
+  const inputs = filter.inputs || []
+  if (inputs.length > 0) {
+    const hasAudioInput = inputs.some(isLikelyAudioLabel)
+    const hasVideoInput = inputs.some((i) => !isLikelyAudioLabel(i))
+    if (hasAudioInput && !hasVideoInput) return 'audio'
+    if (hasVideoInput && !hasAudioInput) return 'video'
+  }
+
+  const outputs = filter.outputs || []
+  if (outputs.some(isLikelyAudioLabel)) return 'audio'
+  return 'video'
 }
 
 /**

@@ -1,175 +1,272 @@
 /**
- * CanvasOverlay — Interactive drag-handles for visual video-edit operations
- * ─────────────────────────────────────────────────────────────────────────
- * Renders on top of the <video> element.
- * Supports:
- *   • crop-guide / blur-region — draggable + resizable rectangle
- *   • overlay-image / overlay-text — draggable position indicator
- *   • transform / none — no overlay
+ * CanvasOverlay — Interactive drag-handles for visual video-edit operations.
  */
-import { useRef, useCallback, useState, useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactElement } from 'react'
 import type { PluginMeta, VideoEditOperation } from './types'
 import { V } from './types'
+import { applyCanvasRect, clampCanvasRect, resolveCanvasRect, resolveCanvasSpace } from './canvas-contracts'
 
 interface CanvasOverlayProps {
-  /** Displayed video width/height (px) */
   videoWidth: number
   videoHeight: number
-  /** Currently selected operation */
   operation: VideoEditOperation | null
-  /** Plugin metadata for the selected operation */
   plugin: PluginMeta | null
-  /** Update params callback */
-  onUpdateParams: (opId: string, params: Record<string, any>) => void
+  operations: VideoEditOperation[]
+  onUpdateParams: (opId: string, params: Record<string, unknown>) => void
 }
 
 type DragMode = 'move' | 'nw' | 'ne' | 'sw' | 'se' | null
+
 const HANDLE = 10
 
-export function CanvasOverlay({
-  videoWidth: vw, videoHeight: vh,
-  operation, plugin, onUpdateParams,
-}: CanvasOverlayProps) {
-  const [dragMode, setDragMode] = useState<DragMode>(null)
-  const start = useRef({ mx: 0, my: 0, ox: 0, oy: 0, ow: 0, oh: 0 })
-  const pointerIdRef = useRef<number | null>(null)
+interface RectPct {
+  x: number
+  y: number
+  w: number
+  h: number
+}
 
-  // Reset drag when operation changes
+function applyDrag(mode: DragMode, base: RectPct, dx: number, dy: number): RectPct {
+  if (mode === 'move') return { x: base.x + dx, y: base.y + dy, w: base.w, h: base.h }
+  if (mode === 'se') return { x: base.x, y: base.y, w: base.w + dx, h: base.h + dy }
+  if (mode === 'nw') return { x: base.x + dx, y: base.y + dy, w: base.w - dx, h: base.h - dy }
+  if (mode === 'ne') return { x: base.x, y: base.y + dy, w: base.w + dx, h: base.h - dy }
+  if (mode === 'sw') return { x: base.x + dx, y: base.y, w: base.w - dx, h: base.h + dy }
+  return base
+}
+
+function handleStyle(color: string, corner: 'nw' | 'ne' | 'sw' | 'se'): React.CSSProperties {
+  const base: React.CSSProperties = {
+    position: 'absolute',
+    width: HANDLE,
+    height: HANDLE,
+    background: '#fff',
+    border: `2px solid ${color}`,
+    borderRadius: 2,
+    zIndex: 2,
+    cursor: `${corner}-resize`,
+  }
+  const half = -HANDLE / 2
+  if (corner === 'nw') return { ...base, top: half, left: half }
+  if (corner === 'ne') return { ...base, top: half, right: half }
+  if (corner === 'sw') return { ...base, bottom: half, left: half }
+  return { ...base, bottom: half, right: half }
+}
+
+export function CanvasOverlay({
+  videoWidth: vw,
+  videoHeight: vh,
+  operation,
+  plugin,
+  operations,
+  onUpdateParams,
+}: CanvasOverlayProps): ReactElement | null {
+  const [dragMode, setDragMode] = useState<DragMode>(null)
+  const pointerIdRef = useRef<number | null>(null)
+  const startRef = useRef<{ mx: number; my: number; ox: number; oy: number; ow: number; oh: number }>({
+    mx: 0,
+    my: 0,
+    ox: 0,
+    oy: 0,
+    ow: 0,
+    oh: 0,
+  })
+  const runtimeRef = useRef({
+    operation,
+    plugin,
+    operations,
+    videoWidth: vw,
+    videoHeight: vh,
+    onUpdateParams,
+  })
+
   useEffect(() => {
-    setDragMode(null)
+    runtimeRef.current = {
+      operation,
+      plugin,
+      operations,
+      videoWidth: vw,
+      videoHeight: vh,
+      onUpdateParams,
+    }
+  }, [operation, plugin, operations, vw, vh, onUpdateParams])
+
+  useEffect(() => {
     pointerIdRef.current = null
   }, [operation?.id])
 
+  const stopDrag = useCallback((e?: PointerEvent) => {
+    if (pointerIdRef.current !== null && e && e.pointerId !== pointerIdRef.current) return
+    pointerIdRef.current = null
+    setDragMode(null)
+  }, [])
+
+  const onMove = useCallback((e: PointerEvent) => {
+    if (!dragMode) return
+    if (pointerIdRef.current !== null && e.pointerId !== pointerIdRef.current) return
+
+    const { operation: op, plugin: pl, operations: ops, videoWidth, videoHeight, onUpdateParams: update } = runtimeRef.current
+    if (!op || !pl || videoWidth <= 0 || videoHeight <= 0) return
+
+    const space = resolveCanvasSpace(op, pl, ops, videoWidth > 0 && videoHeight > 0 ? (videoWidth / videoHeight) : null)
+    const spacePixelW = Math.max(1, (space.w / 100) * videoWidth)
+    const spacePixelH = Math.max(1, (space.h / 100) * videoHeight)
+    const dx = ((e.clientX - startRef.current.mx) / spacePixelW) * 100
+    const dy = ((e.clientY - startRef.current.my) / spacePixelH) * 100
+    const base: RectPct = {
+      x: startRef.current.ox,
+      y: startRef.current.oy,
+      w: startRef.current.ow,
+      h: startRef.current.oh,
+    }
+    const nextRect = clampCanvasRect(applyDrag(dragMode, base, dx, dy))
+    const nextParams = applyCanvasRect(op, pl, nextRect)
+    update(op.id, nextParams)
+  }, [dragMode])
+
+  useEffect(() => {
+    if (!dragMode) return
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', stopDrag)
+    window.addEventListener('pointercancel', stopDrag)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', stopDrag)
+      window.removeEventListener('pointercancel', stopDrag)
+    }
+  }, [dragMode, onMove, stopDrag])
+
   if (!operation || !plugin || vw === 0 || vh === 0) return null
+
   const hint = plugin.previewHint || 'none'
   if (hint === 'none' || hint === 'transform') return null
 
+  const rect = resolveCanvasRect(operation, plugin)
+  if (!rect) return null
+  const spaceRect = resolveCanvasSpace(operation, plugin, operations, vw > 0 && vh > 0 ? (vw / vh) : null)
+
+  const spacePxX = (spaceRect.x / 100) * vw
+  const spacePxY = (spaceRect.y / 100) * vh
+  const spacePxW = (spaceRect.w / 100) * vw
+  const spacePxH = (spaceRect.h / 100) * vh
+  const rx = spacePxX + (rect.x / 100) * spacePxW
+  const ry = spacePxY + (rect.y / 100) * spacePxH
+  const rw = (rect.w / 100) * spacePxW
+  const rh = (rect.h / 100) * spacePxH
+
   const isRegion = hint === 'crop-guide' || hint === 'blur-region'
+  const hasScopedSpace = spaceRect.x > 0 || spaceRect.y > 0 || spaceRect.w < 100 || spaceRect.h < 100
+  const color = hint === 'crop-guide' ? V.accent : hint === 'blur-region' ? '#3b82f6' : hint === 'overlay-image' ? V.accent : '#e67e22'
+  const emoji = hint === 'overlay-image' ? '🖼️' : '✏️'
 
-  // ── Region (crop / blur) ──────────────────────────
+  const beginDrag = (e: React.PointerEvent, mode: DragMode): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragMode(mode)
+    pointerIdRef.current = e.pointerId
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    startRef.current = {
+      mx: e.clientX,
+      my: e.clientY,
+      ox: rect.x,
+      oy: rect.y,
+      ow: rect.w,
+      oh: rect.h,
+    }
+  }
+
   if (isRegion) {
-    const regionKey = operation.params.region ? 'region' : 'cropRegion'
-    const region = operation.params[regionKey] || { x: 10, y: 10, w: 80, h: 80 }
-    const rx = (region.x / 100) * vw
-    const ry = (region.y / 100) * vh
-    const rw = (region.w / 100) * vw
-    const rh = (region.h / 100) * vh
-    const color = hint === 'crop-guide' ? V.accent : '#3b82f6'
-
-    const clamp = (r: typeof region) => ({
-      x: Math.max(0, Math.min(100 - r.w, r.x)),
-      y: Math.max(0, Math.min(100 - r.h, r.y)),
-      w: Math.max(5, Math.min(100, r.w)),
-      h: Math.max(5, Math.min(100, r.h)),
-    })
-    const set = (r: typeof region) =>
-      onUpdateParams(operation.id, { ...operation.params, [regionKey]: clamp(r) })
-
-    const down = (e: React.PointerEvent, mode: DragMode) => {
-      e.preventDefault(); e.stopPropagation()
-      setDragMode(mode)
-      pointerIdRef.current = e.pointerId
-      e.currentTarget.setPointerCapture?.(e.pointerId)
-      start.current = { mx: e.clientX, my: e.clientY, ox: region.x, oy: region.y, ow: region.w, oh: region.h }
-    }
-
-    /* eslint-disable react-hooks/rules-of-hooks */
-    const move = useCallback((e: PointerEvent) => {
-      if (!dragMode) return
-      if (pointerIdRef.current !== null && e.pointerId !== pointerIdRef.current) return
-      const dx = ((e.clientX - start.current.mx) / vw) * 100
-      const dy = ((e.clientY - start.current.my) / vh) * 100
-      const { ox, oy, ow, oh } = start.current
-      if (dragMode === 'move') set({ x: ox + dx, y: oy + dy, w: ow, h: oh })
-      else if (dragMode === 'se') set({ x: ox, y: oy, w: ow + dx, h: oh + dy })
-      else if (dragMode === 'nw') set({ x: ox + dx, y: oy + dy, w: ow - dx, h: oh - dy })
-      else if (dragMode === 'ne') set({ x: ox, y: oy + dy, w: ow + dx, h: oh - dy })
-      else if (dragMode === 'sw') set({ x: ox + dx, y: oy, w: ow - dx, h: oh + dy })
-    }, [dragMode, vw, vh, operation.id, operation.params])
-
-    const up = useCallback((e?: PointerEvent) => {
-      if (pointerIdRef.current !== null && e && e.pointerId !== pointerIdRef.current) return
-      pointerIdRef.current = null
-      setDragMode(null)
-    }, [])
-
-    useEffect(() => {
-      if (!dragMode) return
-      window.addEventListener('pointermove', move)
-      window.addEventListener('pointerup', up)
-      window.addEventListener('pointercancel', up)
-      return () => {
-        window.removeEventListener('pointermove', move)
-        window.removeEventListener('pointerup', up)
-        window.removeEventListener('pointercancel', up)
-      }
-    }, [dragMode, move, up])
-    /* eslint-enable react-hooks/rules-of-hooks */
-
-    const hStyle = (c: string): React.CSSProperties => {
-      const b: React.CSSProperties = {
-        position: 'absolute', width: HANDLE, height: HANDLE,
-        background: '#fff', border: `2px solid ${color}`, borderRadius: 2, zIndex: 2,
-        cursor: `${c}-resize`,
-      }
-      const half = -HANDLE / 2
-      if (c === 'nw') return { ...b, top: half, left: half }
-      if (c === 'ne') return { ...b, top: half, right: half }
-      if (c === 'sw') return { ...b, bottom: half, left: half }
-      return { ...b, bottom: half, right: half } // se
-    }
-
+    const maskId = `crop-mask-${operation.id}`
+    const maskRect = hint === 'crop-guide'
+      ? { x: rx, y: ry, w: rw, h: rh }
+      : { x: spacePxX, y: spacePxY, w: spacePxW, h: spacePxH }
     return (
       <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 5 }}>
-        {hint === 'crop-guide' && (
-          <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.35 }}>
-            <defs><mask id="cm"><rect width="100%" height="100%" fill="white" /><rect x={rx} y={ry} width={rw} height={rh} fill="black" /></mask></defs>
-            <rect width="100%" height="100%" fill="black" mask="url(#cm)" />
+        {(hint === 'crop-guide' || hasScopedSpace) && (
+          <svg className="absolute inset-0 w-full h-full" style={{ opacity: hint === 'crop-guide' ? 0.35 : 0.22 }}>
+            <defs>
+              <mask id={maskId}>
+                <rect width="100%" height="100%" fill="white" />
+                <rect x={maskRect.x} y={maskRect.y} width={maskRect.w} height={maskRect.h} fill="black" />
+              </mask>
+            </defs>
+            <rect width="100%" height="100%" fill="black" mask={`url(#${maskId})`} />
           </svg>
         )}
-        <div className="absolute pointer-events-auto"
-          style={{ left: rx, top: ry, width: rw, height: rh, border: `2px solid ${color}`, cursor: dragMode === 'move' ? 'grabbing' : 'grab', boxShadow: `0 0 0 1px ${color}44`, touchAction: 'none' }}
-          onPointerDown={e => down(e, 'move')}>
-          <div style={hStyle('nw')} className="pointer-events-auto" onPointerDown={e => down(e, 'nw')} />
-          <div style={hStyle('ne')} className="pointer-events-auto" onPointerDown={e => down(e, 'ne')} />
-          <div style={hStyle('sw')} className="pointer-events-auto" onPointerDown={e => down(e, 'sw')} />
-          <div style={hStyle('se')} className="pointer-events-auto" onPointerDown={e => down(e, 'se')} />
-          <div className="absolute -top-6 left-0 text-[10px] font-mono px-1.5 py-0.5 rounded"
-            style={{ background: color, color: '#fff', whiteSpace: 'nowrap' }}>
-            {Math.round(region.w)}% × {Math.round(region.h)}%
+        {hasScopedSpace && hint === 'blur-region' && (
+          <div
+            className="absolute"
+            style={{
+              left: spacePxX,
+              top: spacePxY,
+              width: spacePxW,
+              height: spacePxH,
+              border: '1px dashed #60a5fa88',
+              boxShadow: 'inset 0 0 0 1px #60a5fa33',
+            }}
+          />
+        )}
+        <div
+          className="absolute pointer-events-auto"
+          style={{
+            left: rx,
+            top: ry,
+            width: rw,
+            height: rh,
+            border: `2px solid ${color}`,
+            cursor: dragMode === 'move' ? 'grabbing' : 'grab',
+            boxShadow: `0 0 0 1px ${color}44`,
+            touchAction: 'none',
+          }}
+          onPointerDown={(e) => beginDrag(e, 'move')}
+        >
+          <div style={handleStyle(color, 'nw')} className="pointer-events-auto" onPointerDown={(e) => beginDrag(e, 'nw')} />
+          <div style={handleStyle(color, 'ne')} className="pointer-events-auto" onPointerDown={(e) => beginDrag(e, 'ne')} />
+          <div style={handleStyle(color, 'sw')} className="pointer-events-auto" onPointerDown={(e) => beginDrag(e, 'sw')} />
+          <div style={handleStyle(color, 'se')} className="pointer-events-auto" onPointerDown={(e) => beginDrag(e, 'se')} />
+          <div
+            className="absolute -top-6 left-0 text-[10px] font-mono px-1.5 py-0.5 rounded"
+            style={{ background: color, color: '#fff', whiteSpace: 'nowrap' }}
+          >
+            {Math.round(rect.w)}% × {Math.round(rect.h)}%
           </div>
         </div>
       </div>
     )
   }
 
-  // ── Overlay position (watermark, text) ────────────
-  const pos = operation.params.position || 'center'
-  const posMap: Record<string, { x: number; y: number }> = {
-    'top-left': { x: 10, y: 10 }, 'top-center': { x: 50, y: 10 }, 'top-right': { x: 90, y: 10 },
-    'center-left': { x: 10, y: 50 }, 'center': { x: 50, y: 50 }, 'center-right': { x: 90, y: 50 },
-    'bottom-left': { x: 10, y: 90 }, 'bottom-center': { x: 50, y: 90 }, 'bottom-right': { x: 90, y: 90 },
-  }
-  const p = typeof pos === 'string' ? (posMap[pos] || posMap.center) : { x: pos.x ?? 50, y: pos.y ?? 50 }
-  const px = (p.x / 100) * vw
-  const py = (p.y / 100) * vh
-  const sz = 36
-  const emoji = hint === 'overlay-image' ? '🖼️' : '✏️'
-
   return (
     <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 5 }}>
-      <div className="absolute pointer-events-auto flex items-center justify-center rounded-xl cursor-grab active:cursor-grabbing"
+      <div
+        className="absolute pointer-events-auto"
         style={{
-          left: px - sz / 2, top: py - sz / 2, width: sz, height: sz,
-          background: `${V.accent}cc`, color: '#fff', border: '2px solid #fff',
-          boxShadow: `0 2px 12px ${V.accent}66`, fontSize: 16,
+          left: rx,
+          top: ry,
+          width: rw,
+          height: rh,
+          border: `2px dashed ${color}`,
+          cursor: dragMode === 'move' ? 'grabbing' : 'grab',
+          boxShadow: `0 0 0 1px ${color}44`,
+          touchAction: 'none',
+          borderRadius: 8,
+          background: `${color}11`,
         }}
-        title={typeof pos === 'string' ? pos : `${Math.round(p.x)}%, ${Math.round(p.y)}%`}>
-        {emoji}
-      </div>
-      <div className="absolute text-[10px] font-mono px-1.5 py-0.5 rounded pointer-events-none"
-        style={{ left: px + sz / 2 + 4, top: py - 8, background: `${V.accent}cc`, color: '#fff', whiteSpace: 'nowrap' }}>
-        {typeof pos === 'string' ? pos : `${Math.round(p.x)}%, ${Math.round(p.y)}%`}
+        onPointerDown={(e) => beginDrag(e, 'move')}
+      >
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ fontSize: 20, opacity: 0.7 }}>
+          {emoji}
+        </div>
+        <div style={handleStyle(color, 'nw')} className="pointer-events-auto" onPointerDown={(e) => beginDrag(e, 'nw')} />
+        <div style={handleStyle(color, 'ne')} className="pointer-events-auto" onPointerDown={(e) => beginDrag(e, 'ne')} />
+        <div style={handleStyle(color, 'sw')} className="pointer-events-auto" onPointerDown={(e) => beginDrag(e, 'sw')} />
+        <div style={handleStyle(color, 'se')} className="pointer-events-auto" onPointerDown={(e) => beginDrag(e, 'se')} />
+        <div
+          className="absolute -top-6 left-0 text-[10px] font-mono px-1.5 py-0.5 rounded"
+          style={{ background: color, color: '#fff', whiteSpace: 'nowrap' }}
+        >
+          {Math.round(rect.x)}%, {Math.round(rect.y)}% · {Math.round(rect.w)}×{Math.round(rect.h)}%
+        </div>
       </div>
     </div>
   )

@@ -13,6 +13,7 @@ const blurRegion: VideoEditPlugin = {
   description: 'Blur or pixelate a rectangular region',
   allowMultipleInstances: true,
   addInstanceLabel: 'Add another blur region',
+  previewHint: 'blur-region',
 
   configSchema: [
     {
@@ -56,7 +57,17 @@ const blurRegion: VideoEditPlugin = {
     const key = ctx.instanceKey
     const mode = params.mode || 'gaussian'
     const intensity = params.intensity ?? 20
-    const { x, y, w, h } = region
+    const clamped = {
+      x: Math.max(0, Math.min(100, Number(region.x) || 0)),
+      y: Math.max(0, Math.min(100, Number(region.y) || 0)),
+      w: Math.max(1, Math.min(100, Number(region.w) || 0)),
+      h: Math.max(1, Math.min(100, Number(region.h) || 0)),
+    }
+    // Use stream-relative expressions so blur stays correct after previous transforms (crop/scale/rotate).
+    const x = `iw*${(clamped.x / 100).toFixed(6)}`
+    const y = `ih*${(clamped.y / 100).toFixed(6)}`
+    const w = `max(2,iw*${(clamped.w / 100).toFixed(6)})`
+    const h = `max(2,ih*${(clamped.h / 100).toFixed(6)})`
 
     const filters: VideoFilter[] = []
 
@@ -88,7 +99,7 @@ const blurRegion: VideoEditPlugin = {
       })
       filters.push({
         filter: 'scale',
-        options: { w: Math.max(4, Math.round(w / intensity)), h: Math.max(4, Math.round(h / intensity)) },
+        options: { w: `max(4,(${w})/${intensity})`, h: `max(4,(${h})/${intensity})` },
         inputs: [`region_${key}`],
         outputs: [`region_small_${key}`],
       })
@@ -136,7 +147,7 @@ const blurRegion: VideoEditPlugin = {
   validate(params) {
     const r = params.region
     if (!r || !r.w || !r.h) return 'Select a region to blur'
-    if (r.w < 10 || r.h < 10) return 'Region too small (minimum 10x10px)'
+    if (r.w < 2 || r.h < 2) return 'Region too small (minimum 2%)'
     return null
   },
 }

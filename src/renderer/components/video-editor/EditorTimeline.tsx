@@ -57,7 +57,7 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
     }, [onSelectOperation])
 
     const playheadX = currentTime * pxPerSecond
-    const sortedOps = useMemo(() => [...operations].sort((a, b) => a.order - b.order), [operations])
+    const sortedOps = useMemo(() => [...operations].filter(o => o.enabled).sort((a, b) => a.order - b.order), [operations])
     const LABEL_W = 96, TRACK_H = 44
 
     return (

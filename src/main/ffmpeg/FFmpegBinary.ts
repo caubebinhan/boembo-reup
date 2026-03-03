@@ -32,6 +32,12 @@ export interface CommandResult {
   stderr: Buffer
 }
 
+export interface RunBinaryOptions {
+  timeoutMs?: number
+  onStdoutLine?: (line: string) => void
+  onStderrLine?: (line: string) => void
+}
+
 let availabilityCache: { checkedAt: number; ffmpeg: boolean; ffprobe: boolean } | null = null
 const AVAILABILITY_CACHE_TTL = 5 * 60_000 // 5 minutes
 
@@ -48,8 +54,16 @@ export function resolveBinary(name: 'ffmpeg' | 'ffprobe'): string {
  * Spawn a binary with args and collect stdout/stderr.
  * Rejects on spawn error or timeout.
  */
-export function runBinary(command: string, args: string[], timeoutMs = 60_000): Promise<CommandResult> {
+export function runBinary(
+  command: string,
+  args: string[],
+  timeoutOrOptions: number | RunBinaryOptions = 60_000,
+): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
+    const opts: RunBinaryOptions = typeof timeoutOrOptions === 'number'
+      ? { timeoutMs: timeoutOrOptions }
+      : timeoutOrOptions
+    const timeoutMs = opts.timeoutMs ?? 60_000
     const child = spawn(command, args, {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -57,7 +71,21 @@ export function runBinary(command: string, args: string[], timeoutMs = 60_000): 
 
     const stdoutChunks: Buffer[] = []
     const stderrChunks: Buffer[] = []
+    let stdoutPending = ''
+    let stderrPending = ''
     let finished = false
+
+    const emitLines = (input: string, pending: string, emit?: (line: string) => void): string => {
+      if (!emit) return pending
+      const merged = pending + input
+      const parts = merged.split(/\r?\n|\r/g)
+      const remainder = parts.pop() ?? ''
+      for (const line of parts) {
+        const trimmed = line.trim()
+        if (trimmed) emit(trimmed)
+      }
+      return remainder
+    }
 
     const timer = setTimeout(() => {
       if (finished) return
@@ -66,8 +94,20 @@ export function runBinary(command: string, args: string[], timeoutMs = 60_000): 
       reject(new Error(`Command timeout: ${command} (${timeoutMs}ms)`))
     }, timeoutMs)
 
-    child.stdout?.on('data', (chunk: Buffer | string) => stdoutChunks.push(Buffer.from(chunk)))
-    child.stderr?.on('data', (chunk: Buffer | string) => stderrChunks.push(Buffer.from(chunk)))
+    child.stdout?.on('data', (chunk: Buffer | string) => {
+      const buf = Buffer.from(chunk)
+      stdoutChunks.push(buf)
+      if (opts.onStdoutLine) {
+        stdoutPending = emitLines(buf.toString('utf8'), stdoutPending, opts.onStdoutLine)
+      }
+    })
+    child.stderr?.on('data', (chunk: Buffer | string) => {
+      const buf = Buffer.from(chunk)
+      stderrChunks.push(buf)
+      if (opts.onStderrLine) {
+        stderrPending = emitLines(buf.toString('utf8'), stderrPending, opts.onStderrLine)
+      }
+    })
 
     child.on('error', (err) => {
       if (finished) return
@@ -80,6 +120,8 @@ export function runBinary(command: string, args: string[], timeoutMs = 60_000): 
       if (finished) return
       finished = true
       clearTimeout(timer)
+      if (opts.onStdoutLine && stdoutPending.trim()) opts.onStdoutLine(stdoutPending.trim())
+      if (opts.onStderrLine && stderrPending.trim()) opts.onStderrLine(stderrPending.trim())
       resolve({
         code,
         stdout: Buffer.concat(stdoutChunks),

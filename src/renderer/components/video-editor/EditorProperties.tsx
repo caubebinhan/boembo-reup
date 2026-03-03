@@ -5,6 +5,7 @@
 import { useMemo, useState } from 'react'
 import type { PluginConfigField, PluginMeta, VideoEditOperation } from './types'
 import { V } from './types'
+import { getCanvasNumericFields, updateCanvasNumericField } from './canvas-contracts'
 
 interface EditorPropertiesProps {
     operation: VideoEditOperation | null
@@ -15,6 +16,20 @@ interface EditorPropertiesProps {
 }
 
 export function EditorProperties({ operation, plugin, onUpdateParams, onToggleEnabled, onRemoveOperation }: EditorPropertiesProps) {
+    const isVisual = plugin?.previewHint !== 'none'
+    const visibleFields = useMemo(
+        () => (operation && plugin)
+            ? plugin.configSchema.filter(f => !f.condition || operation.params[f.condition.field] === f.condition.value)
+            : [],
+        [plugin, operation],
+    )
+    const panelFields = useMemo(() => visibleFields.filter(f => !['position'].includes(f.type)), [visibleFields])
+    const canvasFields = useMemo(() => (operation && plugin) ? getCanvasNumericFields(operation, plugin) : null, [operation, plugin])
+    const updateParam = (key: string, value: any) => {
+        if (!operation) return
+        onUpdateParams(operation.id, { ...operation.params, [key]: value })
+    }
+
     if (!operation || !plugin) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-center px-6 py-12" style={{ background: V.bg }}>
@@ -27,11 +42,6 @@ export function EditorProperties({ operation, plugin, onUpdateParams, onToggleEn
             </div>
         )
     }
-
-    const isVisual = plugin.previewHint !== 'none'
-    const visibleFields = useMemo(() => plugin.configSchema.filter(f => !f.condition || operation.params[f.condition.field] === f.condition.value), [plugin.configSchema, operation.params])
-    const panelFields = visibleFields.filter(f => !['position'].includes(f.type))
-    const updateParam = (key: string, value: any) => onUpdateParams(operation.id, { ...operation.params, [key]: value })
 
     return (
         <div className="flex flex-col h-full" style={{ background: V.bg }}>
@@ -79,6 +89,41 @@ export function EditorProperties({ operation, plugin, onUpdateParams, onToggleEn
             )}
 
             <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3">
+                {canvasFields && (
+                    <div className="p-2.5 rounded-xl flex flex-col gap-2"
+                        style={{ background: V.cream, border: `1px solid ${V.beige}` }}>
+                        <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-bold tracking-wide uppercase" style={{ color: V.textDim }}>Canvas Values (%)</p>
+                            <span className="text-[9px] font-medium" style={{ color: V.textDim }}>live sync</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            {canvasFields.map(field => (
+                                <label key={field.key} className="flex items-center gap-1.5">
+                                    <span className="text-[10px] font-bold w-4 text-right" style={{ color: V.textDim }}>{field.label}</span>
+                                    <input
+                                        type="number"
+                                        value={Math.round(field.value)}
+                                        min={field.min}
+                                        max={field.max}
+                                        step={field.step}
+                                        aria-label={`Canvas ${field.label}`}
+                                        onChange={e => {
+                                            const next = updateCanvasNumericField(
+                                                operation,
+                                                plugin,
+                                                field.key,
+                                                Number(e.target.value),
+                                            )
+                                            if (next) onUpdateParams(operation.id, next as Record<string, any>)
+                                        }}
+                                        className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
+                                        style={{ background: V.card, border: `1px solid ${V.beige}`, color: V.charcoal }}
+                                    />
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 {panelFields.map(field => (
                     <FieldRenderer key={field.key} field={field}
                         value={operation.params[field.key] ?? field.default}
@@ -234,7 +279,71 @@ function FieldRenderer({ field, value, onChange }: { field: PluginConfigField; v
                     {description && <p className="text-[10px] mt-1" style={{ color: V.textDim }}>{description}</p>}
                 </div>
             )
+        case 'time':
+            return (
+                <div>{labelEl}
+                    <div className="flex items-center gap-2">
+                        <input type="number" value={value ?? ''} min={0} step={0.1}
+                            aria-label={label}
+                            onChange={e => onChange(e.target.value === '' ? undefined : Number(e.target.value))}
+                            className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
+                            style={{ background: V.cream, border: `1px solid ${V.beige}`, color: V.charcoal }}
+                            placeholder="0.0" />
+                        <span className="text-[10px] shrink-0" style={{ color: V.textDim }}>sec</span>
+                    </div>
+                    {description && <p className="text-[10px] mt-1" style={{ color: V.textDim }}>{description}</p>}
+                </div>
+            )
         default:
+            // Handle isArray fields (e.g. logo_sequence appearances)
+            if (field.isArray && field.arrayFields) {
+                const items: any[] = Array.isArray(value) ? value : []
+                const addItem = () => {
+                    const defaults: Record<string, any> = {}
+                    field.arrayFields!.forEach((f: any) => { if (f.default !== undefined) defaults[f.key] = f.default })
+                    onChange([...items, defaults])
+                }
+                const removeItem = (idx: number) => onChange(items.filter((_: any, i: number) => i !== idx))
+                const updateItem = (idx: number, key: string, val: any) => {
+                    const next = [...items]
+                    next[idx] = { ...next[idx], [key]: val }
+                    onChange(next)
+                }
+                return (
+                    <div>{labelEl}
+                        <div className="flex flex-col gap-2">
+                            {items.map((item: any, idx: number) => (
+                                <div key={idx} className="p-2.5 rounded-xl flex flex-col gap-2 relative"
+                                    style={{ background: V.cream, border: `1px solid ${V.beige}` }}>
+                                    <div className="flex items-center justify-between mb-0.5">
+                                        <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color: V.textDim }}>#{idx + 1}</span>
+                                        <button onClick={() => removeItem(idx)}
+                                            aria-label={`Remove item ${idx + 1}`}
+                                            className="text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition"
+                                            style={{ color: V.textDim }}
+                                            onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = '#fef2f2' }}
+                                            onMouseLeave={e => { e.currentTarget.style.color = V.textDim; e.currentTarget.style.background = 'transparent' }}>✕</button>
+                                    </div>
+                                    {field.arrayFields!.map((subField: any) => (
+                                        <FieldRenderer key={subField.key} field={subField}
+                                            value={item[subField.key] ?? subField.default}
+                                            onChange={(val: any) => updateItem(idx, subField.key, val)} />
+                                    ))}
+                                </div>
+                            ))}
+                            <button onClick={addItem}
+                                aria-label={`Add ${label.toLowerCase()}`}
+                                className="w-full py-2 rounded-lg text-[10px] font-medium transition cursor-pointer text-center"
+                                style={{ border: `1px dashed ${V.beige}`, color: V.accent, background: 'transparent' }}
+                                onMouseEnter={e => (e.currentTarget.style.background = V.accentSoft)}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                                + Add {label.toLowerCase()}
+                            </button>
+                        </div>
+                        {description && <p className="text-[10px] mt-1" style={{ color: V.textDim }}>{description}</p>}
+                    </div>
+                )
+            }
             return <div>{labelEl}<div className="text-[10px] italic" style={{ color: V.textDim }}>Unsupported: {type}</div></div>
     }
 }

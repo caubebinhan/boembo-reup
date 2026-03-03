@@ -5,53 +5,87 @@
  * Layout: Left toolbar | Center preview | Right properties | Bottom timeline
  */
 import { useRef, useEffect, useState, useCallback } from 'react'
+import type { ReactElement } from 'react'
 import { useEditorState } from './useEditorState'
 import { EditorToolbar } from './EditorToolbar'
 import { EditorProperties } from './EditorProperties'
 import { EditorTimeline } from './EditorTimeline'
-import { CanvasOverlay } from './CanvasOverlay'
+import { KonvaCanvasSurface } from './KonvaCanvasSurface'
+import { EditorTracePanel } from './EditorTracePanel'
 import { V } from './types'
 
-export default function VideoEditorWindow() {
+export default function VideoEditorWindow(): ReactElement {
     const state = useEditorState()
     const videoRef = useRef<HTMLVideoElement>(null)
-    const previewContainerRef = useRef<HTMLDivElement>(null)
+    const previewViewportRef = useRef<HTMLDivElement>(null)
     const [videoDims, setVideoDims] = useState({ w: 0, h: 0 })
+    const [videoFrame, setVideoFrame] = useState({ x: 0, y: 0, w: 0, h: 0 })
+    const [videoDuration, setVideoDuration] = useState(30)
 
     // Sync video duration + currentTime
     useEffect(() => {
         const video = videoRef.current
         if (!video) return
-        const onMeta = () => state.handleSeek(0)
-        const onTime = () => state.handleSeek(video.currentTime)
+        const onMeta = (): void => {
+            state.handleSeek(0)
+            setVideoDuration(Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 30)
+        }
+        const onTime = (): void => state.handleSeek(video.currentTime)
         video.addEventListener('loadedmetadata', onMeta)
         video.addEventListener('timeupdate', onTime)
         return () => {
             video.removeEventListener('loadedmetadata', onMeta)
             video.removeEventListener('timeupdate', onTime)
         }
-    }, [state.videoSrc])
+    }, [state.videoSrc, state.previewSrc])
 
-    // Track displayed video element size for canvas overlay
-    const updateVideoDims = useCallback(() => {
+    // Track displayed video frame (content box) for canvas overlay
+    const updateVideoLayout = useCallback(() => {
         const video = videoRef.current
-        if (!video) { setVideoDims({ w: 0, h: 0 }); return }
-        setVideoDims({ w: video.clientWidth, h: video.clientHeight })
+        const viewport = previewViewportRef.current
+        if (!video || !viewport) {
+            setVideoDims({ w: 0, h: 0 })
+            setVideoFrame({ x: 0, y: 0, w: 0, h: 0 })
+            return
+        }
+        const viewportW = viewport.clientWidth
+        const viewportH = viewport.clientHeight
+        const sourceW = video.videoWidth || video.clientWidth
+        const sourceH = video.videoHeight || video.clientHeight
+        if (viewportW <= 0 || viewportH <= 0 || sourceW <= 0 || sourceH <= 0) {
+            setVideoDims({ w: 0, h: 0 })
+            setVideoFrame({ x: 0, y: 0, w: 0, h: 0 })
+            return
+        }
+        const scale = Math.min(viewportW / sourceW, viewportH / sourceH)
+        const w = Math.max(1, Math.round(sourceW * scale))
+        const h = Math.max(1, Math.round(sourceH * scale))
+        const x = Math.round((viewportW - w) / 2)
+        const y = Math.round((viewportH - h) / 2)
+        setVideoDims({ w, h })
+        setVideoFrame({ x, y, w, h })
     }, [])
 
     useEffect(() => {
         const video = videoRef.current
-        if (!video) return
-        const ro = new ResizeObserver(updateVideoDims)
-        ro.observe(video)
-        video.addEventListener('loadedmetadata', updateVideoDims)
-        return () => { ro.disconnect(); video.removeEventListener('loadedmetadata', updateVideoDims) }
-    }, [state.videoSrc, updateVideoDims])
+        const viewport = previewViewportRef.current
+        if (!video || !viewport) return
+        const ro = new ResizeObserver(updateVideoLayout)
+        ro.observe(viewport)
+        video.addEventListener('loadedmetadata', updateVideoLayout)
+        window.addEventListener('resize', updateVideoLayout)
+        return () => {
+            ro.disconnect()
+            video.removeEventListener('loadedmetadata', updateVideoLayout)
+            window.removeEventListener('resize', updateVideoLayout)
+        }
+    }, [state.videoSrc, state.previewSrc, updateVideoLayout])
 
     const displaySrc = state.previewSrc || state.videoSrc
+    const timelineDuration = displaySrc ? videoDuration : 30
 
     return (
-        <div className="video-editor-shell flex flex-col h-screen w-screen" style={{ background: V.bg }}>
+        <div className="video-editor-shell flex flex-col h-screen w-screen overflow-hidden" style={{ background: V.bg }}>
             {/* Top bar */}
             <div className="flex items-center justify-between px-4 shrink-0"
                 style={{ height: 44, background: V.card, borderBottom: `1px solid ${V.beige}` }}>
@@ -74,7 +108,7 @@ export default function VideoEditorWindow() {
                                 background: state.isRendering ? V.beige : V.accent,
                                 color: state.isRendering ? V.textDim : '#fff',
                             }}>
-                            {state.isRendering ? '⏳ Rendering...' : '▶️ Preview Result'}
+                            {state.isRendering ? `⏳ ${state.previewStatus || 'Rendering...'}` : '▶️ Preview Result'}
                         </button>
                     )}
                     <button onClick={state.handleDone}
@@ -87,14 +121,12 @@ export default function VideoEditorWindow() {
             </div>
 
             {/* Main content */}
-            <div className="flex flex-1 overflow-hidden">
+            <div className="flex flex-1 overflow-hidden min-h-0">
                 {/* Left: Toolbar */}
                 <EditorToolbar plugins={state.plugins} onAddOperation={state.handleAddOperation} />
 
                 {/* Center: Video Preview */}
-                <div ref={previewContainerRef}
-                    className="flex-1 flex items-center justify-center relative overflow-hidden"
-                    style={{ background: '#1a1917' }}>
+                <div className="flex-1 min-h-0 relative overflow-hidden" style={{ background: '#1a1917' }}>
                     {state.previewError && (
                         <div
                             role="alert"
@@ -105,45 +137,62 @@ export default function VideoEditorWindow() {
                         </div>
                     )}
                     {displaySrc ? (
-                        <div className="relative" style={{ display: 'inline-block' }}>
-                            <video
-                                ref={videoRef}
-                                src={displaySrc}
-                                controls
-                                className="max-w-full max-h-full"
-                                style={{ objectFit: 'contain', display: 'block' }}
-                            />
-                            <CanvasOverlay
-                                videoWidth={videoDims.w}
-                                videoHeight={videoDims.h}
-                                operation={state.selectedOperation}
-                                plugin={state.selectedPlugin}
-                                onUpdateParams={state.handleUpdateParams}
-                            />
+                        <div className="absolute inset-0 p-3">
+                            <div ref={previewViewportRef} className="relative w-full h-full">
+                                <video
+                                    ref={videoRef}
+                                    src={displaySrc}
+                                    controls
+                                    className="absolute inset-0 w-full h-full"
+                                    style={{ objectFit: 'contain', display: 'block' }}
+                                />
+                                <div
+                                    className="absolute"
+                                    style={{
+                                        left: videoFrame.x,
+                                        top: videoFrame.y,
+                                        width: videoFrame.w,
+                                        height: videoFrame.h,
+                                    }}>
+                                    <KonvaCanvasSurface
+                                        videoWidth={videoDims.w}
+                                        videoHeight={videoDims.h}
+                                        operation={state.selectedOperation}
+                                        plugin={state.selectedPlugin}
+                                        operations={state.operations}
+                                        onUpdateParams={state.handleUpdateParams}
+                                    />
+                                </div>
+                            </div>
                         </div>
                     ) : (
-                        <button onClick={state.handleUploadVideo}
-                            aria-label="Choose a source video file"
-                            className="flex flex-col items-center gap-3 px-8 py-6 rounded-2xl cursor-pointer transition-all"
-                            style={{ background: `${V.card}cc`, border: `2px dashed ${V.beige}` }}
-                            onMouseEnter={e => (e.currentTarget.style.borderColor = V.accent)}
-                            onMouseLeave={e => (e.currentTarget.style.borderColor = V.beige)}>
-                            <span className="text-4xl">🎥</span>
-                            <span className="text-sm font-bold" style={{ color: V.charcoal }}>Choose a video file</span>
-                            <span className="text-xs" style={{ color: V.textDim }}>MP4, MOV, AVI, MKV, WebM</span>
-                        </button>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <button onClick={state.handleUploadVideo}
+                                aria-label="Choose a source video file"
+                                className="flex flex-col items-center gap-3 px-8 py-6 rounded-2xl cursor-pointer transition-all"
+                                style={{ background: `${V.card}cc`, border: `2px dashed ${V.beige}` }}
+                                onMouseEnter={e => (e.currentTarget.style.borderColor = V.accent)}
+                                onMouseLeave={e => (e.currentTarget.style.borderColor = V.beige)}>
+                                <span className="text-4xl">🎥</span>
+                                <span className="text-sm font-bold" style={{ color: V.charcoal }}>Choose a video file</span>
+                                <span className="text-xs" style={{ color: V.textDim }}>MP4, MOV, AVI, MKV, WebM</span>
+                            </button>
+                        </div>
                     )}
                 </div>
 
                 {/* Right: Properties */}
-                <div className="shrink-0 overflow-y-auto" style={{ width: 280 }}>
-                    <EditorProperties
-                        operation={state.selectedOperation}
-                        plugin={state.selectedPlugin}
-                        onUpdateParams={state.handleUpdateParams}
-                        onToggleEnabled={state.handleToggleEnabled}
-                        onRemoveOperation={state.handleRemoveOperation}
-                    />
+                <div className="shrink-0 flex flex-col min-h-0" style={{ width: 320 }}>
+                    <div className="flex-1 min-h-0">
+                        <EditorProperties
+                            operation={state.selectedOperation}
+                            plugin={state.selectedPlugin}
+                            onUpdateParams={state.handleUpdateParams}
+                            onToggleEnabled={state.handleToggleEnabled}
+                            onRemoveOperation={state.handleRemoveOperation}
+                        />
+                    </div>
+                    <EditorTracePanel rows={state.traceLogs} isRendering={state.isRendering} previewStatus={state.previewStatus} />
                 </div>
             </div>
 
@@ -151,7 +200,7 @@ export default function VideoEditorWindow() {
             <EditorTimeline
                 operations={state.operations}
                 plugins={state.plugins}
-                duration={videoRef.current?.duration || 30}
+                duration={timelineDuration}
                 currentTime={state.currentTime}
                 selectedOpId={state.selectedOpId}
                 onSeek={(t) => {

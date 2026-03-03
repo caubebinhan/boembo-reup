@@ -62,10 +62,12 @@ const crop: VideoEditPlugin = {
     const mode = params.mode || 'aspect'
 
     if (mode === 'manual') {
-      const w = params.w || ctx.inputWidth
-      const h = params.h || ctx.inputHeight
-      const x = params.x || 0
-      const y = params.y || 0
+      // Support both raw pixel (x,y,w,h) and % region from canvas (cropRegion)
+      const region = params.cropRegion
+      const w = region ? Math.round((region.w / 100) * ctx.inputWidth) : (params.w || ctx.inputWidth)
+      const h = region ? Math.round((region.h / 100) * ctx.inputHeight) : (params.h || ctx.inputHeight)
+      const x = region ? Math.round((region.x / 100) * ctx.inputWidth) : (params.x || 0)
+      const y = region ? Math.round((region.y / 100) * ctx.inputHeight) : (params.y || 0)
       filters.push({ filter: 'crop', options: { w, h, x, y } })
     } else {
       // Aspect ratio mode
@@ -103,6 +105,8 @@ const crop: VideoEditPlugin = {
 
   validate(params) {
     if (params.mode === 'manual') {
+      const r = params.cropRegion
+      if (r && r.w && r.h) return null
       if (!params.w || !params.h) return 'Width and height are required for manual crop'
       if (params.w < 1 || params.h < 1) return 'Crop dimensions must be positive'
     }
