@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": 1772510826311,
+  "generatedAt": 1772525886982,
   "workflowId": "tiktok-repost",
   "workflowVersion": "1.0",
   "group": "campaign",
@@ -9,7 +9,7 @@
     {
       "id": "tiktok-repost-v1.campaign.all-videos-failed-terminal",
       "title": "Campaign Terminal: All Videos Failed",
-      "fingerprint": "case-TIKTOK-13",
+      "fingerprint": "case-TIKTOK-11",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -20,7 +20,7 @@
     {
       "id": "tiktok-repost-v1.campaign.completed-immutability",
       "title": "Completed Campaign is Immutable",
-      "fingerprint": "case-TIKTOK-14",
+      "fingerprint": "case-TIKTOK-12",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -31,7 +31,7 @@
     {
       "id": "tiktok-repost-v1.campaign.concurrent-save-race-smoke",
       "title": "Campaign Concurrent Save Race Smoke",
-      "fingerprint": "case-TIKTOK-15",
+      "fingerprint": "case-TIKTOK-13",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -42,7 +42,7 @@
     {
       "id": "tiktok-repost-v1.campaign.create-smoke",
       "title": "Campaign Create Smoke",
-      "fingerprint": "case-TIKTOK-16",
+      "fingerprint": "case-TIKTOK-14",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -53,7 +53,7 @@
     {
       "id": "tiktok-repost-v1.campaign.delete-while-running",
       "title": "Campaign Delete While Running",
-      "fingerprint": "case-TIKTOK-17",
+      "fingerprint": "case-TIKTOK-15",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -64,7 +64,7 @@
     {
       "id": "tiktok-repost-v1.campaign.detail-ui-open-snapshot",
       "title": "Campaign Detail UI Open Snapshot",
-      "fingerprint": "case-TIKTOK-18",
+      "fingerprint": "case-TIKTOK-16",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -75,7 +75,7 @@
     {
       "id": "tiktok-repost-v1.campaign.edit-params-while-running",
       "title": "Campaign Params Edited While Running",
-      "fingerprint": "case-TIKTOK-19",
+      "fingerprint": "case-TIKTOK-17",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -86,7 +86,7 @@
     {
       "id": "tiktok-repost-v1.campaign.multi-campaign-same-source",
       "title": "Multiple Campaigns Scanning Same Source Channel",
-      "fingerprint": "case-TIKTOK-20",
+      "fingerprint": "case-TIKTOK-18",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -97,7 +97,7 @@
     {
       "id": "tiktok-repost-v1.campaign.scheduler-missed-window-auto-reschedule",
       "title": "Campaign Scheduler: Missed Window Auto-Reschedule on Boot",
-      "fingerprint": "case-TIKTOK-21",
+      "fingerprint": "case-TIKTOK-19",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -108,7 +108,7 @@
     {
       "id": "tiktok-repost-v1.campaign.stats-counter-integrity",
       "title": "Campaign Stats Counter Integrity on Concurrent Updates",
-      "fingerprint": "case-TIKTOK-22",
+      "fingerprint": "case-TIKTOK-20",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -119,7 +119,7 @@
     {
       "id": "tiktok-repost-v1.campaign.trigger-pause-resume",
       "title": "Campaign Trigger / Pause / Resume",
-      "fingerprint": "case-TIKTOK-23",
+      "fingerprint": "case-TIKTOK-21",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -130,7 +130,7 @@
     {
       "id": "tiktok-repost-v1.campaign.video-status-transitions-valid",
       "title": "Campaign Video Status Transitions: Valid State Machine",
-      "fingerprint": "case-TIKTOK-24",
+      "fingerprint": "case-TIKTOK-22",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",
@@ -141,7 +141,7 @@
     {
       "id": "tiktok-repost-v1.loop.resume-last-processed-index",
       "title": "Loop Resume from last_processed_index",
-      "fingerprint": "case-TIKTOK-36",
+      "fingerprint": "case-TIKTOK-34",
       "errorCode": "DG-300",
       "category": "campaign",
       "group": "campaign",

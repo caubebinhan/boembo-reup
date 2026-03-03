@@ -1,30 +1,30 @@
 {
   "schemaVersion": 2,
-  "generatedAt": 1772510826311,
+  "generatedAt": 1772525886982,
   "workflowId": "tiktok-repost",
   "workflowVersion": "1.0",
   "group": "publish",
   "totalImplemented": 2,
   "cases": [
     {
-      "id": "dashboard-verify",
+      "id": "tiktok-repost-v1.publish.dashboard-verify",
       "title": "Dashboard Verify Debug",
-      "fingerprint": "case-TIKTOK-01",
+      "fingerprint": "case-TIKTOK-71",
       "category": "publish",
       "group": "publish",
       "level": "advanced",
       "risk": "real_publish",
-      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/publish/cases/dashboard-verify.json"
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/publish/cases/tiktok-repost-v1.publish.dashboard-verify.json"
     },
     {
-      "id": "tiktok-publish-e2e",
+      "id": "tiktok-repost-v1.publish.tiktok-publish-e2e",
       "title": "TikTok Publish E2E",
-      "fingerprint": "case-TIKTOK-02",
+      "fingerprint": "case-TIKTOK-82",
       "category": "publish",
       "group": "publish",
       "level": "advanced",
       "risk": "real_publish",
-      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/publish/cases/tiktok-publish-e2e.json"
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/publish/cases/tiktok-repost-v1.publish.tiktok-publish-e2e.json"
     }
   ]
 }

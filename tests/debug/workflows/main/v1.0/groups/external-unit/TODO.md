@@ -1,7 +1,7 @@
 # TODO Cases: main@1.0 / external-unit
 
 - Total TODO: **8**
-- Generated at: 2026-03-03T04:07:06.364Z
+- Generated at: 2026-03-03T08:18:07.081Z
 
 ## unit.core.pipeline-runner.sequence-resolve-vars
 - Title: Unit Mirror: pipeline runner resolves vars in sequence

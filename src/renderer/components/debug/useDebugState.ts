@@ -1,14 +1,13 @@
 /**
  * useDebugState — Centralized state management for the Debug/Troubleshooting panel.
  * ─────────────────────────────────────────────────────────────────────────────────
- * Extracted from the original monolithic TroubleshootingPanel component.
- * Uses useReducer for complex state transitions and exposes typed actions.
+ * Powers the DebugDashboard module in components/debug/*.
  */
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import {
   groupCasesBySuiteAndGroup,
   mapArtifactsForView,
-} from '../TroubleshootingPanel.helpers'
+} from './helpers'
 import { SentryAutoReporter } from '@core/troubleshooting/SentryAutoReporter'
 import type { SentryAutoResult, SentryAutoRunPayload } from '@core/troubleshooting/SentryAutoReporter'
 
@@ -429,7 +428,7 @@ export function useDebugState() {
       setSelectedRunId((prev) => prev || (Array.isArray(runList) && runList[0]?.id) || null)
       await loadWorkflowCandidates(workflowFilterRef.current !== 'all' ? workflowFilterRef.current : undefined)
     } catch (err: any) {
-      console.error('[TroubleshootingPanel] load failed', err)
+      console.error('[DebugDashboard] load failed', err)
       setMessageTone('error')
       setMessage(`Load failed: ${err?.message || String(err)}`)
     } finally {

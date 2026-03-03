@@ -1,7 +1,7 @@
 # TODO Cases: main@1.0 / external-e2e
 
 - Total TODO: **3**
-- Generated at: 2026-03-03T04:07:06.362Z
+- Generated at: 2026-03-03T08:18:07.077Z
 
 ## e2e.troubleshooting.artifact.screenshot-preview-visible
 - Title: E2E Mirror: screenshot artifact preview visible

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "generatedAt": 1772510826311,
+  "generatedAt": 1772525886982,
   "workflowId": "tiktok-repost",
   "workflowVersion": "1.0",
   "group": "publish",
   "case": {
-    "id": "tiktok-publish-e2e",
+    "id": "tiktok-repost-v1.publish.tiktok-publish-e2e",
     "title": "TikTok Publish E2E",
     "description": "Real publish test using latest account cookies + latest local video from DB.",
     "category": "publish",
@@ -17,7 +17,7 @@
     "workflowId": "tiktok-repost",
     "workflowVersion": "1.0",
     "suite": "debug",
-    "fingerprint": "case-TIKTOK-02",
+    "fingerprint": "case-TIKTOK-82",
     "status": "runnable"
   }
 }

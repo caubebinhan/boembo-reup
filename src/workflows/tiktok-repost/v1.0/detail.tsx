@@ -6,7 +6,7 @@
  *   LEFT:   Video Timeline (primary focus)
  *   RIGHT:  Pipeline Visualizer + Sources + Logs (tabs)
  */
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { PipelineVisualizer } from '@renderer/detail/shared/PipelineVisualizer'
 import type { WorkflowDetailProps } from '@renderer/detail/WorkflowDetailRegistry'
 import { getStatusUI, mapDbStatus } from '@nodes/tiktok-publisher/constants'
@@ -429,7 +429,6 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
     const config = campaign?.params || {}
     const [rightTab, setRightTab] = useState<'pipeline' | 'sources' | 'logs'>('pipeline')
     const [pipelineExpanded, setPipelineExpanded] = useState(false)
-    const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     const sources = config.sources || []
     const gapMinutes = config.intervalMinutes
@@ -571,13 +570,18 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
 
                     <div className="flex-1 overflow-hidden min-h-0">
                         {rightTab === 'pipeline' && (
-                            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 h-full overflow-auto animate-fade-in"
-                                onMouseEnter={() => {
-                                    if (leaveTimer.current) clearTimeout(leaveTimer.current)
-                                    setPipelineExpanded(true)
-                                }}
-                            >
-                                <PipelineVisualizer campaignId={campaignId} workflowId={workflowId} vertical />
+                            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm h-full overflow-auto animate-fade-in flex flex-col">
+                                <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 shrink-0">
+                                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Pipeline</span>
+                                    <button
+                                        onClick={() => setPipelineExpanded(true)}
+                                        className="text-slate-400 hover:text-purple-600 p-1 rounded-lg hover:bg-purple-50 transition cursor-pointer text-xs"
+                                        title="Open fullscreen"
+                                    >⛶</button>
+                                </div>
+                                <div className="flex-1 overflow-auto p-3">
+                                    <PipelineVisualizer campaignId={campaignId} workflowId={workflowId} vertical />
+                                </div>
                             </div>
                         )}
 
@@ -589,16 +593,14 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                                 aria-label="Pipeline expanded view"
                                 className="fixed inset-0 z-50 flex items-center justify-center"
                                 style={{ backgroundColor: 'rgba(15,23,42,0.45)', backdropFilter: 'blur(4px)' }}
-                                onMouseLeave={() => { leaveTimer.current = setTimeout(() => setPipelineExpanded(false), 120) }}
-                                onMouseEnter={() => { if (leaveTimer.current) clearTimeout(leaveTimer.current) }}
+                                onClick={(e) => { if (e.target === e.currentTarget) setPipelineExpanded(false) }}
                             >
                                 <div
                                     className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col"
                                     style={{
-                                        width: '80vw', height: '80vh',
+                                        width: '85vw', height: '85vh',
                                         animation: 'pipelineExpand 0.38s ease-out both',
                                     }}
-                                    onMouseEnter={() => { if (leaveTimer.current) clearTimeout(leaveTimer.current) }}
                                 >
                                     <style>{`
                                         @keyframes pipelineExpand {
@@ -607,14 +609,14 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                                         }
                                     `}</style>
                                     <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
-                                        <span className="text-sm font-bold text-slate-700">⚙️ Pipeline</span>
+                                        <span className="text-sm font-bold text-slate-700">⚙️ Pipeline — Fullscreen</span>
                                         <button
-                                            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+                                            className="text-slate-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition cursor-pointer text-sm"
                                             onClick={() => setPipelineExpanded(false)}
                                         >✕</button>
                                     </div>
                                     <div className="flex-1 overflow-auto p-4">
-                                        <PipelineVisualizer campaignId={campaignId} workflowId={workflowId} vertical />
+                                        <PipelineVisualizer campaignId={campaignId} workflowId={workflowId} />
                                     </div>
                                 </div>
                             </div>

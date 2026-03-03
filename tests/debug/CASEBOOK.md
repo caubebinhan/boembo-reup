@@ -6,7 +6,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 
 - Total implemented cases (JSON): **95**
 - Total TODO cases (Markdown): **46**
-- Generated at: 2026-03-03T04:07:06.500Z
+- Generated at: 2026-03-03T08:18:07.209Z
 
 ## Workflow Breakdown
 
@@ -154,7 +154,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish CAPTCHA Event Handling
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
-- Code: `case-TIKTOK-67`
+- Code: `case-TIKTOK-65`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -166,7 +166,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Caption Hashtag Injection from Template
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: basic
-- Code: `case-TIKTOK-68`
+- Code: `case-TIKTOK-66`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -178,7 +178,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Caption Exceeds TikTok 2200-Char Limit
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: intermediate
-- Code: `case-TIKTOK-69`
+- Code: `case-TIKTOK-67`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -190,7 +190,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Concurrent Account Limit (Same Video x N Accounts)
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
-- Code: `case-TIKTOK-70`
+- Code: `case-TIKTOK-68`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -202,7 +202,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish: Cookie Refresh Triggers Mid-Upload
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
-- Code: `case-TIKTOK-71`
+- Code: `case-TIKTOK-69`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -214,7 +214,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Session Expired / Cookie Invalid
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: intermediate
-- Code: `case-TIKTOK-72`
+- Code: `case-TIKTOK-70`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -226,7 +226,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Debug Artifact Integrity
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: intermediate
-- Code: `case-TIKTOK-73`
+- Code: `case-TIKTOK-72`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -238,7 +238,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Dedup: Same Source Video Across Multiple Accounts
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
-- Code: `case-TIKTOK-74`
+- Code: `case-TIKTOK-73`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -250,7 +250,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Fails - Insufficient Disk Space
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: intermediate
-- Code: `case-TIKTOK-75`
+- Code: `case-TIKTOK-74`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -262,7 +262,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Dedup Duplicate Detection
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: intermediate
-- Code: `case-TIKTOK-76`
+- Code: `case-TIKTOK-75`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -274,7 +274,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Network Timeout During Upload
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
-- Code: `case-TIKTOK-77`
+- Code: `case-TIKTOK-76`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -286,7 +286,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Overlapping Schedule Slots Coalesce
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
-- Code: `case-TIKTOK-78`
+- Code: `case-TIKTOK-77`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -298,7 +298,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish: Post-Publish View Count Initially 0
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: intermediate
-- Code: `case-TIKTOK-79`
+- Code: `case-TIKTOK-78`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -310,7 +310,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Privacy Mode Propagation (Public/Friends/Private)
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: intermediate
-- Code: `case-TIKTOK-80`
+- Code: `case-TIKTOK-79`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -322,7 +322,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Path (Public Immediate)
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
-- Code: `case-TIKTOK-81`
+- Code: `case-TIKTOK-80`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -334,7 +334,7 @@ Central backlog/index for troubleshooting/debug scenarios.
 - Title: Publish Selector Drift - Upload Button Not Found
 - Scope: tiktok-repost@1.0
 - Group: publish | Category: publish | Level: advanced
-- Code: `case-TIKTOK-82`
+- Code: `case-TIKTOK-81`
 - Source: `src/workflows/tiktok-repost/v1.0/troubleshooting/cases/publish.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.

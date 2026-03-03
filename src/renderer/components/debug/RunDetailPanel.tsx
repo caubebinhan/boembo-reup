@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import type { TroubleRun, TroubleCase, TroubleSentryFeedback } from './useDebugState'
 import { STATUS_CHIP, parseRunMessages } from './useDebugState'
-import { mapArtifactsForView } from '../TroubleshootingPanel.helpers'
+import { mapArtifactsForView } from './helpers'
 
 const LOG_LEVEL_COLOR: Record<string, string> = {
     info: 'text-slate-600',

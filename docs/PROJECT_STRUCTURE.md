@@ -30,7 +30,7 @@
 
 ---
 
-## `src/nodes/` — Node implementations (18 nodes)
+## `src/nodes/` — Node implementations (17 nodes + `_shared`)
 
 Mỗi node = 1 thư mục gồm 3 file:
 - `manifest.ts` — metadata (id, name, category, config_schema, retryPolicy)
@@ -122,7 +122,7 @@ workflows/
 | `App.tsx` | Root component: routing, modals, workflow picker |
 | `main.tsx` | ReactDOM entry |
 | `store/` | Redux Toolkit: campaigns, pipeline, nodeEvents, interaction slices |
-| `components/` | UI components: SplashScreen, TroubleshootingPanel, video-editor |
+| `components/` | UI components: SplashScreen, DebugDashboard (`components/debug/*`), video-editor |
 | `wizard/` | Wizard pages + `workflowWizardRegistry.ts` (auto-discover) |
 | `detail/shared/PipelineVisualizer.tsx` | Pipeline visualization + InspectPanel |
 | `hooks/` | Custom React hooks |

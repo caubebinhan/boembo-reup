@@ -1,0 +1,11 @@
+src/renderer/components/debug/CaseCatalog.tsx(5,40): error TS6196: 'STATUS_CHIP' is declared but never used.
+src/renderer/components/debug/CaseCatalog.tsx(32,65): error TS6133: 'selectedRunId' is declared but its value is never read.
+src/renderer/components/debug/DebugDashboard.tsx(97,29): error TS2322: Type 'TroubleCaseSuiteSection<TroubleCase>[]' is not assignable to type 'GroupedCases[]'.
+src/renderer/components/debug/RunDetailPanel.tsx(6,63): error TS6196: 'LEVEL_COLOR' is declared but never used.
+src/renderer/components/debug/RunDetailPanel.tsx(24,39): error TS6133: 'caseDef' is declared but its value is never read.
+src/renderer/components/debug/RunDetailPanel.tsx(113,102): error TS2339: Property 'type' does not exist on type 'TroubleArtifactViewItem'.
+src/renderer/components/debug/RunDetailPanel.tsx(114,77): error TS2339: Property 'label' does not exist on type 'TroubleArtifactViewItem'.
+src/renderer/components/debug/RunDetailPanel.tsx(114,88): error TS2339: Property 'path' does not exist on type 'TroubleArtifactViewItem'.
+src/renderer/components/debug/RunDetailPanel.tsx(115,36): error TS2339: Property 'path' does not exist on type 'TroubleArtifactViewItem'.
+src/renderer/components/debug/RunDetailPanel.tsx(117,89): error TS2339: Property 'path' does not exist on type 'TroubleArtifactViewItem'.
+src/renderer/components/debug/useDebugState.ts(7,48): error TS6133: 'useReducer' is declared but its value is never read.

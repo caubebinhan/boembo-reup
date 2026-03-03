@@ -65,13 +65,13 @@ async function runTiktokRepostV1Case(
   caseId: TroubleshootingCaseId,
   options?: TroubleshootingCaseRunOptions
 ): Promise<TroubleshootingRunResultLike | null> {
-  if (caseId === 'tiktok-studio-smoke') {
+  if (caseId === 'tiktok-repost-v1.smoke.tiktok-studio') {
     return withCaseEnvelope(caseId, await runPublishTest(runtimePublishOpts(options)), options?.runtime)
   }
-  if (caseId === 'dashboard-verify') {
+  if (caseId === 'tiktok-repost-v1.publish.dashboard-verify') {
     return withCaseEnvelope(caseId, await debugDashboardVerify(runtimePublishOpts(options)), options?.runtime)
   }
-  if (caseId === 'tiktok-publish-e2e') {
+  if (caseId === 'tiktok-repost-v1.publish.tiktok-publish-e2e') {
     return withCaseEnvelope(caseId, await runFullPublishE2ETest(runtimePublishOpts(options)), options?.runtime)
   }
 

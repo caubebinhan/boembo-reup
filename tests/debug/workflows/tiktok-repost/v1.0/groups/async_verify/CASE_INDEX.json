@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": 1772510826311,
+  "generatedAt": 1772525886982,
   "workflowId": "tiktok-repost",
   "workflowVersion": "1.0",
   "group": "async_verify",
@@ -9,7 +9,7 @@
     {
       "id": "tiktok-repost-v1.async-verify.concurrency-key-serialization",
       "title": "Async Verify Concurrency Key Serialization",
-      "fingerprint": "case-TIKTOK-03",
+      "fingerprint": "case-TIKTOK-01",
       "category": "async_verify",
       "group": "async_verify",
       "level": "advanced",
@@ -19,7 +19,7 @@
     {
       "id": "tiktok-repost-v1.async-verify.cross-worker-dedup-safety",
       "title": "Async Verify Cross-Worker Dedup Safety",
-      "fingerprint": "case-TIKTOK-04",
+      "fingerprint": "case-TIKTOK-02",
       "category": "async_verify",
       "group": "async_verify",
       "level": "advanced",
@@ -29,7 +29,7 @@
     {
       "id": "tiktok-repost-v1.async-verify.dedupe-active-task",
       "title": "Async Verify Dedupe Active Task",
-      "fingerprint": "case-TIKTOK-05",
+      "fingerprint": "case-TIKTOK-03",
       "category": "async_verify",
       "group": "async_verify",
       "level": "advanced",
@@ -39,7 +39,7 @@
     {
       "id": "tiktok-repost-v1.async-verify.lease-reclaim",
       "title": "Async Verify Lease Reclaim",
-      "fingerprint": "case-TIKTOK-06",
+      "fingerprint": "case-TIKTOK-04",
       "category": "async_verify",
       "group": "async_verify",
       "level": "advanced",
@@ -49,7 +49,7 @@
     {
       "id": "tiktok-repost-v1.async-verify.max-retries-exceeded-manual-fallback",
       "title": "Async Verify Max Retries Exceeded → Manual Fallback",
-      "fingerprint": "case-TIKTOK-07",
+      "fingerprint": "case-TIKTOK-05",
       "category": "async_verify",
       "group": "async_verify",
       "level": "advanced",
@@ -59,7 +59,7 @@
     {
       "id": "tiktok-repost-v1.async-verify.nonblocking-smoke",
       "title": "Async Verify Non-blocking Smoke",
-      "fingerprint": "case-TIKTOK-08",
+      "fingerprint": "case-TIKTOK-06",
       "category": "async_verify",
       "group": "async_verify",
       "level": "advanced",
@@ -69,7 +69,7 @@
     {
       "id": "tiktok-repost-v1.async-verify.queue-backpressure",
       "title": "Async Verify Queue Backpressure (Many Pending Tasks)",
-      "fingerprint": "case-TIKTOK-09",
+      "fingerprint": "case-TIKTOK-07",
       "category": "async_verify",
       "group": "async_verify",
       "level": "advanced",
@@ -79,7 +79,7 @@
     {
       "id": "tiktok-repost-v1.async-verify.result-persisted-correct-campaign",
       "title": "Async Verify Result Persisted to Correct Campaign",
-      "fingerprint": "case-TIKTOK-10",
+      "fingerprint": "case-TIKTOK-08",
       "category": "async_verify",
       "group": "async_verify",
       "level": "advanced",
@@ -89,7 +89,7 @@
     {
       "id": "tiktok-repost-v1.async-verify.timeout-manual-check",
       "title": "Async Verify Timed Out → Manual Check",
-      "fingerprint": "case-TIKTOK-11",
+      "fingerprint": "case-TIKTOK-09",
       "category": "async_verify",
       "group": "async_verify",
       "level": "advanced",
@@ -99,7 +99,7 @@
     {
       "id": "tiktok-repost-v1.async-verify.worker-crash-mid-verify",
       "title": "Async Verify Worker Crash Mid-Verification",
-      "fingerprint": "case-TIKTOK-12",
+      "fingerprint": "case-TIKTOK-10",
       "category": "async_verify",
       "group": "async_verify",
       "level": "advanced",

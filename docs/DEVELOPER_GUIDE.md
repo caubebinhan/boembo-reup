@@ -54,7 +54,7 @@ User mở app → Bấm "+ New Campaign" → Chọn Workflow (workflow khác nha
 ### 2. Chạy Campaign
 
 ```
-FlowEngine poll DB mỗi 30s → Tìm campaign "running"
+FlowEngine poll DB mỗi 5s → Tìm campaign "running"
 → Duyệt qua từng node trong flow_snapshot
 → Mỗi node tạo Job, execute(), trả kết quả cho node tiếp theo
 → Khi đến loop node: lặp lại các child nodes cho từng video
@@ -86,7 +86,7 @@ Một số thao tác chạy lâu (verify publish, retry) được schedule qua `
 
 ### Node
 Đơn vị xử lý nhỏ nhất. Mỗi node có `manifest` (metadata) và `execute()` (logic).
-- 18 nodes trong `src/nodes/`, mỗi node = 1 thư mục với `manifest.ts` + `backend.ts` + `index.ts`
+- Hiện tại có 17 nodes trong `src/nodes/` (không tính `_shared`), mỗi node = 1 thư mục với `manifest.ts` + `backend.ts` + `index.ts`
 - Auto-discovered qua `import.meta.glob` trong `src/nodes/index.ts`
 
 ### Flow (Workflow)
@@ -113,20 +113,46 @@ throw new CodedError('DG-042', 'Node implementation not registered')
 
 | Range | Nhóm |
 |-------|------|
-| DG-001..009 | Hạ tầng (FFmpeg, DB, mạng) |
-| DG-010..029 | FFmpeg (encode, probe) |
-| DG-030..049 | Database, FlowEngine |
-| DG-050..059 | IPC validation |
-| DG-100..139 | Publish & account |
-| DG-200..212 | Scanner & download |
+| DG-000 | Legacy / chưa phân loại |
+| DG-001..099 | Hạ tầng (FFmpeg, DB, mạng, IPC) |
+| DG-100..199 | Publish & verify |
+| DG-200..299 | Scanner & nguồn |
 | DG-300..399 | Campaign & wizard |
-| DG-400..404 | Caption & transform |
-| DG-500..503 | Tương thích & khôi phục |
-| DG-600..612 | Video editor |
-| DG-700..726 | Sentry & troubleshooting |
+| DG-400..499 | Caption & transform |
+| DG-500..599 | Tương thích & khôi phục |
+| DG-600..699 | Video editor |
+| DG-700..899 | Sentry & troubleshooting |
+| DG-900..999 | Debug / meta |
 
 Registry: `src/core/troubleshooting/error-codes.ts` — flat array, mỗi entry đầy đủ (tiếng Việt).
-Mỗi mã lỗi có handler riêng: `src/core/troubleshooting/handlers/DG-xxx.handler.ts`.
+Chỉ một số mã có handler tự động: `src/core/troubleshooting/handlers/DG-xxx.handler.ts` (không bắt buộc mọi code phải có handler).
+
+### Cách thêm Error Code mới
+
+1. Chọn code chưa dùng theo đúng range domain.
+2. Thêm metadata vào `src/core/troubleshooting/error-codes.ts` (title/cause/solutions/retryable/skippable).
+3. Nếu cần auto-diagnostic: thêm `troubleshootHandler: 'DG-xxx'`.
+4. Tạo file handler `src/core/troubleshooting/handlers/DG-xxx.handler.ts` và đăng ký trong `handler-registry.ts`.
+5. Throw lỗi bằng `new CodedError('DG-xxx', '...')` tại điểm phát sinh.
+
+### Cách bắt lỗi chuẩn
+
+1. Ở layer nghiệp vụ: `throw new CodedError('DG-xxx', 'message rõ nghĩa')`.
+2. Ở boundary (IPC/service): catch `unknown`, chuẩn hoá payload trả UI gồm `errorCode`, `message`, `context` khi có.
+3. Không `throw new Error()` cho lỗi nghiệp vụ có thể chẩn đoán.
+4. Message hiển thị user dùng tiếng Việt; technical detail để trong logs/footprint.
+
+### Cách thêm Troubleshooting Case
+
+1. Thêm case definition trong `src/workflows/<workflow>/v<version>/troubleshooting/cases/*.ts`.
+2. Nếu runnable: set `implemented: true` + bổ sung runner trong `troubleshooting/runners/*`.
+3. Nếu TODO/planned: set `implemented: false`, chỉ cần meta/checks.
+4. Chạy `npm run debug:casebook` để regenerate catalog.
+5. Kết quả catalog:
+   - Implemented ghi ra JSON (`tests/debug/workflows/.../cases/*.json`).
+   - TODO chỉ ghi ra Markdown (`TODO.md`), không load để chạy.
+
+Runtime artifacts/footprints của troubleshooting được ghi vào `.debug-runtime/` (không trộn vào catalog `tests/debug`).
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": 1772510826311,
+  "generatedAt": 1772525886982,
   "workflowId": "tiktok-repost",
   "workflowVersion": "1.0",
   "group": "compat",
@@ -18,7 +18,7 @@
     "workflowId": "tiktok-repost",
     "workflowVersion": "1.0",
     "suite": "debug",
-    "fingerprint": "case-TIKTOK-30",
+    "fingerprint": "case-TIKTOK-28",
     "status": "runnable"
   }
 }

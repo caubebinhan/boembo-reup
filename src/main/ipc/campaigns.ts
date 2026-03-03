@@ -168,7 +168,7 @@ export function setupCampaignIPC() {
           instance_id: n.instance_id,
           children: n.children,
           execution: (n as any).execution,
-          // visualizer meta  - sourced from each node's manifest.ts
+          // visualizer meta - sourced from each node's index.ts (manifest inline)
           icon: manifest?.icon,
           label: manifest?.label || manifest?.name,
           color: manifest?.color,

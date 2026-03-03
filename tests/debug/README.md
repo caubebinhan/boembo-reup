@@ -11,9 +11,12 @@ This folder is the single hub for debug/test investigation assets:
 - `workflows/<workflowId>/<version>/groups/<group>/cases/<case-id>.json`: one file per implemented case.
 - `workflows/<workflowId>/<version>/groups/<group>/TODO.md`: TODO/planned cases for that group.
 - `EXCEPTION_MATRIX.md`: proposed extra edge/exception scenarios to convert into cases.
-- `artifacts/`: archived artifact bundles per run (`artifact-manifest.json`, screenshots, HTML dumps, logs, JSON snapshots).
-- `footprints/`: diagnostic footprint JSON exported per run.
-- `runs/`: reserved for exported run snapshots.
+
+Runtime outputs are separated from this catalog:
+
+- `.debug-runtime/artifacts/`: archived artifact bundles per run (`artifact-manifest.json`, screenshots, HTML dumps, logs, JSON snapshots).
+- `.debug-runtime/footprints/`: diagnostic footprint JSON exported per run.
+- `.debug-runtime/runs/`: reserved for exported run snapshots.
 
 Cross-platform notes:
 

@@ -1,7 +1,6 @@
 /**
  * DebugDashboard — Thin compositor for the Debug/Troubleshooting tab.
  * ────────────────────────────────────────────────────────────────────
- * Replaces the monolithic TroubleshootingPanel with decomposed sub-components.
  * Uses useDebugState hook for all state management.
  */
 import { useDebugState } from './useDebugState'

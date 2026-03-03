@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": 1772510826311,
+  "generatedAt": 1772525886982,
   "workflowId": "tiktok-repost",
   "workflowVersion": "1.0",
   "group": "network",
@@ -9,7 +9,7 @@
     {
       "id": "tiktok-repost-v1.network.cache-etag-304-revalidation",
       "title": "Network: Cache ETag 304 Revalidation Path",
-      "fingerprint": "case-TIKTOK-37",
+      "fingerprint": "case-TIKTOK-35",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -19,7 +19,7 @@
     {
       "id": "tiktok-repost-v1.network.cancel-inflight-on-campaign-pause",
       "title": "Network: Cancel Inflight Requests on Campaign Pause",
-      "fingerprint": "case-TIKTOK-38",
+      "fingerprint": "case-TIKTOK-36",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -29,7 +29,7 @@
     {
       "id": "tiktok-repost-v1.network.circuit-breaker-half-open-recovery",
       "title": "Network: Circuit Breaker Half-Open Recovery",
-      "fingerprint": "case-TIKTOK-39",
+      "fingerprint": "case-TIKTOK-37",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -39,7 +39,7 @@
     {
       "id": "tiktok-repost-v1.network.circuit-breaker-open-on-repeated-failures",
       "title": "Network: Circuit Breaker Opens on Repeated Failures",
-      "fingerprint": "case-TIKTOK-40",
+      "fingerprint": "case-TIKTOK-38",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -49,7 +49,7 @@
     {
       "id": "tiktok-repost-v1.network.clock-skew-retry-after-clamp",
       "title": "Network: Retry-After Clock Skew Clamp",
-      "fingerprint": "case-TIKTOK-41",
+      "fingerprint": "case-TIKTOK-39",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -59,7 +59,7 @@
     {
       "id": "tiktok-repost-v1.network.connection-reset-mid-upload",
       "title": "Network: Connection Reset Mid Upload",
-      "fingerprint": "case-TIKTOK-42",
+      "fingerprint": "case-TIKTOK-40",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -69,7 +69,7 @@
     {
       "id": "tiktok-repost-v1.network.content-length-mismatch-corruption-guard",
       "title": "Network: Content-Length Mismatch Corruption Guard",
-      "fingerprint": "case-TIKTOK-43",
+      "fingerprint": "case-TIKTOK-41",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -79,7 +79,7 @@
     {
       "id": "tiktok-repost-v1.network.dns-resolution-failure-failover",
       "title": "Network: DNS Resolution Failure with Failover",
-      "fingerprint": "case-TIKTOK-44",
+      "fingerprint": "case-TIKTOK-42",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -89,7 +89,7 @@
     {
       "id": "tiktok-repost-v1.network.dual-stack-ipv6-to-ipv4-fallback",
       "title": "Network: Dual Stack IPv6 to IPv4 Fallback",
-      "fingerprint": "case-TIKTOK-45",
+      "fingerprint": "case-TIKTOK-43",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -99,7 +99,7 @@
     {
       "id": "tiktok-repost-v1.network.global-rate-limit-shared-account-throttle",
       "title": "Network: Global Rate Limit Shared Account Throttle",
-      "fingerprint": "case-TIKTOK-46",
+      "fingerprint": "case-TIKTOK-44",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -109,7 +109,7 @@
     {
       "id": "tiktok-repost-v1.network.http-429-retry-after",
       "title": "Network: HTTP 429 Retry-After Handling",
-      "fingerprint": "case-TIKTOK-47",
+      "fingerprint": "case-TIKTOK-45",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -119,7 +119,7 @@
     {
       "id": "tiktok-repost-v1.network.http-503-exponential-backoff",
       "title": "Network: HTTP 503 Exponential Backoff",
-      "fingerprint": "case-TIKTOK-48",
+      "fingerprint": "case-TIKTOK-46",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -129,7 +129,7 @@
     {
       "id": "tiktok-repost-v1.network.http2-goaway-retry-path",
       "title": "Network: HTTP/2 GOAWAY Retry Path",
-      "fingerprint": "case-TIKTOK-49",
+      "fingerprint": "case-TIKTOK-47",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -139,7 +139,7 @@
     {
       "id": "tiktok-repost-v1.network.idempotency-key-dedupe-on-retry",
       "title": "Network: Idempotency Key Dedupe on Retry",
-      "fingerprint": "case-TIKTOK-50",
+      "fingerprint": "case-TIKTOK-48",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -149,7 +149,7 @@
     {
       "id": "tiktok-repost-v1.network.jitter-seed-deterministic-retry-order",
       "title": "Network: Deterministic Retry Order via Seeded Jitter",
-      "fingerprint": "case-TIKTOK-51",
+      "fingerprint": "case-TIKTOK-49",
       "category": "network",
       "group": "network",
       "level": "intermediate",
@@ -159,7 +159,7 @@
     {
       "id": "tiktok-repost-v1.network.multipart-chunk-resume-after-failure",
       "title": "Network: Multipart Chunk Resume After Failure",
-      "fingerprint": "case-TIKTOK-52",
+      "fingerprint": "case-TIKTOK-50",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -169,7 +169,7 @@
     {
       "id": "tiktok-repost-v1.network.offline-preflight-block",
       "title": "Network: Offline Preflight Block",
-      "fingerprint": "case-TIKTOK-53",
+      "fingerprint": "case-TIKTOK-51",
       "category": "network",
       "group": "network",
       "level": "intermediate",
@@ -179,7 +179,7 @@
     {
       "id": "tiktok-repost-v1.network.packet-loss-progress-stall-detect",
       "title": "Network: Packet Loss Progress Stall Detection",
-      "fingerprint": "case-TIKTOK-54",
+      "fingerprint": "case-TIKTOK-52",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -189,7 +189,7 @@
     {
       "id": "tiktok-repost-v1.network.partial-json-response-guard",
       "title": "Network: Partial JSON Response Guard",
-      "fingerprint": "case-TIKTOK-55",
+      "fingerprint": "case-TIKTOK-53",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -199,7 +199,7 @@
     {
       "id": "tiktok-repost-v1.network.proxy-auth-required-407",
       "title": "Network: Proxy Auth Required (407)",
-      "fingerprint": "case-TIKTOK-56",
+      "fingerprint": "case-TIKTOK-54",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -209,7 +209,7 @@
     {
       "id": "tiktok-repost-v1.network.proxy-pool-failover-rotation",
       "title": "Network: Proxy Pool Failover Rotation",
-      "fingerprint": "case-TIKTOK-57",
+      "fingerprint": "case-TIKTOK-55",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -219,7 +219,7 @@
     {
       "id": "tiktok-repost-v1.network.redirect-loop-detection",
       "title": "Network: Redirect Loop Detection",
-      "fingerprint": "case-TIKTOK-58",
+      "fingerprint": "case-TIKTOK-56",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -229,7 +229,7 @@
     {
       "id": "tiktok-repost-v1.network.retry-budget-exhaustion-terminal",
       "title": "Network: Retry Budget Exhaustion Terminal Path",
-      "fingerprint": "case-TIKTOK-59",
+      "fingerprint": "case-TIKTOK-57",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -239,7 +239,7 @@
     {
       "id": "tiktok-repost-v1.network.schema-drift-missing-required-field",
       "title": "Network: Response Schema Drift Missing Required Field",
-      "fingerprint": "case-TIKTOK-60",
+      "fingerprint": "case-TIKTOK-58",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -249,7 +249,7 @@
     {
       "id": "tiktok-repost-v1.network.slow-start-first-byte-timeout",
       "title": "Network: Slow Start First-Byte Timeout",
-      "fingerprint": "case-TIKTOK-61",
+      "fingerprint": "case-TIKTOK-59",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -259,7 +259,7 @@
     {
       "id": "tiktok-repost-v1.network.tls-handshake-failure-classification",
       "title": "Network: TLS Handshake Failure Classification",
-      "fingerprint": "case-TIKTOK-62",
+      "fingerprint": "case-TIKTOK-60",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -269,7 +269,7 @@
     {
       "id": "tiktok-repost-v1.network.upload-connection-drain-timeout",
       "title": "Network: Upload Connection Drain Timeout",
-      "fingerprint": "case-TIKTOK-63",
+      "fingerprint": "case-TIKTOK-61",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -279,7 +279,7 @@
     {
       "id": "tiktok-repost-v1.network.upload-timeout-midstream",
       "title": "Network: Upload Timeout Midstream",
-      "fingerprint": "case-TIKTOK-64",
+      "fingerprint": "case-TIKTOK-62",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -289,7 +289,7 @@
     {
       "id": "tiktok-repost-v1.network.upload-timeout-retry-jitter",
       "title": "Network: Upload Timeout Retry with Jitter",
-      "fingerprint": "case-TIKTOK-65",
+      "fingerprint": "case-TIKTOK-63",
       "category": "network",
       "group": "network",
       "level": "advanced",
@@ -299,7 +299,7 @@
     {
       "id": "tiktok-repost-v1.network.websocket-disconnect-reconnect",
       "title": "Network: WebSocket Disconnect/Reconnect Sequence",
-      "fingerprint": "case-TIKTOK-66",
+      "fingerprint": "case-TIKTOK-64",
       "category": "network",
       "group": "network",
       "level": "advanced",

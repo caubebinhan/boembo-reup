@@ -26,7 +26,7 @@ export const smokeCases: TroubleshootingCaseDefinition[] = [
     }),
   }),
   ttCase({
-    id: 'tiktok-studio-smoke',
+    id: 'tiktok-repost-v1.smoke.tiktok-studio',
     title: 'TikTok Studio Smoke',
     description: 'Open TikTok Studio upload page, scan selectors/buttons, detect captcha, dump page artifacts.',
     risk: 'safe',
@@ -51,7 +51,7 @@ export const smokeCases: TroubleshootingCaseDefinition[] = [
     }),
   }),
   ttCase({
-    id: 'tiktok-publish-e2e',
+    id: 'tiktok-repost-v1.publish.tiktok-publish-e2e',
     title: 'TikTok Publish E2E',
     description: 'Real publish test using latest account cookies + latest local video from DB.',
     risk: 'real_publish',
@@ -77,7 +77,7 @@ export const smokeCases: TroubleshootingCaseDefinition[] = [
     }),
   }),
   ttCase({
-    id: 'dashboard-verify',
+    id: 'tiktok-repost-v1.publish.dashboard-verify',
     title: 'Dashboard Verify Debug',
     description: 'Full publish → dump flags → force recheck after 30s. Diagnoses verify/retry branch behavior.',
     risk: 'real_publish',

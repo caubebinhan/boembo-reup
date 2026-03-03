@@ -9,7 +9,7 @@ import { Toaster, toast } from 'sonner'
 import { CampaignList } from './components/CampaignList'
 import { CampaignDetail } from './components/CampaignDetail'
 import { SettingsPanel } from './components/SettingsPanel'
-import { TroubleshootingPanel } from './components/TroubleshootingPanel'
+import { DebugDashboard } from './components/debug/DebugDashboard'
 
 import { CampaignWizard } from './components/CampaignWizard'
 import { SplashScreen } from './components/SplashScreen'
@@ -237,7 +237,7 @@ function AppContent() {
             ) : homeTab === 'settings' ? (
               <SettingsPanel />
             ) : (
-              <TroubleshootingPanel />
+              <DebugDashboard />
             )}
           </div>
         </div>

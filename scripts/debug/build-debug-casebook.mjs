@@ -143,9 +143,7 @@ function parseCasesFromFile(filePath, defaults = {}) {
   let match
   while ((match = idPattern.exec(text))) {
     const rawId = match[1]
-    const id = defaults.idPrefix && !rawId.startsWith('tiktok-repost-v1.')
-      ? `${defaults.idPrefix}${rawId}`
-      : rawId
+    const id = rawId
     if (seen.has(id)) continue
 
     const block = extractObjectBlockFromId(text, match.index)
@@ -211,7 +209,6 @@ function parseWorkflowCases() {
       suite: 'debug',
       ...(fileBase === 'network'
         ? {
-          idPrefix: 'tiktok-repost-v1.network.',
           category: 'network',
           group: 'network',
           implemented: true,
@@ -610,9 +607,6 @@ function main() {
   const generatedAt = Date.now()
 
   fs.mkdirSync(DEBUG_DIR, { recursive: true })
-  fs.mkdirSync(path.join(DEBUG_DIR, 'artifacts'), { recursive: true })
-  fs.mkdirSync(path.join(DEBUG_DIR, 'footprints'), { recursive: true })
-  fs.mkdirSync(path.join(DEBUG_DIR, 'runs'), { recursive: true })
 
   const workflowRows = writeWorkflowIndexes(sortedEntries, generatedAt)
 

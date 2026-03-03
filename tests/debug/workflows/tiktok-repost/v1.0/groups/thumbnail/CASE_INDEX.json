@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": 1772510826311,
+  "generatedAt": 1772525886982,
   "workflowId": "tiktok-repost",
   "workflowVersion": "1.0",
   "group": "thumbnail",
@@ -9,7 +9,7 @@
     {
       "id": "tiktok-repost-v1.thumbnail.bulk-mixed-shapes-grid-snapshot",
       "title": "Thumbnail Mixed Shapes Grid Snapshot",
-      "fingerprint": "case-TIKTOK-118",
+      "fingerprint": "case-TIKTOK-119",
       "category": "thumbnail",
       "group": "thumbnail",
       "level": "advanced",
@@ -19,7 +19,7 @@
     {
       "id": "tiktok-repost-v1.thumbnail.detail-ui-codepath-contract",
       "title": "Thumbnail Detail UI Codepath Contract",
-      "fingerprint": "case-TIKTOK-119",
+      "fingerprint": "case-TIKTOK-120",
       "category": "thumbnail",
       "group": "thumbnail",
       "level": "basic",
@@ -29,7 +29,7 @@
     {
       "id": "tiktok-repost-v1.thumbnail.malformed-payload-fallback",
       "title": "Thumbnail Malformed Payload Fallback",
-      "fingerprint": "case-TIKTOK-120",
+      "fingerprint": "case-TIKTOK-121",
       "category": "thumbnail",
       "group": "thumbnail",
       "level": "intermediate",
@@ -39,7 +39,7 @@
     {
       "id": "tiktok-repost-v1.thumbnail.normalize-nested-object",
       "title": "Thumbnail Normalize (Nested Object)",
-      "fingerprint": "case-TIKTOK-121",
+      "fingerprint": "case-TIKTOK-122",
       "category": "thumbnail",
       "group": "thumbnail",
       "level": "intermediate",
@@ -49,7 +49,7 @@
     {
       "id": "tiktok-repost-v1.thumbnail.normalize-string",
       "title": "Thumbnail Normalize (String)",
-      "fingerprint": "case-TIKTOK-122",
+      "fingerprint": "case-TIKTOK-123",
       "category": "thumbnail",
       "group": "thumbnail",
       "level": "basic",
@@ -59,7 +59,7 @@
     {
       "id": "tiktok-repost-v1.thumbnail.ui-render-preview",
       "title": "Thumbnail UI Render Preview",
-      "fingerprint": "case-TIKTOK-123",
+      "fingerprint": "case-TIKTOK-124",
       "category": "thumbnail",
       "group": "thumbnail",
       "level": "intermediate",

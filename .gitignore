@@ -13,3 +13,4 @@ tests/debug/footprints/*
 !tests/debug/footprints/.gitkeep
 tests/debug/runs/*
 !tests/debug/runs/.gitkeep
+.debug-runtime/

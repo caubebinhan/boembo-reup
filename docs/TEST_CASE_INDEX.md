@@ -10,6 +10,7 @@ Debug casebook hub:
 - `tests/debug/workflows/<workflowId>/<version>/groups/<group>/cases/<case-id>.json` (implemented only)
 - `tests/debug/workflows/<workflowId>/<version>/groups/<group>/TODO.md` (planned/TODO only)
 - `tests/debug/EXCEPTION_MATRIX.md`
+- Runtime outputs (artifacts/footprints/runs) are written to `.debug-runtime/`.
 
 ## Unit Cases
 

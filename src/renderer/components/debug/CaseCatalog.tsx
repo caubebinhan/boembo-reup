@@ -2,7 +2,7 @@
  * CaseCatalog — Grouped case list with run/filter controls.
  * Shows cases organized by suite → group with status badges.
  */
-import type { TroubleCaseSuiteSection } from '../TroubleshootingPanel.helpers'
+import type { TroubleCaseSuiteSection } from './helpers'
 import type { TroubleCase, TroubleRun } from './useDebugState'
 import { STATUS_CHIP } from './useDebugState'
 

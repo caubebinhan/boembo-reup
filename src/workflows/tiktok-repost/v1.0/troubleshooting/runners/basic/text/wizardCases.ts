@@ -5,7 +5,8 @@ import { log, safeRead, lineOf, ok, fail, ROOT, FILE_PATHS } from '../../_base'
 const STEP2_SOURCES_FILE = FILE_PATHS.STEP2_SOURCES
 const WIZARD_FILE = FILE_PATHS.WIZARD
 const SCANNER_NODE_FILE = FILE_PATHS.SCANNER_NODE
-const TROUBLE_PANEL_FILE = FILE_PATHS.TROUBLE_PANEL
+const DEBUG_DASHBOARD_FILE = FILE_PATHS.DEBUG_DASHBOARD
+const DEBUG_STATE_FILE = FILE_PATHS.DEBUG_STATE
 export async function runWizardSourcesMainValidationCase(
   options?: TroubleshootingCaseRunOptions
 ): Promise<TroubleshootingRunResultLike> {
@@ -88,15 +89,16 @@ export async function runDebugPanelWorkflowFilterSmokeCase(
   options?: TroubleshootingCaseRunOptions
 ): Promise<TroubleshootingRunResultLike> {
   const logger = options?.logger
-  const panel = safeRead(TROUBLE_PANEL_FILE)
+  const dashboard = safeRead(DEBUG_DASHBOARD_FILE)
+  const state = safeRead(DEBUG_STATE_FILE)
 
   const checks = {
-    hasWorkflowState: panel.includes("const [workflowFilter, setWorkflowFilter] = useState<string>('all')"),
-    hasVersionState: panel.includes("const [versionFilter, setVersionFilter] = useState<string>('all')"),
-    hasWorkflowDropdown: panel.includes('<option value="all">All Workflows</option>'),
-    hasGroupedCases: panel.includes('groupCasesBySuiteAndGroup(filteredCases)'),
-    hasSuiteHeadingMarker: panel.includes('data-suite-heading={suiteSection.suite}'),
-    hasRunAllButton: panel.includes('Run All Runnable'),
+    hasWorkflowState: state.includes("const [workflowFilter, setWorkflowFilter] = useState<string>('all')"),
+    hasVersionState: state.includes("const [versionFilter, setVersionFilter] = useState<string>('all')"),
+    hasWorkflowDropdown: dashboard.includes('<option value="all">All Workflows</option>'),
+    hasGroupedCases: state.includes('groupCasesBySuiteAndGroup(filteredCases)'),
+    hasRunAllButton: dashboard.includes('Run All'),
+    hasRunAllSummary: state.includes('Troubleshooting completed: passed'),
   }
 
   Object.entries(checks).forEach(([key, okFlag]) => {
@@ -107,12 +109,13 @@ export async function runDebugPanelWorkflowFilterSmokeCase(
   const result = {
     checks,
     files: {
-      panel: TROUBLE_PANEL_FILE,
+      dashboard: DEBUG_DASHBOARD_FILE,
+      state: DEBUG_STATE_FILE,
     },
     lineHints: {
-      workflowFilterState: lineOf(panel, "const [workflowFilter, setWorkflowFilter] = useState<string>('all')"),
-      versionFilterState: lineOf(panel, "const [versionFilter, setVersionFilter] = useState<string>('all')"),
-      suiteHeadingMarker: lineOf(panel, 'data-suite-heading={suiteSection.suite}'),
+      workflowFilterState: lineOf(state, "const [workflowFilter, setWorkflowFilter] = useState<string>('all')"),
+      versionFilterState: lineOf(state, "const [versionFilter, setVersionFilter] = useState<string>('all')"),
+      workflowDropdown: lineOf(dashboard, '<option value="all">All Workflows</option>'),
     },
   }
 
@@ -120,7 +123,8 @@ export async function runDebugPanelWorkflowFilterSmokeCase(
     return fail('Debug panel workflow/version filter contract is incomplete', {
       errors: [`Missing UI contract markers: ${missing.join(', ')}`],
       artifacts: {
-        panelFile: TROUBLE_PANEL_FILE,
+        dashboardFile: DEBUG_DASHBOARD_FILE,
+        stateFile: DEBUG_STATE_FILE,
       },
       result,
     })
@@ -129,10 +133,11 @@ export async function runDebugPanelWorkflowFilterSmokeCase(
   return ok('Debug panel workflow/version filter contract looks healthy', {
     messages: [
       'Workflow + version filters exist with all/default option handling',
-      'Suite/group heading markers and grouped sections are present',
+      'Grouped cases + run-all summary are wired in debug state',
     ],
     artifacts: {
-      panelFile: TROUBLE_PANEL_FILE,
+      dashboardFile: DEBUG_DASHBOARD_FILE,
+      stateFile: DEBUG_STATE_FILE,
     },
     result,
   })

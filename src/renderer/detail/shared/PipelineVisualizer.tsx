@@ -243,7 +243,7 @@ function NodeCard({
                             style={{ backgroundColor: status === 'running' ? meta.color : status === 'error' ? '#ef4444' : '#10b981' }} />
                     )}
                     {node.editable_settings && (
-                        <span className="absolute top-0.5 right-1 text-slate-400 text-[9px] opacity-0 group-hover:opacity-100 transition cursor-pointer hover:text-purple-500" title="Configurable">⚙️</span>
+                        <span className="absolute -top-1.5 -right-1.5 text-slate-400 text-[10px] bg-white border border-slate-200 rounded-full w-5 h-5 flex items-center justify-center shadow-sm cursor-pointer hover:text-purple-500 hover:border-purple-300 transition z-20" title="Settings">⚙️</span>
                     )}
                 </div>
 
@@ -330,7 +330,7 @@ function LoopBlock({
     )
 }
 
-// ── SVG Edge Overlay (clean routing) ──────
+// ── SVG Edge Overlay (straight lines, centered on nodes) ──────
 function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: FlowEdge[], flowData: { nodes: FlowNodeInfo[] }, containerRef: any, campaignId: string }) {
     const [paths, setPaths] = useState<{ d: string, isRunning: boolean, isError: boolean, isDone: boolean, label?: string, labelX?: number, labelY?: number }[]>([])
     const stats = useSelector((s: RootState) => s.nodeEvents.byCampaign[campaignId]?.nodeStats)
@@ -348,7 +348,7 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
             outgoingBySource.get(edge.from)!.push(edge)
         }
 
-        const usedYSlots = new Map<string, number>()
+        const usedBackSlots = new Map<string, number>()
 
         for (const edge of edges) {
             const elFrom = document.getElementById(`vis-node-${edge.from}`) || document.getElementById(`vis-loop-out-${edge.from}`) || document.getElementById(`vis-loop-${edge.from}`)
@@ -359,6 +359,7 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
             const r1 = elFrom.getBoundingClientRect()
             const r2 = elTo.getBoundingClientRect()
 
+            // Connection points: right-center of source, left-center of target
             const x1 = r1.right - containerRect.left
             const y1 = r1.top + r1.height / 2 - containerRect.top
             let x2 = r2.left - containerRect.left
@@ -372,28 +373,57 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
             const isConditionSource = sourceNode?.node_id === 'core.condition'
 
             let d = ''
+            let labelX = 0
+            let labelY = 0
+            const R = 8 // corner radius for smooth-step
 
             if (isBackward) {
-                // Backward edge: smooth arc going below both nodes
-                x2 = r2.left + r2.width / 2 - containerRect.left
-                y2 = r2.bottom - containerRect.top
+                // Backward: smooth-step route below both nodes
+                const botX = r2.left + r2.width / 2 - containerRect.left
+                const botY = r2.bottom - containerRect.top
 
                 const slotKey = `back-${edge.from}`
-                const currentSlot = usedYSlots.get(slotKey) || 0
-                usedYSlots.set(slotKey, currentSlot + 1)
+                const slot = usedBackSlots.get(slotKey) || 0
+                usedBackSlots.set(slotKey, slot + 1)
 
-                const dropY = Math.max(r1.bottom, r2.bottom) - containerRect.top + 35 + (currentSlot * 20)
-                d = `M ${x1} ${y1} L ${x1 + 15} ${y1} Q ${x1 + 15} ${dropY}, ${(x1 + x2) / 2} ${dropY} Q ${x2} ${dropY}, ${x2} ${y2 + 8}`
+                const dropY = Math.max(r1.bottom, r2.bottom) - containerRect.top + 30 + (slot * 20)
+                // Smooth-step backward: right → rounded corner down → horizontal → rounded corner up
+                d = [
+                    `M ${x1} ${y1}`,
+                    `L ${x1 + 12 - R} ${y1}`,
+                    `Q ${x1 + 12} ${y1}, ${x1 + 12} ${y1 + R}`,
+                    `L ${x1 + 12} ${dropY - R}`,
+                    `Q ${x1 + 12} ${dropY}, ${x1 + 12 - R} ${dropY}`,
+                    `L ${botX + R} ${dropY}`,
+                    `Q ${botX} ${dropY}, ${botX} ${dropY - R}`,
+                    `L ${botX} ${botY + 6}`,
+                ].join(' ')
+                labelX = (x1 + 12 + botX) / 2
+                labelY = dropY - 10
             } else {
-                // Forward edge: simple smooth curve, minimal vertical offset for branches
-                const vertOffset = totalBranches > 1
-                    ? (branchIndex - (totalBranches - 1) / 2) * Math.min(24, 60 / totalBranches)
-                    : 0
+                // Forward: n8n smooth-step connector
+                const midX = x1 + (x2 - x1) / 2
 
-                const hDist = x2 - x1
-                const cx = Math.max(20, Math.min(hDist * 0.35, 60))
+                if (Math.abs(y1 - y2) < 3) {
+                    // Same Y: straight horizontal line
+                    d = `M ${x1} ${y1} L ${x2 - 6} ${y2}`
+                } else {
+                    // Different Y: smooth-step with rounded corners at midpoint
+                    const dy = y2 - y1
+                    const rY = Math.min(R, Math.abs(dy) / 2) // clamp radius if vertical gap is tiny
+                    const signY = dy > 0 ? 1 : -1
+                    d = [
+                        `M ${x1} ${y1}`,
+                        `L ${midX - rY} ${y1}`,
+                        `Q ${midX} ${y1}, ${midX} ${y1 + signY * rY}`,
+                        `L ${midX} ${y2 - signY * rY}`,
+                        `Q ${midX} ${y2}, ${midX + rY} ${y2}`,
+                        `L ${x2 - 6} ${y2}`,
+                    ].join(' ')
+                }
 
-                d = `M ${x1} ${y1} C ${x1 + cx} ${y1 + vertOffset}, ${x2 - cx} ${y2}, ${x2 - 6} ${y2}`
+                labelX = x1 + (x2 - x1) / 2
+                labelY = Math.min(y1, y2) - 10
             }
 
             // Status detection
@@ -403,10 +433,6 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
             const isError = tAct?.status === 'failed' || tStat.failed > 0
             const isRunning = tAct?.status === 'running' || tStat.running > 0
             const isDone = tStat.completed > 0 && !isRunning && !isError
-
-            // Label: midpoint
-            const labelX = x1 + (x2 - x1) / 2
-            const labelY = ((y1 + y2) / 2) - 8
 
             newPaths.push({
                 d, isRunning, isError, isDone,
@@ -441,13 +467,13 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
                 const labelW = p.label ? Math.max(40, Math.min(160, p.label.length * 6 + 18)) : 0
                 return (
                     <g key={i}>
-                        <path d={p.d} fill="none" stroke="#e2e8f0" strokeWidth="1.5" markerEnd="url(#arrow-idle)" />
-                        {p.isDone && <path d={p.d} fill="none" stroke="#10b981" strokeWidth="1.5" opacity="0.4" markerEnd="url(#arrow-done)" />}
+                        <path d={p.d} fill="none" stroke="#cbd5e1" strokeWidth="1.5" markerEnd="url(#arrow-idle)" strokeLinejoin="round" />
+                        {p.isDone && <path d={p.d} fill="none" stroke="#10b981" strokeWidth="1.5" opacity="0.5" markerEnd="url(#arrow-done)" strokeLinejoin="round" />}
                         {p.isRunning && (
-                            <path d={p.d} fill="none" stroke="#3b82f6" strokeWidth="2" markerEnd="url(#arrow-run)" strokeDasharray="6 4" className="animate-[dash_1s_linear_infinite]" />
+                            <path d={p.d} fill="none" stroke="#3b82f6" strokeWidth="2" markerEnd="url(#arrow-run)" strokeDasharray="6 4" strokeLinejoin="round" className="animate-[dash_1s_linear_infinite]" />
                         )}
                         {p.isRunning && (
-                            <circle r="2" fill="#60a5fa">
+                            <circle r="2.5" fill="#60a5fa">
                                 <animateMotion dur="2s" repeatCount="indefinite" path={p.d} />
                             </circle>
                         )}

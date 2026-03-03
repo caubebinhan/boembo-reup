@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": 1772510826311,
+  "generatedAt": 1772525886982,
   "workflowId": "tiktok-repost",
   "workflowVersion": "1.0",
   "group": "compat",
@@ -9,7 +9,7 @@
     {
       "id": "tiktok-repost-v1.compat.db-schema-forward-compat-new-field",
       "title": "Compat: DB Schema Forward Compat - Unknown Fields Survive Round-Trip",
-      "fingerprint": "case-TIKTOK-28",
+      "fingerprint": "case-TIKTOK-26",
       "errorCode": "DG-500",
       "category": "compat",
       "group": "compat",
@@ -20,7 +20,7 @@
     {
       "id": "tiktok-repost-v1.compat.flow-snapshot-version-lock",
       "title": "Compat: Flow Snapshot Version Lock",
-      "fingerprint": "case-TIKTOK-29",
+      "fingerprint": "case-TIKTOK-27",
       "errorCode": "DG-500",
       "category": "compat",
       "group": "compat",
@@ -31,7 +31,7 @@
     {
       "id": "tiktok-repost-v1.compat.multi-workflow-coexistence",
       "title": "Compat: tiktok-repost@1.0 and upload-local@1.0 Coexist",
-      "fingerprint": "case-TIKTOK-30",
+      "fingerprint": "case-TIKTOK-28",
       "errorCode": "DG-500",
       "category": "compat",
       "group": "compat",
@@ -42,7 +42,7 @@
     {
       "id": "tiktok-repost-v1.compat.old-campaign-rerun-after-code-update",
       "title": "Compat: Existing Campaign Re-runs After Workflow Code Update",
-      "fingerprint": "case-TIKTOK-31",
+      "fingerprint": "case-TIKTOK-29",
       "errorCode": "DG-500",
       "category": "compat",
       "group": "compat",
@@ -53,7 +53,7 @@
     {
       "id": "tiktok-repost-v1.compat.orphan-async-tasks-deleted-video",
       "title": "Compat: Orphan Async Tasks After Campaign Video Deleted",
-      "fingerprint": "case-TIKTOK-32",
+      "fingerprint": "case-TIKTOK-30",
       "errorCode": "DG-500",
       "category": "compat",
       "group": "compat",
@@ -64,7 +64,7 @@
     {
       "id": "tiktok-repost-v1.compat.params-defaults-upgrade",
       "title": "Compat: Params Defaults on Upgrade",
-      "fingerprint": "case-TIKTOK-33",
+      "fingerprint": "case-TIKTOK-31",
       "errorCode": "DG-500",
       "category": "compat",
       "group": "compat",
@@ -75,7 +75,7 @@
     {
       "id": "tiktok-repost-v1.compat.workflow-catalog-dynamic-discovery",
       "title": "Compat: Dynamic Workflow/Version Discovery in Debug Tab",
-      "fingerprint": "case-TIKTOK-34",
+      "fingerprint": "case-TIKTOK-32",
       "errorCode": "DG-500",
       "category": "compat",
       "group": "compat",

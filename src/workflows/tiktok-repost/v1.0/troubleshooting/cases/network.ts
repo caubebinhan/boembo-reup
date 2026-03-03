@@ -1,4 +1,4 @@
-import type { TroubleshootingCaseDefinition, TroubleshootingCaseMeta } from '@main/services/troubleshooting/types'
+﻿import type { TroubleshootingCaseDefinition, TroubleshootingCaseMeta } from '@main/services/troubleshooting/types'
 import { meta, ttCase } from './_shared'
 
 type NetworkCaseInput = {
@@ -41,10 +41,10 @@ function mergedChecks(checks?: TroubleshootingCaseMeta['checks']): Troubleshooti
 
 function networkCase(input: NetworkCaseInput): TroubleshootingCaseDefinition {
   return ttCase({
-    id: `tiktok-repost-v1.network.${input.id}`,
+    id: input.id,
     title: input.title,
     description: input.description,
-    fingerprint: `case-fp.tiktok-repost-v1.network.${input.id}`,
+    fingerprint: `case-fp.${input.id}`,
     risk: input.risk || 'safe',
     category: 'network',
     group: 'network',
@@ -65,7 +65,7 @@ function networkCase(input: NetworkCaseInput): TroubleshootingCaseDefinition {
 
 export const networkCases: TroubleshootingCaseDefinition[] = [
   networkCase({
-    id: 'upload-timeout-midstream',
+    id: 'tiktok-repost-v1.network.upload-timeout-midstream',
     title: 'Network: Upload Timeout Midstream',
     description: 'Upload stalls midstream; retry policy should recover or fail cleanly with stage-aware diagnostics.',
     risk: 'real_publish',
@@ -76,7 +76,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['upload', 'timeout', 'retry'],
   }),
   networkCase({
-    id: 'upload-timeout-retry-jitter',
+    id: 'tiktok-repost-v1.network.upload-timeout-retry-jitter',
     title: 'Network: Upload Timeout Retry with Jitter',
     description: 'Consecutive upload timeouts should apply jittered retry delays to avoid synchronized retry storms.',
     parameters: [
@@ -86,7 +86,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['upload', 'timeout', 'retry', 'jitter'],
   }),
   networkCase({
-    id: 'http-429-retry-after',
+    id: 'tiktok-repost-v1.network.http-429-retry-after',
     title: 'Network: HTTP 429 Retry-After Handling',
     description: 'Retry-After header drives pause duration for rate-limited requests and respects global throttle state.',
     parameters: [
@@ -96,7 +96,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['rate-limit', '429', 'retry-after', 'throttle'],
   }),
   networkCase({
-    id: 'http-503-exponential-backoff',
+    id: 'tiktok-repost-v1.network.http-503-exponential-backoff',
     title: 'Network: HTTP 503 Exponential Backoff',
     description: 'Transient 503 responses should trigger bounded exponential backoff with retry budget enforcement.',
     parameters: [
@@ -106,7 +106,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['5xx', 'retry', 'backoff', 'transient'],
   }),
   networkCase({
-    id: 'dns-resolution-failure-failover',
+    id: 'tiktok-repost-v1.network.dns-resolution-failure-failover',
     title: 'Network: DNS Resolution Failure with Failover',
     description: 'ENOTFOUND or EAI_AGAIN errors should classify as DNS issues and trigger endpoint failover where configured.',
     parameters: [
@@ -116,7 +116,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['dns', 'failover'],
   }),
   networkCase({
-    id: 'tls-handshake-failure-classification',
+    id: 'tiktok-repost-v1.network.tls-handshake-failure-classification',
     title: 'Network: TLS Handshake Failure Classification',
     description: 'TLS handshake errors should not be misclassified as selector/auth failures and must include cert context.',
     parameters: [
@@ -125,7 +125,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['tls', 'handshake', 'security'],
   }),
   networkCase({
-    id: 'connection-reset-mid-upload',
+    id: 'tiktok-repost-v1.network.connection-reset-mid-upload',
     title: 'Network: Connection Reset Mid Upload',
     description: 'ECONNRESET during upload should produce resumable retry path or deterministic terminal failure.',
     parameters: [
@@ -134,7 +134,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['connection-reset', 'upload', 'retry'],
   }),
   networkCase({
-    id: 'proxy-auth-required-407',
+    id: 'tiktok-repost-v1.network.proxy-auth-required-407',
     title: 'Network: Proxy Auth Required (407)',
     description: 'Proxy authentication failures should stop early with explicit proxy diagnostics and no hidden retries.',
     parameters: [
@@ -144,7 +144,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['proxy', '407', 'auth'],
   }),
   networkCase({
-    id: 'offline-preflight-block',
+    id: 'tiktok-repost-v1.network.offline-preflight-block',
     title: 'Network: Offline Preflight Block',
     description: 'Connectivity preflight should block publish/scan execution when host is offline and emit actionable message.',
     level: 'intermediate',
@@ -154,7 +154,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['offline', 'preflight'],
   }),
   networkCase({
-    id: 'packet-loss-progress-stall-detect',
+    id: 'tiktok-repost-v1.network.packet-loss-progress-stall-detect',
     title: 'Network: Packet Loss Progress Stall Detection',
     description: 'High packet loss can stall progress updates; watchdog should detect stall and trigger timeout policy.',
     parameters: [
@@ -164,7 +164,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['packet-loss', 'stall', 'watchdog'],
   }),
   networkCase({
-    id: 'partial-json-response-guard',
+    id: 'tiktok-repost-v1.network.partial-json-response-guard',
     title: 'Network: Partial JSON Response Guard',
     description: 'Truncated JSON payloads from network path should fail safely with parser diagnostics and raw payload preview.',
     parameters: [
@@ -176,7 +176,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     },
   }),
   networkCase({
-    id: 'schema-drift-missing-required-field',
+    id: 'tiktok-repost-v1.network.schema-drift-missing-required-field',
     title: 'Network: Response Schema Drift Missing Required Field',
     description: 'Missing required API fields should trigger schema drift classification and avoid downstream null crashes.',
     parameters: [
@@ -185,7 +185,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['schema', 'drift', 'validation'],
   }),
   networkCase({
-    id: 'websocket-disconnect-reconnect',
+    id: 'tiktok-repost-v1.network.websocket-disconnect-reconnect',
     title: 'Network: WebSocket Disconnect/Reconnect Sequence',
     description: 'Socket transport drops should reconnect within retry policy and preserve event ordering guarantees.',
     parameters: [
@@ -195,7 +195,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['websocket', 'reconnect', 'ordering'],
   }),
   networkCase({
-    id: 'clock-skew-retry-after-clamp',
+    id: 'tiktok-repost-v1.network.clock-skew-retry-after-clamp',
     title: 'Network: Retry-After Clock Skew Clamp',
     description: 'Negative retry delays due to clock skew should clamp to minimum safe delay instead of immediate spin-loop.',
     parameters: [
@@ -205,7 +205,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['clock-skew', 'retry-after', 'clamp'],
   }),
   networkCase({
-    id: 'idempotency-key-dedupe-on-retry',
+    id: 'tiktok-repost-v1.network.idempotency-key-dedupe-on-retry',
     title: 'Network: Idempotency Key Dedupe on Retry',
     description: 'Repeated requests after timeout should reuse idempotency key and avoid duplicate remote writes.',
     parameters: [
@@ -219,7 +219,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     },
   }),
   networkCase({
-    id: 'slow-start-first-byte-timeout',
+    id: 'tiktok-repost-v1.network.slow-start-first-byte-timeout',
     title: 'Network: Slow Start First-Byte Timeout',
     description: 'Server accepts connection but never returns first byte; first-byte timeout should abort with clear diagnostics.',
     parameters: [
@@ -228,7 +228,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['ttfb', 'timeout', 'slow-server'],
   }),
   networkCase({
-    id: 'multipart-chunk-resume-after-failure',
+    id: 'tiktok-repost-v1.network.multipart-chunk-resume-after-failure',
     title: 'Network: Multipart Chunk Resume After Failure',
     description: 'Chunk upload failures resume from last committed chunk and do not restart full payload when resumable mode is enabled.',
     parameters: [
@@ -238,7 +238,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['multipart', 'chunk', 'resume'],
   }),
   networkCase({
-    id: 'global-rate-limit-shared-account-throttle',
+    id: 'tiktok-repost-v1.network.global-rate-limit-shared-account-throttle',
     title: 'Network: Global Rate Limit Shared Account Throttle',
     description: 'Multiple flows using same account respect shared throttle budget to prevent burst violations.',
     parameters: [
@@ -248,7 +248,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['rate-limit', 'global', 'account', 'throttle'],
   }),
   networkCase({
-    id: 'proxy-pool-failover-rotation',
+    id: 'tiktok-repost-v1.network.proxy-pool-failover-rotation',
     title: 'Network: Proxy Pool Failover Rotation',
     description: 'Bad proxy endpoints rotate out after threshold and fallback to healthy endpoint without blocking campaign.',
     parameters: [
@@ -258,7 +258,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['proxy', 'failover', 'rotation'],
   }),
   networkCase({
-    id: 'circuit-breaker-open-on-repeated-failures',
+    id: 'tiktok-repost-v1.network.circuit-breaker-open-on-repeated-failures',
     title: 'Network: Circuit Breaker Opens on Repeated Failures',
     description: 'Repeated network failures should open circuit breaker and fast-fail new attempts during cooldown period.',
     parameters: [
@@ -268,7 +268,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['circuit-breaker', 'open-state', 'fast-fail'],
   }),
   networkCase({
-    id: 'circuit-breaker-half-open-recovery',
+    id: 'tiktok-repost-v1.network.circuit-breaker-half-open-recovery',
     title: 'Network: Circuit Breaker Half-Open Recovery',
     description: 'After cooldown, half-open probe succeeds and circuit returns to closed state without dropping queued items.',
     parameters: [
@@ -277,7 +277,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['circuit-breaker', 'half-open', 'recovery'],
   }),
   networkCase({
-    id: 'retry-budget-exhaustion-terminal',
+    id: 'tiktok-repost-v1.network.retry-budget-exhaustion-terminal',
     title: 'Network: Retry Budget Exhaustion Terminal Path',
     description: 'Retry budget exhaustion transitions to terminal failed state with complete retry timeline in logs.',
     parameters: [
@@ -287,7 +287,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['retry-budget', 'terminal', 'timeout'],
   }),
   networkCase({
-    id: 'cancel-inflight-on-campaign-pause',
+    id: 'tiktok-repost-v1.network.cancel-inflight-on-campaign-pause',
     title: 'Network: Cancel Inflight Requests on Campaign Pause',
     description: 'Pausing campaign should abort inflight network requests and prevent stale callbacks after pause.',
     parameters: [
@@ -296,7 +296,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['cancel', 'pause', 'abort'],
   }),
   networkCase({
-    id: 'dual-stack-ipv6-to-ipv4-fallback',
+    id: 'tiktok-repost-v1.network.dual-stack-ipv6-to-ipv4-fallback',
     title: 'Network: Dual Stack IPv6 to IPv4 Fallback',
     description: 'IPv6 connection failures should fallback to IPv4 path where supported and preserve request id.',
     parameters: [
@@ -306,7 +306,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['ipv6', 'ipv4', 'fallback'],
   }),
   networkCase({
-    id: 'redirect-loop-detection',
+    id: 'tiktok-repost-v1.network.redirect-loop-detection',
     title: 'Network: Redirect Loop Detection',
     description: 'Redirect loops should terminate after limit with explicit error classification and final URL chain artifact.',
     parameters: [
@@ -318,7 +318,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     },
   }),
   networkCase({
-    id: 'content-length-mismatch-corruption-guard',
+    id: 'tiktok-repost-v1.network.content-length-mismatch-corruption-guard',
     title: 'Network: Content-Length Mismatch Corruption Guard',
     description: 'Received bytes mismatch declared content-length should flag corruption and block downstream parsing/publish.',
     parameters: [
@@ -328,7 +328,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['content-length', 'corruption', 'guard'],
   }),
   networkCase({
-    id: 'cache-etag-304-revalidation',
+    id: 'tiktok-repost-v1.network.cache-etag-304-revalidation',
     title: 'Network: Cache ETag 304 Revalidation Path',
     description: '304 responses should reuse cached payload deterministically and maintain checksum consistency.',
     parameters: [
@@ -338,7 +338,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['cache', 'etag', '304'],
   }),
   networkCase({
-    id: 'http2-goaway-retry-path',
+    id: 'tiktok-repost-v1.network.http2-goaway-retry-path',
     title: 'Network: HTTP/2 GOAWAY Retry Path',
     description: 'GOAWAY frames should trigger safe connection recycle and idempotent retry on a new stream.',
     parameters: [
@@ -348,7 +348,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['http2', 'goaway', 'retry'],
   }),
   networkCase({
-    id: 'upload-connection-drain-timeout',
+    id: 'tiktok-repost-v1.network.upload-connection-drain-timeout',
     title: 'Network: Upload Connection Drain Timeout',
     description: 'Connection drains too slowly after body upload; timeout path should not mark success before server ack.',
     parameters: [
@@ -357,7 +357,7 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['upload', 'drain', 'timeout'],
   }),
   networkCase({
-    id: 'jitter-seed-deterministic-retry-order',
+    id: 'tiktok-repost-v1.network.jitter-seed-deterministic-retry-order',
     title: 'Network: Deterministic Retry Order via Seeded Jitter',
     description: 'Given same random seed, retry delay sequence remains deterministic to support reproducible debugging.',
     level: 'intermediate',
@@ -368,3 +368,4 @@ export const networkCases: TroubleshootingCaseDefinition[] = [
     tags: ['jitter', 'seed', 'deterministic'],
   }),
 ]
+
