@@ -1,5 +1,6 @@
 import { jobRepo } from '../db/repositories/JobRepo'
 import { campaignRepo } from '../db/repositories/CampaignRepo'
+import { publishHistoryRepo } from '../db/repositories/PublishHistoryRepo'
 import { PipelineEventBus } from '@core/engine/PipelineEventBus'
 
 /**
@@ -31,6 +32,17 @@ export class CrashRecoveryService {
         }
       } else {
         console.log('[CrashRecovery] No stuck running jobs found.')
+      }
+
+      // Step 1b: Clean up stale 'uploading' claims in publish_history
+      // These are crash artifacts that would cause false duplicate detection.
+      try {
+        const cleaned = publishHistoryRepo.cleanupStaleUploadingClaims(30 * 60 * 1000)
+        if (cleaned > 0) {
+          console.log(`[CrashRecovery] Cleaned ${cleaned} stale uploading claim(s) from publish_history`)
+        }
+      } catch (err) {
+        console.error('[CrashRecovery] Failed to clean stale uploading claims:', err)
       }
 
       // Step 2: Per-workflow recovery for active campaigns

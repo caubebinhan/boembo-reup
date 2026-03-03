@@ -64,6 +64,8 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
   }
 
   // ── Combined dedup lookup (OR match on source_platform_id OR file_fingerprint) ──
+  // NOTE: 'uploading' records older than 30 min are ignored — they are stale
+  // crash artifacts, not active uploads (see CrashRecovery).
   findExactDuplicate(
     accountId: string,
     sourcePlatformId?: string,
@@ -81,16 +83,22 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
     }
     if (clauses.length === 0) return null
 
+    const staleThresholdMs = 30 * 60 * 1000 // 30 minutes
+    const cutoff = Date.now() - staleThresholdMs
+
     const row = db
       .prepare(
         `SELECT data_json, account_id, source_platform_id, file_fingerprint, status
          FROM publish_history
          WHERE account_id = ?
-           AND status IN ('uploading', 'under_review', 'published')
+           AND (
+             (status IN ('under_review', 'published'))
+             OR (status = 'uploading' AND updated_at > ?)
+           )
            AND (${clauses.join(' OR ')})
          ORDER BY updated_at DESC LIMIT 1`
       )
-      .get(accountId, ...params) as Record<string, any> | undefined
+      .get(accountId, cutoff, ...params) as Record<string, any> | undefined
     if (!row) return null
     return this.mergeIndexedFields(JSON.parse(row.data_json), row)
   }
@@ -167,6 +175,19 @@ export class PublishHistoryRepository extends BaseRepo<PublishHistoryDocument> {
     db.prepare(
       `DELETE FROM publish_history WHERE id = ? AND status = 'uploading'`
     ).run(id)
+  }
+
+  /**
+   * Clean up stale 'uploading' claims older than the given threshold.
+   * Called during crash recovery to prevent false duplicate detection.
+   * Returns the number of rows deleted.
+   */
+  cleanupStaleUploadingClaims(maxAgeMs = 30 * 60 * 1000): number {
+    const cutoff = Date.now() - maxAgeMs
+    const result = db.prepare(
+      `DELETE FROM publish_history WHERE status = 'uploading' AND updated_at < ?`
+    ).run(cutoff)
+    return result.changes
   }
 }
 
