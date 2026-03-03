@@ -1,4 +1,5 @@
 import { chromium, Browser, BrowserContext, Page } from 'playwright-core'
+import { spawnSync } from 'node:child_process'
 import { AppSettingsService, AutomationBrowserSettings } from './AppSettingsService'
 
 type ResolvedBrowserRuntime = {
@@ -56,6 +57,44 @@ class BrowserService {
     return args
   }
 
+  private shouldAttemptEdgeUnlock(runtime: ResolvedBrowserRuntime, message: string): boolean {
+    if (process.platform !== 'win32') return false
+    const dir = (runtime.userDataDir || '').toLowerCase()
+    if (!dir.includes('\\microsoft\\edge\\user data')) return false
+    const lower = (message || '').toLowerCase()
+    return (
+      lower.includes('launchpersistentcontext') ||
+      lower.includes('target page, context or browser has been closed') ||
+      lower.includes('singletonlock') ||
+      lower.includes('in use')
+    )
+  }
+
+  private terminateEdgeProcesses(): boolean {
+    if (process.platform !== 'win32') return false
+    try {
+      const result = spawnSync('taskkill', ['/IM', 'msedge.exe', '/F', '/T'], {
+        windowsHide: true,
+        encoding: 'utf8',
+      })
+      const status = result.status ?? 1
+      const combined = `${result.stdout || ''}\n${result.stderr || ''}`.toLowerCase()
+      if (status === 0) return true
+      // "No instances found" is also acceptable: nothing to kill.
+      if (
+        combined.includes('no running instance') ||
+        combined.includes('not found') ||
+        combined.includes('không tìm thấy') ||
+        combined.includes('cannot find')
+      ) {
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
   async init(headless: boolean = false) {
     const runtime = this.getRuntime()
     const runtimeKey = this.makeRuntimeKey(runtime, headless)
@@ -79,7 +118,34 @@ class BrowserService {
         })
         this.browser = this.context.browser()
       } catch (err: any) {
-        const msg = err?.message || String(err)
+        let launchErr = err
+        const firstMsg = err?.message || String(err)
+
+        // Profile lock recovery: close hidden Edge background processes, then retry once.
+        if (this.shouldAttemptEdgeUnlock(runtime, firstMsg)) {
+          const terminated = this.terminateEdgeProcesses()
+          if (terminated) {
+            await new Promise(resolve => setTimeout(resolve, 1200))
+            try {
+              this.context = await chromium.launchPersistentContext(runtime.userDataDir, {
+                headless,
+                executablePath: runtime.executablePath,
+                args: launchArgs,
+                ...commonContextOptions,
+              })
+              this.browser = this.context.browser()
+            } catch (retryErr: any) {
+              launchErr = retryErr
+            }
+          }
+        }
+
+        if (this.context) {
+          this.lastRuntimeKey = runtimeKey
+          return
+        }
+
+        const msg = launchErr?.message || String(launchErr)
         // Clean up the verbose Playwright log wrapper which often includes mojibake from taskkill
         const cleanMsg = msg.split('\nBrowser logs:')[0] || msg
         console.warn(

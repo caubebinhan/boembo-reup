@@ -73,7 +73,7 @@ export const V = {
   card: '#ffffff',
   charcoal: '#2c2a29',
   textMuted: '#5c5551',
-  textDim: '#8a827c',
+  textDim: '#6f6660',
   accent: '#7c3aed',
   accentSoft: '#f3effe',
   pastelPink: '#f4dce0',

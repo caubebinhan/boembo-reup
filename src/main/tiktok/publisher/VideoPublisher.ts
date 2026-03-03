@@ -20,11 +20,12 @@ export class VideoPublisher {
     async publish(
         filePath: string,
         caption: string,
-        cookies: any[],
+        cookies: any[] | null | undefined,
         onProgress?: (msg: string) => void,
         options?: PublishOptions
     ): Promise<PublishResult> {
         const useUniqueTag = options?.advancedVerification || false
+        const useProfileSession = !!options?.useProfileSession
         const uniqueTag = '#' + Math.random().toString(36).substring(2, 8)
         const finalCaption = useUniqueTag ? `${caption} ${uniqueTag}` : caption
 
@@ -57,12 +58,18 @@ export class VideoPublisher {
                 captionLength: finalCaption.length,
                 username: options?.username,
                 useUniqueTag,
+                useProfileSession,
             })
             videoMetadata = await DebugHelper.dumpFileMetadata(filePath, 'publish_video_metadata')
-            cookieInputSnapshot = await DebugHelper.dumpCookieInput(cookies, 'publish_cookie_input', includeCookieValues)
+            cookieInputSnapshot = await DebugHelper.dumpCookieInput(cookies || [], 'publish_cookie_input', includeCookieValues)
+            if (useProfileSession) {
+                currentStage = 'profile_session'
+                if (onProgress) onProgress('Using browser profile session...')
+                recorder.record('cookie_injection_skipped', { reason: 'profile_session_mode' })
+            }
 
             // ── Inject cookies ────────────────────────────
-            if (!cookies?.length) {
+            if (!useProfileSession && !cookies?.length) {
                 const result = this.fail('No cookies provided. Please re-login the publish account.', 'session_expired')
                 const finalized = recorder ? await recorder.finalize('no_cookies').catch(() => null) : null
                 result.debugArtifacts = {
@@ -73,15 +80,18 @@ export class VideoPublisher {
                 }
                 return result
             }
-            try {
-                currentStage = 'cookie_injection'
-                await page.context().addCookies(sanitizeCookies(cookies))
-                console.log(`[VideoPublisher] Injected ${cookies.length} cookies`)
-                cookieSnapshot = await DebugHelper.dumpCookieSnapshot(page, 'publish_context_cookies', includeCookieValues)
-                recorder.record('cookies_injected', { count: cookies.length })
-            } catch (e) {
-                console.error('[VideoPublisher] Cookie injection failed:', e)
-                recorder.record('cookie_injection_failed', { error: (e as any)?.message || String(e) })
+            if (!useProfileSession) {
+                try {
+                    const publishCookies = cookies || []
+                    currentStage = 'cookie_injection'
+                    await page.context().addCookies(sanitizeCookies(publishCookies))
+                    console.log(`[VideoPublisher] Injected ${publishCookies.length} cookies`)
+                    cookieSnapshot = await DebugHelper.dumpCookieSnapshot(page, 'publish_context_cookies', includeCookieValues)
+                    recorder.record('cookies_injected', { count: publishCookies.length })
+                } catch (e) {
+                    console.error('[VideoPublisher] Cookie injection failed:', e)
+                    recorder.record('cookie_injection_failed', { error: (e as any)?.message || String(e) })
+                }
             }
 
             // ── Navigate to TikTok Studio ─────────────────
@@ -238,7 +248,7 @@ export class VideoPublisher {
     }
 
     async recheckPublishedStatus(
-        cookies: any[],
+        cookies: any[] | null | undefined,
         onProgress?: (msg: string) => void,
         options?: PublishOptions & {
             useUniqueTag?: boolean
@@ -251,11 +261,15 @@ export class VideoPublisher {
     ): Promise<PublishResult> {
         let page: Page | null = null
         try {
+            const useProfileSession = !!options?.useProfileSession
             await browserService.init(false)
             page = await browserService.newPage()
             /** @throws DG-118 — Failed to create page for publish recheck */
             if (!page) throw new CodedError('DG-118', 'Failed to create page for publish recheck')
-            await page.context().addCookies(sanitizeCookies(cookies || []))
+            if (!useProfileSession) {
+                if (!cookies?.length) return this.fail('No cookies provided. Please re-login the publish account.', 'session_expired')
+                await page.context().addCookies(sanitizeCookies(cookies || []))
+            }
             const verifier = new PublishVerifier(page)
             return await verifier.recheckDashboardStatus({
                 useUniqueTag: !!options?.useUniqueTag,

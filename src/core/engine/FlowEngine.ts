@@ -7,6 +7,7 @@ import { ExecutionLogger } from './ExecutionLogger'
 import { FlowDefinition, FlowNodeDefinition } from '../flow/ExecutionContracts'
 import type { JobDocument } from '@main/db/models/Job'
 import { asyncTaskScheduler } from '@main/services/AsyncTaskScheduler'
+import { AppSettingsService } from '@main/services/AppSettingsService'
 import { isNetworkError, isDiskError } from '../nodes/NodeHelpers'
 import { getFreeDiskSpaceMB } from '@main/utils/diskSpace'
 import { CodedError } from '@core/errors/CodedError'
@@ -241,7 +242,6 @@ export class FlowEngine {
 
     // 1. Storage check (cross-platform)
     try {
-      const { AppSettingsService } = require('@main/services/AppSettingsService')
       const mediaPath = AppSettingsService.getMediaStoragePath()
       const freeMB = await getFreeDiskSpaceMB(mediaPath)
       if (freeMB >= 0 && freeMB < 100) {

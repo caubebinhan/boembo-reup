@@ -103,6 +103,12 @@ export class PostSubmitter {
             try {
                 const el = this.page.locator(sel).first()
                 if (await el.isVisible({ timeout: 2000 })) {
+                    const dialogText = ((await this.page.locator('div[role="dialog"]').first().innerText().catch(() => '')) || '').trim()
+                    if (this.isSoftRestrictionWarning(dialogText)) {
+                        console.log('[PostSubmitter] Soft restriction warning detected; continuing publish flow')
+                        await this.dismissSoftRestrictionDialog()
+                        return
+                    }
                     await DebugHelper.dumpPageState(this.page, 'violation_detected')
                     /** @throws DG-114 — TikTok flagged content violation */
                     throw new CodedError('DG-114', 'VIOLATION_DETECTED: TikTok detected content violation during upload')
@@ -111,6 +117,39 @@ export class PostSubmitter {
                 if (e.message.includes('_DETECTED')) throw e
             }
         }
+    }
+
+    private isSoftRestrictionWarning(text: string): boolean {
+        const lower = String(text || '').toLowerCase()
+        if (!lower) return false
+        const softKeywords = [
+            'you can still post',
+            'may improve visibility',
+            'still post',
+        ]
+        return softKeywords.some(keyword => lower.includes(keyword))
+    }
+
+    private async dismissSoftRestrictionDialog(): Promise<void> {
+        try {
+            await this.page.keyboard.press('Escape').catch(() => {})
+            await this.page.waitForTimeout(250)
+            const closeSelectors = [
+                'div[role="dialog"] .common-modal-close',
+                'div[role="dialog"] [data-e2e="modal-close"]',
+                'div[role="dialog"] button[aria-label="Close"]',
+                'div[role="dialog"] button[aria-label="close"]',
+                'div[role="dialog"] button:has(svg)',
+            ]
+            for (const sel of closeSelectors) {
+                const btn = this.page.locator(sel).first()
+                if (await btn.isVisible().catch(() => false)) {
+                    await btn.click({ timeout: 1200 }).catch(() => {})
+                    await this.page.waitForTimeout(250)
+                    return
+                }
+            }
+        } catch {}
     }
 
     // ── Confirm dialog ───────────────────────────────────

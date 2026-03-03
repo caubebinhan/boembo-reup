@@ -42,6 +42,20 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
         onSeek(Math.max(0, Math.min(effectiveDuration, (e.clientX - rect.left + scrollLeft) / pxPerSecond)))
     }, [effectiveDuration, pxPerSecond, onSeek])
 
+    const handleRulerKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+        e.preventDefault()
+        const step = e.shiftKey ? 5 : 1
+        const nextTime = currentTime + (e.key === 'ArrowRight' ? step : -step)
+        onSeek(Math.max(0, Math.min(effectiveDuration, nextTime)))
+    }, [currentTime, effectiveDuration, onSeek])
+
+    const handleOperationKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>, opId: string) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return
+        e.preventDefault()
+        onSelectOperation(opId)
+    }, [onSelectOperation])
+
     const playheadX = currentTime * pxPerSecond
     const sortedOps = useMemo(() => [...operations].sort((a, b) => a.order - b.order), [operations])
     const LABEL_W = 96, TRACK_H = 44
@@ -65,11 +79,12 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
                         <div className="absolute h-1 rounded-full w-full" style={{ background: V.beige }} />
                         <div className="absolute h-1 rounded-full" style={{ width: `${((zoom - 0.2) / 2.8) * 100}%`, background: V.accent }} />
                         <input type="range" min={0.2} max={3} step={0.1} value={zoom}
+                            aria-label="Timeline zoom"
                             onChange={e => setZoom(Number(e.target.value))}
                             className="absolute w-full opacity-0 cursor-pointer h-full" />
                     </div>
                     <span className="text-xs" style={{ color: V.textDim }}>➕</span>
-                    <span className="text-[9px] font-mono w-8 text-right" style={{ color: V.accent }}>{Math.round(zoom * 100)}%</span>
+                    <span className="text-[10px] font-mono w-8 text-right" style={{ color: V.accent }}>{Math.round(zoom * 100)}%</span>
                 </div>
             </div>
 
@@ -77,11 +92,18 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
                 <div style={{ width: totalWidth + LABEL_W + 20, minHeight: '100%' }} className="relative">
                     {/* Ruler */}
                     <div ref={rulerRef} className="sticky top-0 z-10 cursor-pointer"
+                        role="slider"
+                        tabIndex={0}
+                        aria-label="Timeline playhead position"
+                        aria-valuemin={0}
+                        aria-valuemax={Math.round(effectiveDuration)}
+                        aria-valuenow={Math.round(currentTime)}
                         style={{ height: 24, background: V.cream, borderBottom: `1px solid ${V.beige}` }}
-                        onClick={handleRulerClick}>
+                        onClick={handleRulerClick}
+                        onKeyDown={handleRulerKeyDown}>
                         {markers.map(t => (
                             <div key={t} className="absolute top-0 h-full flex flex-col items-start" style={{ left: t * pxPerSecond + LABEL_W }}>
-                                <span className="text-[8px] font-mono mt-1 ml-1" style={{ color: V.textDim }}>{fmt(t)}</span>
+                                <span className="text-[10px] font-mono mt-1 ml-1" style={{ color: V.textDim }}>{fmt(t)}</span>
                                 <div className="w-px mt-auto" style={{ height: 5, background: V.beige }} />
                             </div>
                         ))}
@@ -95,17 +117,21 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
                                 const isSelected = op.id === selectedOpId
                                 return (
                                     <div key={op.id} className="flex items-center gap-1.5 px-2.5 cursor-pointer transition-all"
+                                        role="button"
+                                        tabIndex={0}
+                                        aria-label={`Select ${plugin?.name || op.pluginId} track`}
                                         style={{
                                             height: TRACK_H, borderBottom: `1px solid ${V.beige}`,
                                             background: isSelected ? V.accentSoft : 'transparent',
                                             borderLeft: `2px solid ${isSelected ? V.accent : 'transparent'}`,
                                         }}
-                                        onClick={() => onSelectOperation(op.id)}>
+                                        onClick={() => onSelectOperation(op.id)}
+                                        onKeyDown={e => handleOperationKeyDown(e, op.id)}>
                                         <span className="text-sm shrink-0">{GROUP_EMOJI[plugin?.group || ''] || '🎬'}</span>
                                         <div className="min-w-0">
-                                            <div className="text-[9px] font-semibold truncate"
+                                            <div className="text-[10px] font-semibold truncate"
                                                 style={{ color: isSelected ? V.accent : V.charcoal }}>{plugin?.name || op.pluginId}</div>
-                                            {!op.enabled && <div className="text-[7px]" style={{ color: V.textDim }}>off</div>}
+                                            {!op.enabled && <div className="text-[9px]" style={{ color: V.textDim }}>off</div>}
                                         </div>
                                     </div>
                                 )
@@ -124,6 +150,9 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
                                 return (
                                     <div key={op.id} style={{ height: TRACK_H, position: 'relative', background: V.bg, borderBottom: `1px solid ${V.beige}` }}>
                                         <div className="absolute flex items-center overflow-hidden cursor-pointer transition-all"
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-label={`Select ${plugin?.name || op.pluginId} timeline bar`}
                                             style={{
                                                 left: start * pxPerSecond, width: Math.max(20, (end - start) * pxPerSecond),
                                                 top: 5, bottom: 5, background: color.bg, borderRadius: 8,
@@ -131,8 +160,9 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
                                                 opacity: op.enabled ? 1 : 0.3,
                                                 boxShadow: isSelected ? `0 0 0 2px ${V.accent}, 0 2px 8px ${V.accent}22` : '0 1px 3px rgba(0,0,0,0.04)',
                                             }}
-                                            onClick={() => onSelectOperation(op.id)}>
-                                            <span className="text-[9px] font-bold px-2.5 truncate" style={{ color: color.text }}>
+                                            onClick={() => onSelectOperation(op.id)}
+                                            onKeyDown={e => handleOperationKeyDown(e, op.id)}>
+                                            <span className="text-[10px] font-bold px-2.5 truncate" style={{ color: color.text }}>
                                                 {plugin?.name || op.pluginId}
                                             </span>
                                         </div>

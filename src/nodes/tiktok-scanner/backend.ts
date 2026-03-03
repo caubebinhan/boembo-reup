@@ -1,17 +1,24 @@
 import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { TikTokScanner } from '@main/tiktok/TikTokScanner'
 import { accountRepo } from '@main/db/repositories/AccountRepo'
+import { shouldUseProfileSession } from '@main/tiktok/TikTokAuthMode'
 
 export async function execute(_input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const sources = ctx.params.sources || []
+  const useProfileSession = shouldUseProfileSession()
 
-  // Resolve cookies for the campaign's publish account
-  const accountId = ctx.params.account_id || ''
-  const accounts = accountRepo.findAll() as any[]
-  const account = accountId ? accounts.find(a => a.id === accountId) : accounts[0]
-  const cookies = account?.cookies || []
-  if (cookies.length > 0) {
-    ctx.logger.info(`[Scanner] Using ${cookies.length} cookies from account @${account?.username}`)
+  let cookies: any[] = []
+  if (useProfileSession) {
+    ctx.logger.info('[Scanner] Using browser profile session (cookie injection disabled)')
+  } else {
+    // Resolve cookies for the campaign's publish account
+    const accountId = ctx.params.account_id || ''
+    const accounts = accountRepo.findAll() as any[]
+    const account = accountId ? accounts.find(a => a.id === accountId) : accounts[0]
+    cookies = account?.cookies || []
+    if (cookies.length > 0) {
+      ctx.logger.info(`[Scanner] Using ${cookies.length} cookies from account @${account?.username}`)
+    }
   }
 
   const scanner = new TikTokScanner()

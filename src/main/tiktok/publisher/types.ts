@@ -2,6 +2,7 @@ export interface PublishOptions {
     username?: string
     advancedVerification?: boolean
     privacy?: 'public' | 'friends' | 'private'
+    useProfileSession?: boolean
 }
 
 export type PublishErrorType = 'captcha' | 'violation' | 'session_expired' | 'upload_failed' | 'unknown'

@@ -14,10 +14,9 @@ interface UseEditorStateReturn {
   plugins: PluginMeta[]
   operations: VideoEditOperation[]
   selectedOpId: string | null
-  globalEnabledIds: Set<string>
-  duration: number
   currentTime: number
   previewSrc: string | null
+  previewError: string | null
   isRendering: boolean
 
   // Actions
@@ -42,10 +41,9 @@ export function useEditorState(): UseEditorStateReturn {
   const [plugins, setPlugins] = useState<PluginMeta[]>([])
   const [operations, setOperations] = useState<VideoEditOperation[]>([])
   const [selectedOpId, setSelectedOpId] = useState<string | null>(null)
-  const [globalEnabledIds, setGlobalEnabledIds] = useState<Set<string>>(new Set())
-  const [duration, _setDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [previewSrc, setPreviewSrc] = useState<string | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
   const [isRendering, setIsRendering] = useState(false)
 
   // Load plugins and defaults from main process
@@ -55,13 +53,27 @@ export function useEditorState(): UseEditorStateReturn {
 
     api.invoke?.(IPC_CHANNELS.VIDEO_EDIT_GET_PLUGIN_METAS).then((metas: PluginMeta[]) => {
       setPlugins(metas)
-      const enabled = new Set<string>(metas.filter(p => p.defaultEnabled).map(p => p.id))
-      setGlobalEnabledIds(enabled)
     }).catch(() => {})
 
     api.invoke?.(IPC_CHANNELS.VIDEO_EDIT_GET_DEFAULTS).then((ops: VideoEditOperation[]) => {
       if (ops?.length) setOperations(ops)
     }).catch(() => {})
+  }, [])
+
+  // Receive init data from parent window (restores previously-saved state)
+  useEffect(() => {
+    const api = (window as any).api
+    if (!api) return
+    const off = api.on?.(IPC_CHANNELS.VIDEO_EDITOR_INIT_DATA, (initData: any) => {
+      if (!initData) return
+      if (initData.videoEditOperations?.length) {
+        setOperations(initData.videoEditOperations)
+      }
+      if (initData._previewVideoSrc) {
+        setPreviewSrc(initData._previewVideoSrc)
+      }
+    })
+    return () => { if (typeof off === 'function') off() }
   }, [])
 
   // Upload video file
@@ -76,6 +88,7 @@ export function useEditorState(): UseEditorStateReturn {
         setVideoPath(path)
         setVideoSrc(`file://${path}`)
         setPreviewSrc(null)
+        setPreviewError(null)
       }
     } catch {}
   }, [])
@@ -134,26 +147,41 @@ export function useEditorState(): UseEditorStateReturn {
     if (!api || !videoPath) return
 
     setIsRendering(true)
+    setPreviewError(null)
     try {
       const result = await api.invoke(IPC_CHANNELS.VIDEO_EDIT_PREVIEW, {
         videoPath,
         operations: operations.filter(o => o.enabled),
       })
+      if (result?.error) {
+        setPreviewError(String(result.error))
+        return
+      }
       if (result?.outputPath) {
         setPreviewSrc(`file://${result.outputPath}?t=${Date.now()}`)
+        return
       }
+      setPreviewError('Preview render failed. Please check your operation parameters.')
     } catch (err: any) {
       console.error('[VideoEditor] Preview failed:', err)
+      setPreviewError(err?.message || 'Preview render failed. Please try again.')
     } finally {
       setIsRendering(false)
     }
   }, [videoPath, operations])
 
-  // Done — close editor window
+  // Done — close editor window, send data in the shape WizardVideoEdit expects
   const handleDone = useCallback(() => {
     const api = (window as any).api
-    api?.invoke?.(IPC_CHANNELS.VIDEO_EDITOR_DONE, { operations })
-  }, [operations])
+    const enabledPluginIds = Array.from(
+      new Set(operations.filter(op => op.enabled).map(op => op.pluginId)),
+    )
+    api?.invoke?.(IPC_CHANNELS.VIDEO_EDITOR_DONE, {
+      videoEditOperations: operations,
+      _enabledPluginIds: enabledPluginIds,
+      _previewVideoSrc: previewSrc,
+    })
+  }, [operations, previewSrc])
 
   // Derived
   const selectedOperation = useMemo(
@@ -168,7 +196,7 @@ export function useEditorState(): UseEditorStateReturn {
 
   return {
     videoSrc, videoPath, plugins, operations, selectedOpId,
-    globalEnabledIds, duration, currentTime, previewSrc, isRendering,
+    currentTime, previewSrc, previewError, isRendering,
     handleUploadVideo, handleAddOperation, handleRemoveOperation,
     handleUpdateParams, handleToggleEnabled, handleSelectOperation,
     handleSeek, handlePreview, handleDone,

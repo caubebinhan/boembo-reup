@@ -1,4 +1,4 @@
-import { Page, Response } from 'playwright-core'
+import { Locator, Page, Response } from 'playwright-core'
 import { TIKTOK_SELECTORS } from './constants/selectors'
 import { PublishResult } from './types'
 import { DebugHelper } from './helpers/DebugHelper'
@@ -128,11 +128,17 @@ export class PublishVerifier {
                     'proceed to post',
                     'copyright check',
                     'check is not completed',
-                                        'continue to post',
+                    'continue to post',
                     'continue posting',
                     'go to post',
                 ]
                 if (nonViolationConfirmKeywords.some(kw => text.toLowerCase().includes(kw.toLowerCase()))) {
+                    return null
+                }
+
+                if (this.isSoftRestrictionWarning(text)) {
+                    this.captureWarningText(`Soft content restriction warning: ${text}`)
+                    await this.dismissDialog(dialog)
                     return null
                 }
 
@@ -148,6 +154,39 @@ export class PublishVerifier {
             }
         } catch {}
         return null
+    }
+
+    private isSoftRestrictionWarning(text: string): boolean {
+        const lower = String(text || '').toLowerCase()
+        if (!lower) return false
+        const softKeywords = [
+            'you can still post',
+            'may improve visibility',
+            'still post',
+        ]
+        return softKeywords.some(keyword => lower.includes(keyword))
+    }
+
+    private async dismissDialog(dialog: Locator): Promise<void> {
+        try {
+            await this.page.keyboard.press('Escape').catch(() => {})
+            await this.page.waitForTimeout(250).catch(() => {})
+            const closeSelectors = [
+                '[data-e2e="modal-close"]',
+                '.common-modal-close',
+                'button[aria-label="Close"]',
+                'button[aria-label="close"]',
+                'button:has(svg)',
+            ]
+            for (const sel of closeSelectors) {
+                const btn = dialog.locator(sel).first()
+                if (await btn.isVisible().catch(() => false)) {
+                    await btn.click({ timeout: 1200 }).catch(() => {})
+                    await this.page.waitForTimeout(250).catch(() => {})
+                    return
+                }
+            }
+        } catch {}
     }
 
     private async verifyViaDashboard(opts: VerifyOptions): Promise<PublishResult> {

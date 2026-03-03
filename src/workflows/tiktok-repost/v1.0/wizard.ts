@@ -32,7 +32,7 @@ export const tiktokRepostSteps: WizardStepConfig[] = [
     },
   },
   {
-    id: 'video_edit',
+    id: 'video-edit',
     title: 'Video Edit',
     icon: '🎬',
     description: 'Configure video editing operations',

@@ -52,8 +52,8 @@ export function setupVideoEditorIPC() {
 
     const editorWin = new BrowserWindow({
       parent: parentWin || undefined,
-      width: 1400,
-      height: 900,
+      width: 1000,
+      height: 700,
       title: 'BOEMBO - Video Editor',
       autoHideMenuBar: true,
       webPreferences: {
@@ -64,6 +64,10 @@ export function setupVideoEditorIPC() {
     })
 
     editorWin.on('closed', () => {
+      if (_editorParentWin && !_editorParentWin.isDestroyed()) {
+        // Keep wizard state in sync when user closes editor with window controls.
+        _editorParentWin.webContents.send(IPC_CHANNELS.VIDEO_EDITOR_DONE, null)
+      }
       _editorParentWin = null
     })
 

@@ -93,6 +93,22 @@ export function DebugDashboard() {
                     currentCaseTitle={state.runAllProgress.currentCaseId ? state.caseMap.get(state.runAllProgress.currentCaseId)?.title : undefined}
                 />
 
+                {state.runAllSummary && (
+                    <div className={`rounded-lg border px-3 py-2 text-xs ${state.runAllSummary.failed > 0
+                        ? 'border-rose-200 bg-rose-50 text-rose-700'
+                        : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                        }`}>
+                        <div className="font-semibold">
+                            Last troubleshoot result: passed {state.runAllSummary.passed}/{state.runAllSummary.total}, failed {state.runAllSummary.failed}.
+                        </div>
+                        {state.runAllSummary.failed > 0 && (
+                            <div className="mt-1 break-words">
+                                Failed case code(s): <span className="font-mono">{state.runAllSummary.failedCaseCodes.join(', ')}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Message banner */}
                 {state.message && (
                     <div className={`rounded-lg border text-sm px-3 py-2 ${state.messageTone === 'info'

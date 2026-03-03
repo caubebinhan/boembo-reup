@@ -168,3 +168,8 @@ body {
 .animate-count {
   animation: count-pulse 0.6s ease-out;
 }
+
+.video-editor-shell :is(button, [role='button'], input, select, textarea):focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}

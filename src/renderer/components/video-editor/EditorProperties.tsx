@@ -44,6 +44,8 @@ export function EditorProperties({ operation, plugin, onUpdateParams, onToggleEn
                     <p className="text-[10px] tracking-wide uppercase font-medium" style={{ color: V.textDim }}>{plugin.group}</p>
                 </div>
                 <button onClick={() => onToggleEnabled(operation.id)}
+                    aria-label={operation.enabled ? 'Disable operation' : 'Enable operation'}
+                    aria-pressed={operation.enabled}
                     className="relative shrink-0 cursor-pointer" style={{ width: 36, height: 20 }}>
                     <div className="absolute inset-0 rounded-full transition-all"
                         style={{ background: operation.enabled ? V.accent : V.beige }} />
@@ -51,6 +53,7 @@ export function EditorProperties({ operation, plugin, onUpdateParams, onToggleEn
                         style={{ left: operation.enabled ? 18 : 4, background: operation.enabled ? '#fff' : V.textDim }} />
                 </button>
                 <button onClick={() => onRemoveOperation(operation.id)}
+                    aria-label="Remove operation"
                     className="transition cursor-pointer shrink-0 p-1 rounded text-sm" title="Remove"
                     style={{ color: V.textDim }}
                     onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = '#fef2f2' }}
@@ -63,7 +66,7 @@ export function EditorProperties({ operation, plugin, onUpdateParams, onToggleEn
                     <span className="text-base">✋</span>
                     <div>
                         <p className="text-[11px] font-semibold" style={{ color: V.accent }}>Drag on canvas</p>
-                        <p className="text-[9px] mt-0.5" style={{ color: `${V.accent}88` }}>Resize corners · Drag to move</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: `${V.accent}88` }}>Resize corners · Drag to move</p>
                     </div>
                 </div>
             )}
@@ -106,6 +109,8 @@ function FieldRenderer({ field, value, onChange }: { field: PluginConfigField; v
                             const isActive = value === opt.value || (!value && field.default === opt.value)
                             return (
                                 <button key={opt.value} onClick={() => onChange(opt.value)}
+                                    aria-pressed={isActive}
+                                    aria-label={`${label}: ${opt.label}`}
                                     className="px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer"
                                     style={{
                                         background: isActive ? V.accentSoft : V.cream,
@@ -117,7 +122,7 @@ function FieldRenderer({ field, value, onChange }: { field: PluginConfigField; v
                             )
                         })}
                     </div>
-                    {description && <p className="text-[9px] mt-1" style={{ color: V.textDim }}>{description}</p>}
+                    {description && <p className="text-[10px] mt-1" style={{ color: V.textDim }}>{description}</p>}
                 </div>
             )
         case 'slider':
@@ -132,6 +137,7 @@ function FieldRenderer({ field, value, onChange }: { field: PluginConfigField; v
                                 }} />
                             </div>
                             <input type="range" min={min ?? 0} max={max ?? 100} step={step ?? 1}
+                                aria-label={label}
                                 value={value ?? min ?? 0} onChange={e => onChange(Number(e.target.value))}
                                 className="absolute w-full opacity-0 cursor-pointer h-full" />
                         </div>
@@ -139,7 +145,7 @@ function FieldRenderer({ field, value, onChange }: { field: PluginConfigField; v
                             {typeof value === 'number' ? value : (min ?? 0)}
                         </div>
                     </div>
-                    {description && <p className="text-[9px] mt-1" style={{ color: V.textDim }}>{description}</p>}
+                    {description && <p className="text-[10px] mt-1" style={{ color: V.textDim }}>{description}</p>}
                 </div>
             )
         case 'number':
@@ -165,7 +171,7 @@ function FieldRenderer({ field, value, onChange }: { field: PluginConfigField; v
             return (
                 <div className="flex items-center justify-between py-0.5">
                     <span className="text-[11px] font-medium" style={{ color: V.textMuted }}>{label}</span>
-                    <button onClick={() => onChange(!value)} className="relative transition-all cursor-pointer shrink-0" style={{ width: 34, height: 18 }}>
+                    <button onClick={() => onChange(!value)} aria-label={label} aria-pressed={Boolean(value)} className="relative transition-all cursor-pointer shrink-0" style={{ width: 34, height: 18 }}>
                         <div className="absolute inset-0 rounded-full transition-all" style={{ background: value ? V.accent : V.beige }} />
                         <div className="absolute top-0.5 w-3.5 h-3.5 rounded-full shadow transition-all"
                             style={{ left: value ? 17 : 2, background: value ? '#fff' : V.textDim }} />
@@ -202,11 +208,11 @@ function FieldRenderer({ field, value, onChange }: { field: PluginConfigField; v
                             const r = await window.api?.invoke?.('dialog:open-file', { filters: [{ name: 'Media', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'mp3', 'wav'] }] })
                             if (r) onChange(r)
                         } catch { }
-                    }} className="w-full py-2.5 rounded-lg text-xs font-medium transition cursor-pointer text-center"
+                    }} aria-label={value ? 'Replace selected media file' : 'Choose media file'} className="w-full py-2.5 rounded-lg text-xs font-medium transition cursor-pointer text-center"
                         style={{ background: V.cream, border: `1px dashed ${V.beige}`, color: value ? V.accent : V.textDim }}>
                         {value ? '✅ File selected' : '📎 Choose file...'}
                     </button>
-                    {description && <p className="text-[9px] mt-1" style={{ color: V.textDim }}>{description}</p>}
+                    {description && <p className="text-[10px] mt-1" style={{ color: V.textDim }}>{description}</p>}
                 </div>
             )
         case 'timeRange':
@@ -214,16 +220,18 @@ function FieldRenderer({ field, value, onChange }: { field: PluginConfigField; v
                 <div>{labelEl}
                     <div className="flex items-center gap-2">
                         <input type="number" value={value?.start ?? ''} min={0} step={0.1}
+                            aria-label={`${label} start time`}
                             onChange={e => onChange({ ...value, start: e.target.value === '' ? undefined : Number(e.target.value) })}
                             className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
                             style={{ background: V.cream, border: `1px solid ${V.beige}`, color: V.charcoal }} placeholder="Start" />
                         <span className="text-xs" style={{ color: V.textDim }}>→</span>
                         <input type="number" value={value?.end ?? ''} min={0} step={0.1}
+                            aria-label={`${label} end time`}
                             onChange={e => onChange({ ...value, end: e.target.value === '' ? undefined : Number(e.target.value) })}
                             className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
                             style={{ background: V.cream, border: `1px solid ${V.beige}`, color: V.charcoal }} placeholder="End" />
                     </div>
-                    {description && <p className="text-[9px] mt-1" style={{ color: V.textDim }}>{description}</p>}
+                    {description && <p className="text-[10px] mt-1" style={{ color: V.textDim }}>{description}</p>}
                 </div>
             )
         default:
@@ -240,6 +248,8 @@ function PositionPicker({ value, onChange }: { value: string | { x: number; y: n
         <div className="grid grid-cols-3 gap-1.5 p-2 rounded-xl" style={{ width: 96, background: V.cream, border: `1px solid ${V.beige}` }}>
             {positions.map(pos => (
                 <button key={pos} onClick={() => onChange(pos)}
+                    aria-label={`Set position ${pos}`}
+                    aria-pressed={cur === pos}
                     className="w-7 h-7 rounded-md transition-all cursor-pointer flex items-center justify-center"
                     style={{ background: cur === pos ? V.accentSoft : V.card, border: `1px solid ${cur === pos ? `${V.accent}44` : V.beige}` }} title={pos}>
                     <div className="w-1.5 h-1.5 rounded-full" style={{ background: cur === pos ? V.accent : V.textDim }} />
@@ -260,15 +270,16 @@ function RegionEditor({ value, onChange }: { value: any; onChange: (v: any) => v
             <div className="grid grid-cols-2 gap-2">
                 {(['x', 'y', 'w', 'h'] as const).map(key => (
                     <div key={key} className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-bold uppercase w-4 text-right" style={{ color: V.textDim }}>{key}</span>
+                        <span className="text-[10px] font-bold uppercase w-4 text-right" style={{ color: V.textDim }}>{key}</span>
                         <input type="number" value={region[key] ?? 0} min={0}
+                            aria-label={`Region ${key}`}
                             onChange={e => update(key, Number(e.target.value))}
                             className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
                             style={{ background: V.cream, border: `1px solid ${V.beige}`, color: V.charcoal }} />
                     </div>
                 ))}
             </div>
-            <p className="text-[9px]" style={{ color: V.textDim }}>
+            <p className="text-[10px]" style={{ color: V.textDim }}>
                 Drag on the canvas preview to select region visually
             </p>
         </div>
@@ -297,24 +308,28 @@ function AspectRatioPicker({ value, onChange }: { value: string; onChange: (v: s
                     const active = current === r.value
                     return (
                         <button key={r.value} onClick={() => { onChange(r.value); setCustomOpen(false) }}
+                            aria-label={`Set aspect ratio ${r.value}`}
+                            aria-pressed={active}
                             className="flex flex-col items-center gap-0.5 p-2 rounded-xl transition-all cursor-pointer"
                             style={{
                                 background: active ? V.accentSoft : V.cream,
                                 border: `1px solid ${active ? `${V.accent}44` : V.beige}`,
                             }}>
                             <span className="text-sm">{r.icon}</span>
-                            <span className="text-[9px] font-bold" style={{ color: active ? V.accent : V.textDim }}>{r.label}</span>
+                            <span className="text-[10px] font-bold" style={{ color: active ? V.accent : V.textDim }}>{r.label}</span>
                         </button>
                     )
                 })}
             </div>
             <button onClick={() => setCustomOpen(!customOpen)}
+                aria-label={customOpen ? 'Hide custom aspect ratio input' : 'Show custom aspect ratio input'}
                 className="text-[10px] font-medium px-2 py-1 rounded-lg cursor-pointer transition"
                 style={{ color: isCustom ? V.accent : V.textDim, background: isCustom ? V.accentSoft : 'transparent' }}>
                 {isCustom ? `Custom: ${current}` : '+ Custom ratio'}
             </button>
             {customOpen && (
                 <input type="text" value={isCustom ? current : ''} placeholder="e.g. 3:4"
+                    aria-label="Custom aspect ratio"
                     onChange={e => { if (e.target.value.match(/^\d+:\d+$/)) onChange(e.target.value) }}
                     className="px-2 py-1 rounded-lg text-xs outline-none"
                     style={{ background: V.cream, border: `1px solid ${V.beige}`, color: V.charcoal }} />

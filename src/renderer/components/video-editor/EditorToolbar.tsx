@@ -32,6 +32,9 @@ export function EditorToolbar({ plugins, onAddOperation }: EditorToolbarProps) {
                     return (
                         <div key={group.id} className="relative">
                             <button onClick={() => setOpenGroup(isOpen ? null : group.id)}
+                                aria-label={`${isOpen ? 'Close' : 'Open'} ${group.label} tools`}
+                                aria-haspopup="menu"
+                                aria-expanded={isOpen}
                                 className="w-full flex flex-col items-center justify-center gap-0.5 py-2.5 rounded-xl transition-all cursor-pointer"
                                 style={{
                                     background: isOpen ? V.accentSoft : 'transparent',
@@ -41,7 +44,7 @@ export function EditorToolbar({ plugins, onAddOperation }: EditorToolbarProps) {
                                 onMouseLeave={e => { if (!isOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = V.textDim } }}
                                 title={group.label}>
                                 <span className="text-xl">{group.emoji}</span>
-                                <span className="text-[9px] font-medium">{group.label}</span>
+                                <span className="text-[10px] font-medium">{group.label}</span>
                             </button>
                             {isOpen && (
                                 <div className="absolute left-full top-0 ml-2 flex flex-col overflow-hidden z-50"
@@ -49,26 +52,27 @@ export function EditorToolbar({ plugins, onAddOperation }: EditorToolbarProps) {
                                     <div className="flex items-center gap-2 px-3 py-2.5" style={{ borderBottom: `1px solid ${V.beige}` }}>
                                         <span className="text-base">{group.emoji}</span>
                                         <span className="text-xs font-bold tracking-wide uppercase" style={{ color: V.charcoal }}>{group.label}</span>
-                                        <span className="text-[9px] px-1.5 py-0.5 rounded-full ml-auto"
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full ml-auto"
                                             style={{ background: V.accentSoft, color: V.accent }}>{gp.length}</span>
                                     </div>
                                     <div className="py-1">
                                         {gp.map(plugin => (
                                             <button key={plugin.id}
                                                 onClick={() => { onAddOperation(plugin.id); setOpenGroup(null) }}
+                                                aria-label={`Add ${plugin.name}`}
                                                 className="w-full px-3 py-2 flex items-center gap-2.5 transition-all text-left cursor-pointer"
                                                 onMouseEnter={e => (e.currentTarget.style.background = V.accentSoft)}
                                                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                                                 <span className="text-lg shrink-0">{plugin.icon}</span>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="text-xs font-semibold truncate" style={{ color: V.charcoal }}>{plugin.name}</div>
-                                                    <div className="text-[9px] truncate mt-0.5" style={{ color: V.textDim }}>{plugin.description}</div>
+                                                    <div className="text-[10px] truncate mt-0.5" style={{ color: V.textDim }}>{plugin.description}</div>
                                                 </div>
                                                 {plugin.previewHint !== 'none' ? (
-                                                    <span className="text-[8px] px-1 py-0.5 rounded-full shrink-0 font-bold"
+                                                    <span className="text-[9px] px-1 py-0.5 rounded-full shrink-0 font-bold"
                                                         style={{ background: V.pastelMint, color: '#2e7d32' }}>LIVE</span>
                                                 ) : (
-                                                    <span className="text-[8px] px-1 py-0.5 rounded-full shrink-0 font-bold"
+                                                    <span className="text-[9px] px-1 py-0.5 rounded-full shrink-0 font-bold"
                                                         style={{ background: '#fef3c7', color: '#92400e' }}>AUTO</span>
                                                 )}
                                             </button>
@@ -83,11 +87,12 @@ export function EditorToolbar({ plugins, onAddOperation }: EditorToolbarProps) {
             <div className="flex-1" />
             <div className="w-8 h-px" style={{ background: V.beige }} />
             <button className="w-full flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg transition cursor-pointer mt-1"
+                aria-label="Editor settings"
                 title="Settings" style={{ color: V.textDim }}
                 onMouseEnter={e => { e.currentTarget.style.color = V.charcoal; e.currentTarget.style.background = V.cream }}
                 onMouseLeave={e => { e.currentTarget.style.color = V.textDim; e.currentTarget.style.background = 'transparent' }}>
                 <span className="text-lg">⚙️</span>
-                <span className="text-[9px] font-medium">Settings</span>
+                <span className="text-[10px] font-medium">Settings</span>
             </button>
         </div>
     )

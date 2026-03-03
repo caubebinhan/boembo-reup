@@ -4,6 +4,7 @@ import { failGracefully, setVideoStatus } from '@core/nodes/NodeHelpers'
 import { VIDEO_STATUS } from './constants'
 import { VideoPublisher } from '@main/tiktok/publisher/VideoPublisher'
 import { selectPublishAccount } from '@main/tiktok/publisher/PublishAccountResolver'
+import { shouldUseProfileSession } from '@main/tiktok/TikTokAuthMode'
 import { settingsRepo } from '@main/db/repositories/SettingsRepo'
 import {
   captionPreview,
@@ -39,6 +40,7 @@ function estimateRetryDelayMs(stat?: ReviewRetryStats, attempt = 1): number {
 
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const video = input
+  const useProfileSession = shouldUseProfileSession()
 
   // ── Guard: video input must have local_path ──
   if (!video?.local_path) {
@@ -77,9 +79,13 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
   // ── Guard: account must have cookies ──
   const cookies = Array.isArray(account.cookies) ? account.cookies : null
-  if (!cookies?.length) {
+  if (!useProfileSession && !cookies?.length) {
     return failGracefully(ctx, INSTANCE_ID, video.platform_id, 'no_cookies',
       `Account @${account.username} has no cookies — please re-login`)
+  }
+
+  if (useProfileSession) {
+    ctx.logger.info(`[Publisher] Using browser profile session for @${account.username} (cookie injection disabled)`)
   }
 
   const caption = video.generated_caption || video.description || ''
@@ -161,11 +167,12 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   let result: any
 
   try {
-    result = await publisher.publish(video.local_path, caption, cookies, (msg) => {
+    result = await publisher.publish(video.local_path, caption, useProfileSession ? undefined : cookies, (msg) => {
       ctx.onProgress(`[Playwright] ${msg}`)
     }, {
       privacy: ctx.params.privacy || 'public',
       username: account.username,
+      useProfileSession,
     })
   } catch (err: any) {
     // Unexpected crash during publish (browser crash, OOM, network drop mid-session, etc.)

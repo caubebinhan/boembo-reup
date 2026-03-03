@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, useLayoutEffect } from 'react'
+import { useEffect, useState, useMemo, useRef, useLayoutEffect, useCallback } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../../store/store'
 import { updateNodeProgress } from '../../store/nodeEventsSlice'
@@ -154,7 +154,7 @@ function NodeTooltip({ node, campaignId, onViewError }: { node: FlowNodeInfo; ca
     )
 }
 
-// ── Light Theme Node Card (no hover tooltip) ──────────────────────
+// ── Light Theme Node Card ──────────────────────
 function NodeCard({
     node, campaignId, compact = false, isSelected, onSelect, campaignParams, onViewError
 }: {
@@ -184,7 +184,18 @@ function NodeCard({
     const showRawStats = !isTimeout && !isBatchNode && stat.total > 0
 
     return (
-        <div className="relative group z-10">
+        <div className="relative group z-10 w-max h-max">
+            {/* Settings floating button */}
+            {node.editable_settings && (
+                <span
+                    onClick={(e) => { e.stopPropagation(); onSelect(node); }}
+                    className="absolute -top-2 -right-2 text-slate-400 text-[10px] bg-white border border-slate-200 rounded-full w-5 h-5 flex items-center justify-center shadow-sm cursor-pointer hover:text-purple-500 hover:border-purple-300 transition z-40"
+                    title="Settings"
+                >
+                    ⚙️
+                </span>
+            )}
+
             {/* Error badge on failed nodes */}
             {status === 'error' && (
                 <div className="absolute -top-2 -right-2 z-30 animate-bounce">
@@ -242,9 +253,6 @@ function NodeCard({
                         <span className={`ml-auto w-1.5 h-1.5 rounded-full shrink-0 ${status === 'running' ? 'animate-pulse' : ''}`}
                             style={{ backgroundColor: status === 'running' ? meta.color : status === 'error' ? '#ef4444' : '#10b981' }} />
                     )}
-                    {node.editable_settings && (
-                        <span className="absolute -top-1.5 -right-1.5 text-slate-400 text-[10px] bg-white border border-slate-200 rounded-full w-5 h-5 flex items-center justify-center shadow-sm cursor-pointer hover:text-purple-500 hover:border-purple-300 transition z-20" title="Settings">⚙️</span>
-                    )}
                 </div>
 
                 {isTimeout && waitMinutes && <p className="text-[8px] text-slate-400 mt-0.5 font-medium bg-slate-100 rounded px-1.5 py-0.5 inline-block border border-slate-200">Wait {waitMinutes} min</p>}
@@ -259,6 +267,15 @@ function NodeCard({
 
                 {progressMsg && <p className="text-[8px] truncate mt-0.5 font-medium" style={{ color: meta.color }}>{progressMsg}</p>}
                 {isBatchNode && !progressMsg && stat.completed > 0 && <p className="text-[8px] mt-0.5 font-medium text-emerald-600">✓ Done</p>}
+            </div>
+
+            {/* Hover tooltip with rich fail diagnostics/actions */}
+            <div className="hidden group-hover:block">
+                <NodeTooltip
+                    node={node}
+                    campaignId={campaignId}
+                    onViewError={() => onViewError?.(node)}
+                />
             </div>
         </div>
     )
@@ -281,11 +298,13 @@ function LoopBlock({
     else if (isDone) borderColor = '#86efac'
 
     return (
-        <div className="relative min-w-[300px] z-0">
-            <div id={`vis-loop-in-${node.instance_id}`} className="absolute left-0 top-0 h-[56px] w-[1px] pointer-events-none" />
-            <div id={`vis-loop-out-${node.instance_id}`} className="absolute right-0 top-0 h-[56px] w-[1px] pointer-events-none" />
+        <div className="relative min-w-[300px] z-0 flex items-center justify-center py-10 px-[30px]">
+            {/* Connection points centered vertically */}
+            <div id={`vis-loop-in-${node.instance_id}`} className="absolute left-0 top-1/2 -translate-y-1/2 h-[1px] w-[1px] pointer-events-none" />
+            <div id={`vis-loop-out-${node.instance_id}`} className="absolute right-0 top-1/2 -translate-y-1/2 h-[1px] w-[1px] pointer-events-none" />
 
-            <div className="absolute left-0 right-0 top-[32px] h-[130px] rounded-[24px] border-[2px] border-dashed transition-all duration-700 z-0"
+            {/* Loop Dashed Border */}
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-[90px] rounded-[24px] border-[2px] border-dashed transition-all duration-700 z-0"
                 style={{
                     borderColor,
                     background: isRunning ? 'linear-gradient(135deg, rgba(56,189,248,0.05), rgba(248,250,252,0.3))' : '#f8fafc',
@@ -309,17 +328,15 @@ function LoopBlock({
                         </div>
                     )}
                 </div>
-                <div className="absolute bottom-[16px] w-full text-center flex items-center justify-center gap-3 text-sky-300 text-[9px] uppercase font-bold tracking-widest pointer-events-none select-none">
-                    <span>◀</span> Return <span>◀</span>
-                </div>
             </div>
 
-            <div className="flex items-center gap-[35px] relative z-10 px-[30px] pb-[130px] w-max">
+            {/* Nodes inside Loop */}
+            <div className="flex items-center gap-[35px] relative z-10 w-max">
                 {childNodes.map((child, i) => (
                     <div key={child.instance_id} className="relative z-10 flex items-center">
                         <NodeCard node={child} campaignId={campaignId} compact isSelected={selectedId === child.instance_id} onSelect={onSelect} campaignParams={campaignParams} onViewError={onViewError} />
                         {i < childNodes.length - 1 && (
-                            <div className="absolute left-[100%] top-[32px] -translate-y-1/2 w-[35px] flex justify-center text-sky-400 text-[10px] pointer-events-none z-0">
+                            <div className="absolute left-[100%] top-1/2 -translate-y-1/2 w-[35px] flex justify-center text-sky-400 text-[10px] pointer-events-none z-0">
                                 ▶
                             </div>
                         )}
@@ -331,7 +348,7 @@ function LoopBlock({
 }
 
 // ── SVG Edge Overlay (straight lines, centered on nodes) ──────
-function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: FlowEdge[], flowData: { nodes: FlowNodeInfo[] }, containerRef: any, campaignId: string }) {
+function SvgOverlay({ edges, flowData, containerRef, campaignId, vertical }: { edges: FlowEdge[], flowData: { nodes: FlowNodeInfo[] }, containerRef: any, campaignId: string, vertical?: boolean }) {
     const [paths, setPaths] = useState<{ d: string, isRunning: boolean, isError: boolean, isDone: boolean, label?: string, labelX?: number, labelY?: number }[]>([])
     const stats = useSelector((s: RootState) => s.nodeEvents.byCampaign[campaignId]?.nodeStats)
     const active = useSelector((s: RootState) => s.nodeEvents.activeNodes?.[campaignId])
@@ -359,13 +376,23 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
             const r1 = elFrom.getBoundingClientRect()
             const r2 = elTo.getBoundingClientRect()
 
-            // Connection points: right-center of source, left-center of target
-            const x1 = r1.right - containerRect.left
-            const y1 = r1.top + r1.height / 2 - containerRect.top
-            let x2 = r2.left - containerRect.left
-            let y2 = r2.top + r2.height / 2 - containerRect.top
+            let x1: number, y1: number, x2: number, y2: number
 
-            const isBackward = x2 <= x1
+            if (vertical) {
+                // Top to bottom
+                x1 = r1.left + r1.width / 2 - containerRect.left
+                y1 = r1.bottom - containerRect.top
+                x2 = r2.left + r2.width / 2 - containerRect.left
+                y2 = r2.top - containerRect.top
+            } else {
+                // Left to right
+                x1 = r1.right - containerRect.left
+                y1 = r1.top + r1.height / 2 - containerRect.top
+                x2 = r2.left - containerRect.left
+                y2 = r2.top + r2.height / 2 - containerRect.top
+            }
+
+            const isBackward = vertical ? (y2 <= y1) : (x2 <= x1)
             const siblings = outgoingBySource.get(edge.from) || []
             const branchIndex = siblings.findIndex(e => e.to === edge.to && e.when === edge.when)
             const totalBranches = siblings.length
@@ -378,52 +405,68 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
             const R = 8 // corner radius for smooth-step
 
             if (isBackward) {
-                // Backward: smooth-step route below both nodes
-                const botX = r2.left + r2.width / 2 - containerRect.left
-                const botY = r2.bottom - containerRect.top
-
+                // Backward routing
                 const slotKey = `back-${edge.from}`
                 const slot = usedBackSlots.get(slotKey) || 0
                 usedBackSlots.set(slotKey, slot + 1)
 
-                const dropY = Math.max(r1.bottom, r2.bottom) - containerRect.top + 30 + (slot * 20)
-                // Smooth-step backward: right → rounded corner down → horizontal → rounded corner up
-                d = [
-                    `M ${x1} ${y1}`,
-                    `L ${x1 + 12 - R} ${y1}`,
-                    `Q ${x1 + 12} ${y1}, ${x1 + 12} ${y1 + R}`,
-                    `L ${x1 + 12} ${dropY - R}`,
-                    `Q ${x1 + 12} ${dropY}, ${x1 + 12 - R} ${dropY}`,
-                    `L ${botX + R} ${dropY}`,
-                    `Q ${botX} ${dropY}, ${botX} ${dropY - R}`,
-                    `L ${botX} ${botY + 6}`,
-                ].join(' ')
-                labelX = (x1 + 12 + botX) / 2
-                labelY = dropY - 10
-            } else {
-                // Forward: n8n smooth-step connector
-                const midX = x1 + (x2 - x1) / 2
-
-                if (Math.abs(y1 - y2) < 3) {
-                    // Same Y: straight horizontal line
-                    d = `M ${x1} ${y1} L ${x2 - 6} ${y2}`
+                if (vertical) {
+                    // Route backward around the right side
+                    const rightX = Math.max(r1.right, r2.right) - containerRect.left + 30 + (slot * 20)
+                    const srcMidY = r1.top + r1.height / 2 - containerRect.top
+                    const tgtMidY = r2.top + r2.height / 2 - containerRect.top
+                    // Right from source -> up -> left to target
+                    d = [
+                        `M ${r1.right - containerRect.left} ${srcMidY}`,
+                        `L ${rightX - R} ${srcMidY}`,
+                        `Q ${rightX} ${srcMidY}, ${rightX} ${srcMidY - R}`,
+                        `L ${rightX} ${tgtMidY + R}`,
+                        `Q ${rightX} ${tgtMidY}, ${rightX - R} ${tgtMidY}`,
+                        `L ${r2.right - containerRect.left + 6} ${tgtMidY}`
+                    ].join(' ')
+                    labelX = rightX + 10
+                    labelY = (srcMidY + tgtMidY) / 2
                 } else {
-                    // Different Y: smooth-step with rounded corners at midpoint
-                    const dy = y2 - y1
-                    const rY = Math.min(R, Math.abs(dy) / 2) // clamp radius if vertical gap is tiny
-                    const signY = dy > 0 ? 1 : -1
+                    // Backward: smooth-step route below both nodes
+                    const botX = r2.left + r2.width / 2 - containerRect.left
+                    const botY = r2.bottom - containerRect.top
+                    const dropY = Math.max(r1.bottom, r2.bottom) - containerRect.top + 30 + (slot * 20)
                     d = [
                         `M ${x1} ${y1}`,
-                        `L ${midX - rY} ${y1}`,
-                        `Q ${midX} ${y1}, ${midX} ${y1 + signY * rY}`,
-                        `L ${midX} ${y2 - signY * rY}`,
-                        `Q ${midX} ${y2}, ${midX + rY} ${y2}`,
-                        `L ${x2 - 6} ${y2}`,
+                        `L ${x1 + 12 - R} ${y1}`,
+                        `Q ${x1 + 12} ${y1}, ${x1 + 12} ${y1 + R}`,
+                        `L ${x1 + 12} ${dropY - R}`,
+                        `Q ${x1 + 12} ${dropY}, ${x1 + 12 - R} ${dropY}`,
+                        `L ${botX + R} ${dropY}`,
+                        `Q ${botX} ${dropY}, ${botX} ${dropY - R}`,
+                        `L ${botX} ${botY + 6}`,
                     ].join(' ')
+                    labelX = (x1 + 12 + botX) / 2
+                    labelY = dropY - 10
                 }
+            } else {
+                // Forward: n8n style beautiful bezier curve
+                const stagger = totalBranches > 1 ? (branchIndex - (totalBranches - 1) / 2) * 20 : 0;
 
-                labelX = x1 + (x2 - x1) / 2
-                labelY = Math.min(y1, y2) - 10
+                if (vertical) {
+                    if (Math.abs(x1 - x2) < 3) {
+                        d = `M ${x1} ${y1} L ${x2} ${y2}`
+                    } else {
+                        const cpDist = Math.max(Math.abs(y2 - y1) / 2.5, 40);
+                        d = `M ${x1} ${y1} C ${x1 + stagger} ${y1 + cpDist}, ${x2 - stagger} ${y2 - cpDist}, ${x2} ${y2}`
+                    }
+                    labelX = x1 + (x2 - x1) / 2
+                    labelY = y1 + (y2 - y1) / 2
+                } else {
+                    if (Math.abs(y1 - y2) < 3) {
+                        d = `M ${x1} ${y1} L ${x2} ${y2}`
+                    } else {
+                        const cpDist = Math.max(Math.abs(x2 - x1) / 2.5, 40);
+                        d = `M ${x1} ${y1} C ${x1 + cpDist + stagger} ${y1}, ${x2 - cpDist - stagger} ${y2}, ${x2} ${y2}`
+                    }
+                    labelX = x1 + (x2 - x1) / 2
+                    labelY = y1 + (y2 - y1) / 2 - 12
+                }
             }
 
             // Status detection
@@ -453,13 +496,13 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
     return (
         <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" style={{ overflow: 'visible' }}>
             <defs>
-                <marker id="arrow-idle" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                <marker id="arrow-idle" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
                 </marker>
-                <marker id="arrow-run" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                <marker id="arrow-run" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#3B82F6" />
                 </marker>
-                <marker id="arrow-done" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+                <marker id="arrow-done" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#10B981" />
                 </marker>
             </defs>
@@ -467,13 +510,13 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId }: { edges: Flow
                 const labelW = p.label ? Math.max(40, Math.min(160, p.label.length * 6 + 18)) : 0
                 return (
                     <g key={i}>
-                        <path d={p.d} fill="none" stroke="#cbd5e1" strokeWidth="1.5" markerEnd="url(#arrow-idle)" strokeLinejoin="round" />
-                        {p.isDone && <path d={p.d} fill="none" stroke="#10b981" strokeWidth="1.5" opacity="0.5" markerEnd="url(#arrow-done)" strokeLinejoin="round" />}
+                        <path d={p.d} fill="none" stroke="#cbd5e1" strokeWidth="2" markerEnd="url(#arrow-idle)" strokeLinejoin="round" />
+                        {p.isDone && <path d={p.d} fill="none" stroke="#10b981" strokeWidth="2" opacity="0.6" markerEnd="url(#arrow-done)" strokeLinejoin="round" />}
                         {p.isRunning && (
-                            <path d={p.d} fill="none" stroke="#3b82f6" strokeWidth="2" markerEnd="url(#arrow-run)" strokeDasharray="6 4" strokeLinejoin="round" className="animate-[dash_1s_linear_infinite]" />
+                            <path d={p.d} fill="none" stroke="#3b82f6" strokeWidth="2.5" markerEnd="url(#arrow-run)" strokeDasharray="6 4" strokeLinejoin="round" className="animate-[dash_1s_linear_infinite]" />
                         )}
                         {p.isRunning && (
-                            <circle r="2.5" fill="#60a5fa">
+                            <circle r="3" fill="#60a5fa" className="shadow-lg">
                                 <animateMotion dur="2s" repeatCount="indefinite" path={p.d} />
                             </circle>
                         )}
@@ -665,7 +708,43 @@ export function PipelineVisualizer({ campaignId, workflowId, vertical = false }:
     const [campaignParams, setCampaignParams] = useState<any>({})
     const [errorModalNode, setErrorModalNode] = useState<FlowNodeInfo | null>(null)
     const containerRef = useRef<HTMLDivElement>(null)
+    const scrollRef = useRef<HTMLDivElement>(null)
     const dispatch = useDispatch()
+
+    // ── Drag-to-Pan ──────────────────────────────
+    const isPanning = useRef(false)
+    const panStart = useRef({ x: 0, y: 0, scrollX: 0, scrollY: 0 })
+
+    const onPanDown = useCallback((e: React.MouseEvent) => {
+        // Only left-click on empty space (not on nodes/buttons)
+        if (e.button !== 0) return
+        const tag = (e.target as HTMLElement).tagName
+        if (['BUTTON', 'INPUT', 'A', 'SELECT'].includes(tag)) return
+        // Skip if clicked on a node card
+        if ((e.target as HTMLElement).closest('[role="button"]')) return
+
+        isPanning.current = true
+        panStart.current = { x: e.clientX, y: e.clientY, scrollX: scrollRef.current?.scrollLeft || 0, scrollY: scrollRef.current?.scrollTop || 0 }
+        if (scrollRef.current) scrollRef.current.style.cursor = 'grabbing'
+        e.preventDefault()
+    }, [])
+
+    useEffect(() => {
+        const onMove = (e: MouseEvent) => {
+            if (!isPanning.current || !scrollRef.current) return
+            const dx = e.clientX - panStart.current.x
+            const dy = e.clientY - panStart.current.y
+            scrollRef.current.scrollLeft = panStart.current.scrollX - dx
+            scrollRef.current.scrollTop = panStart.current.scrollY - dy
+        }
+        const onUp = () => {
+            isPanning.current = false
+            if (scrollRef.current) scrollRef.current.style.cursor = 'grab'
+        }
+        window.addEventListener('mousemove', onMove)
+        window.addEventListener('mouseup', onUp)
+        return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    }, [])
 
     useEffect(() => {
         // @ts-ignore
@@ -736,7 +815,10 @@ export function PipelineVisualizer({ campaignId, workflowId, vertical = false }:
 
     return (
         <div className="flex bg-slate-50 rounded-xl border border-slate-200 overflow-hidden relative" style={{ minHeight: vertical ? '200px' : '280px' }}>
-            <div className={`flex-1 p-6 relative ${vertical ? 'overflow-y-auto overflow-x-hidden' : 'overflow-x-auto overflow-y-hidden'}`}>
+            <div ref={scrollRef}
+                className={`flex-1 p-6 relative ${vertical ? 'overflow-y-auto overflow-x-hidden' : 'overflow-x-auto overflow-y-hidden'}`}
+                style={{ cursor: 'grab' }}
+                onMouseDown={onPanDown}>
                 <style>{`
                     @keyframes dash {
                         to { stroke-dashoffset: -10; }

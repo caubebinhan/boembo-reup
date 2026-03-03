@@ -132,8 +132,11 @@ export function VideoHistory({ campaignId, videoId, isExpanded }: VideoHistoryPr
                     try {
                         const data = ev.data ? JSON.parse(ev.data) : null
                         if (data?.url) extra = data.url
-                        if (data?.error) extra = data.error
-                        if (data?.operations) extra = `${data.operations.length} operations`
+                        else if (data?.publishedUrl) extra = data.publishedUrl
+                        else if (data?.error) extra = typeof data.error === 'string' ? data.error : JSON.stringify(data.error)
+                        else if (data?.operations) extra = `${data.operations.length} thao tác chỉnh sửa`
+                        else if (data?.status) extra = `Trạng thái: ${data.status}`
+                        else if (data?.path) extra = `📂 ${data.path.replace(/\\/g, '/').split('/').pop()}`
                     } catch { }
 
                     const isError = ev.event.includes('failed') || ev.event.includes('violation') || ev.event.includes('error')
@@ -159,7 +162,7 @@ export function VideoHistory({ campaignId, videoId, isExpanded }: VideoHistoryPr
                                     </span>
                                 </div>
 
-                                {ev.message && ev.message !== config.label && (
+                                {ev.message && ev.message !== config.label && !ev.message.startsWith('{') && ev.message.length < 200 && (
                                     <p className="text-[11px] text-slate-500 mt-0.5 truncate">{ev.message}</p>
                                 )}
 

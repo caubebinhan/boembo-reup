@@ -5,6 +5,7 @@ import { updatePublishHistoryRecord } from './dedup/PublishDedupStore'
 import { campaignRepo } from '@main/db/repositories/CampaignRepo'
 import { settingsRepo } from '@main/db/repositories/SettingsRepo'
 import { accountRepo } from '@main/db/repositories/AccountRepo'
+import { shouldUseProfileSession } from '@main/tiktok/TikTokAuthMode'
 
 // ── Shared helpers (extracted from publisher backend) ─────
 
@@ -103,8 +104,9 @@ export const publishVerifyHandler: AsyncTaskHandler = {
     if (!account) {
       return { action: 'fail', error: `Account ${accountId} not found` }
     }
+    const useProfileSession = shouldUseProfileSession()
     const cookies = Array.isArray(account.cookies) ? account.cookies : null
-    if (!cookies?.length) {
+    if (!useProfileSession && !cookies?.length) {
       return { action: 'fail', error: 'Account cookies expired or missing. Please re-login.' }
     }
 
@@ -123,8 +125,9 @@ export const publishVerifyHandler: AsyncTaskHandler = {
     const publisher = new VideoPublisher()
     let recheck: any
     try {
-      recheck = await publisher.recheckPublishedStatus(cookies, undefined, {
+      recheck = await publisher.recheckPublishedStatus(useProfileSession ? undefined : cookies, undefined, {
         username: account.username,
+        useProfileSession,
         uploadStartTime: publishStartedAtSec,  // seconds!
         expectedVideoId,
         expectedVideoUrl,
