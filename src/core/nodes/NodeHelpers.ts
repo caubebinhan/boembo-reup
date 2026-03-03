@@ -15,7 +15,7 @@ import { ExecutionLogger } from '../engine/ExecutionLogger'
  * @param platformId   Video platform_id (or fallback string)
  * @param errorType    Machine-readable error category (e.g. 'file_not_found', 'no_account')
  * @param message      Human-readable error description
- * @param extra        Optional extra fields to include in the emitted event
+ * @param opts         Optional: errorCode (DG-xxx), retryable flag, extra event fields
  */
 export function failGracefully(
   ctx: NodeExecutionContext,
@@ -23,9 +23,11 @@ export function failGracefully(
   platformId: string,
   errorType: string,
   message: string,
-  extra?: Record<string, any>
+  opts?: { errorCode?: string; retryable?: boolean; extra?: Record<string, any> }
 ): NodeExecutionResult {
-  ctx.logger.error(message)
+  const errorCode = opts?.errorCode
+  const logMsg = errorCode ? `[${errorCode}] ${message}` : message
+  ctx.logger.error(logMsg)
 
   // Update video status if we have a valid platform_id
   if (platformId && platformId !== 'unknown') {
@@ -38,10 +40,15 @@ export function failGracefully(
   }
 
   ExecutionLogger.emitNodeEvent(ctx.campaign_id, instanceId, 'node:failed', {
-    videoId: platformId, error: message, errorType, ...extra,
+    videoId: platformId,
+    error: message,
+    errorType,
+    errorCode,
+    retryable: opts?.retryable ?? false,
+    ...opts?.extra,
   })
 
-  return { action: 'continue', data: null, message }
+  return { action: 'continue', data: null, message: logMsg }
 }
 
 /**
@@ -52,20 +59,27 @@ export function failGracefully(
  * @param instanceId   The node instance ID
  * @param errorType    Machine-readable error category
  * @param message      Human-readable error description
+ * @param opts         Optional: errorCode (DG-xxx), retryable flag
  */
 export function failBatchGracefully(
   ctx: NodeExecutionContext,
   instanceId: string,
   errorType: string,
   message: string,
+  opts?: { errorCode?: string; retryable?: boolean }
 ): NodeExecutionResult {
-  ctx.logger.error(message)
+  const errorCode = opts?.errorCode
+  const logMsg = errorCode ? `[${errorCode}] ${message}` : message
+  ctx.logger.error(logMsg)
 
   ExecutionLogger.emitNodeEvent(ctx.campaign_id, instanceId, 'node:failed', {
-    error: message, errorType,
+    error: message,
+    errorType,
+    errorCode,
+    retryable: opts?.retryable ?? false,
   })
 
-  return { action: 'continue', data: [], message }
+  return { action: 'continue', data: [], message: logMsg }
 }
 
 /**

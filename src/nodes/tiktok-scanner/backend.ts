@@ -21,7 +21,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
   for (const source of sources) {
     if (!source) continue
 
-    // Use per-source settings from Step2_Sources wizard
+    // Use per-source settings from WizardSources wizard
     const limit = source.historyLimit ?? 50
     const sortOrder = source.sortOrder ?? 'newest'
     const timeRange = source.timeRange ?? 'history_and_future'

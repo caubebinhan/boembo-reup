@@ -1,13 +1,13 @@
 {
-  "schemaVersion": 1,
-  "generatedAt": 1772182793399,
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
   "totalWorkflows": 3,
   "workflows": [
     {
       "workflowId": "main",
       "workflowVersion": "1.0",
       "scope": "main@1.0",
-      "total": 11,
+      "total": 0,
       "runnable": 0,
       "planned": 11,
       "caseIndexPath": "tests/debug/workflows/main/v1.0/CASE_INDEX.json",
@@ -17,9 +17,9 @@
       "workflowId": "tiktok-repost",
       "workflowVersion": "1.0",
       "scope": "tiktok-repost@1.0",
-      "total": 129,
-      "runnable": 57,
-      "planned": 72,
+      "total": 95,
+      "runnable": 95,
+      "planned": 34,
       "caseIndexPath": "tests/debug/workflows/tiktok-repost/v1.0/CASE_INDEX.json",
       "casebookPath": "tests/debug/workflows/tiktok-repost/v1.0/CASEBOOK.md"
     },
@@ -27,7 +27,7 @@
       "workflowId": "upload-local",
       "workflowVersion": "1.0",
       "scope": "upload-local@1.0",
-      "total": 1,
+      "total": 0,
       "runnable": 0,
       "planned": 1,
       "caseIndexPath": "tests/debug/workflows/upload-local/v1.0/CASE_INDEX.json",

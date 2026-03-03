@@ -8,6 +8,18 @@ const manifest: NodeManifest = {
   category: 'source',
   icon: '📁',
   description: 'Load local video files for publishing',
+  errorPrefix: 'FSR',
+  retryPolicy: {
+    maxRetries: 2,
+    backoff: 'fixed',
+    initialDelayMs: 1000,
+    maxDelayMs: 5000,
+  },
+  behavior: {
+    sideEffects: ['reads_disk'],
+    idempotent: true,
+    crashBehavior: 'retry',
+  },
 }
 
 export default manifest

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "network",
+  "case": {
+    "id": "tiktok-repost-v1.network.upload-connection-drain-timeout",
+    "title": "Network: Upload Connection Drain Timeout",
+    "description": "Connection drains too slowly after body upload; timeout path should not mark success before server ack.",
+    "category": "network",
+    "group": "network",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-63",
+    "status": "runnable"
+  }
+}

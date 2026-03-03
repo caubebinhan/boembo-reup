@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "compat",
+  "case": {
+    "id": "tiktok-repost-v1.compat.workflow-catalog-dynamic-discovery",
+    "title": "Compat: Dynamic Workflow/Version Discovery in Debug Tab",
+    "description": "Troubleshooting registry/UI lists workflow versions dynamically from providers and keeps tiktok-repost@1.0 filter stable.",
+    "category": "compat",
+    "group": "compat",
+    "risk": "safe",
+    "level": "intermediate",
+    "errorCode": "DG-500",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-34",
+    "status": "runnable"
+  }
+}

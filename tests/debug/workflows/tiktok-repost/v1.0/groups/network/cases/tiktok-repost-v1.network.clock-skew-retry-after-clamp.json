@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "network",
+  "case": {
+    "id": "tiktok-repost-v1.network.clock-skew-retry-after-clamp",
+    "title": "Network: Retry-After Clock Skew Clamp",
+    "description": "Negative retry delays due to clock skew should clamp to minimum safe delay instead of immediate spin-loop.",
+    "category": "network",
+    "group": "network",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-41",
+    "status": "runnable"
+  }
+}

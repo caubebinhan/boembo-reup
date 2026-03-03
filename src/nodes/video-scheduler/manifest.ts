@@ -20,6 +20,12 @@ const manifest: NodeManifest = {
     ],
   },
   on_save_event: 'reschedule',
+  errorPrefix: 'SCH',
+  behavior: {
+    sideEffects: ['writes_to_db'],
+    idempotent: true,
+    crashBehavior: 'fail_job',
+  },
 }
 
 export default manifest

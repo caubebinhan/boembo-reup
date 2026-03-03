@@ -5,6 +5,7 @@ const CAMPAIGN_CASE_BASE = {
   risk: 'safe' as const,
   category: 'campaign',
   group: 'campaign',
+  errorCode: 'DG-300',
   implemented: true
 }
 

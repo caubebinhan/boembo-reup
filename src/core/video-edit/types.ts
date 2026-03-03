@@ -1,12 +1,22 @@
 /**
  * Video Edit Plugin — Type Definitions
  * ─────────────────────────────────────
- * Core interfaces for the plugin-based video editing system.
+ * PURE DOMAIN TYPES — no infrastructure imports.
  * Supports multi-instance operations (user can add N instances of same plugin).
  */
-// Re-export for convenience
-export type { FFmpegFilter } from '@main/ffmpeg/FFmpegCommandBuilder'
-import type { FFmpegFilter } from '@main/ffmpeg/FFmpegCommandBuilder'
+
+// ── Video Filter (pure domain — was FFmpegFilter) ───
+
+export interface VideoFilter {
+  /** FFmpeg filter name (e.g. 'scale', 'overlay', 'hflip') */
+  filter: string
+  /** Filter options (e.g. { w: 1920, h: 1080 }) */
+  options: Record<string, any>
+  /** Named input pads (e.g. ['0:v'], ['scaled', '1:v']) */
+  inputs?: string[]
+  /** Named output pads (e.g. ['scaled'], ['out']) */
+  outputs?: string[]
+}
 
 // ── Plugin Config Schema ────────────────────────────
 
@@ -68,11 +78,11 @@ export interface PluginContext {
   instanceKey: string
 }
 
-// ── FFmpeg Command (for multi-pass plugins) ─────────
+// ── Multi-pass command ──────────────────────────────
 
-export interface FFmpegCommand {
+export interface VideoEditCommand {
   inputs: Array<{ path: string; options?: string[] }>
-  filters: FFmpegFilter[]
+  filters: VideoFilter[]
   outputOptions: Record<string, any>
   /** If set, the output replaces the main video for subsequent commands */
   outputIsMainVideo?: boolean
@@ -82,17 +92,6 @@ export interface FFmpegCommand {
 
 export type PluginGroup = 'transform' | 'overlay' | 'filter' | 'audio' | 'anti-detect'
 
-/**
- * Preview hint — tells the editor canvas how to render this plugin's effect.
- * Every plugin should declare this so the UI knows what to show.
- *
- * - 'overlay-image': draggable image sprite (watermark, logo)
- * - 'overlay-text': draggable text label with font/color
- * - 'crop-guide': dashed rectangle showing crop region
- * - 'blur-region': translucent rectangle for blur area
- * - 'transform': visual indicator (resize arrows, rotation)
- * - 'none': no canvas representation (anti-detect, audio, codec)
- */
 export type PreviewHintType =
   | 'overlay-image'
   | 'overlay-text'
@@ -100,6 +99,9 @@ export type PreviewHintType =
   | 'blur-region'
   | 'transform'
   | 'none'
+
+/** Where the plugin came from */
+export type PluginSource = 'builtin' | 'marketplace' | 'local'
 
 export interface VideoEditPlugin {
   /** Unique plugin ID (e.g. 'builtin.rotate') */
@@ -112,61 +114,65 @@ export interface VideoEditPlugin {
   icon: string
   /** Short description */
   description: string
+  /** Plugin version (semver) */
+  version?: string
+  /** Plugin source */
+  source?: PluginSource
   /** If true, this plugin is enabled by default for new campaigns */
   defaultEnabled?: boolean
-  /** If true, user can add multiple instances of this plugin (e.g. watermarks) */
+  /** If true, user can add multiple instances of this plugin */
   allowMultipleInstances?: boolean
   /** Label for the "add" button when allowMultipleInstances is true */
   addInstanceLabel?: string
-  /** If true, show "Recommended" badge in wizard — safe, invisible anti-detect plugins */
+  /** If true, show "Recommended" badge — safe, invisible anti-detect plugins */
   recommended?: boolean
-  /** Warning text shown when user enables this plugin (e.g. "Alters original audio") */
+  /** Warning text shown when user enables this plugin */
   warning?: string
-  /**
-   * How this plugin renders on the editor canvas.
-   * Defaults to 'none' if not specified. Plugins that affect
-   * visual output should declare a hint so the compositor can show a preview.
-   */
+  /** How this plugin renders on the editor canvas */
   previewHint?: PreviewHintType
 
-  /** Config schema — used to auto-render wizard UI form */
+  /** Config schema — used to auto-render UI form */
   configSchema: PluginConfigField[]
 
-  /**
-   * Build FFmpeg filter(s) from user params.
-   * Returns filters that can be merged into a single-pass filter_complex.
-   */
-  buildFilters(params: Record<string, any>, ctx: PluginContext): FFmpegFilter[]
+  /** Build filter(s) from user params */
+  buildFilters(params: Record<string, any>, ctx: PluginContext): VideoFilter[]
 
-  /** Validate params before execution. Return error string or null. */
+  /** Validate params before execution */
   validate?(params: Record<string, any>): string | null
 
-  /**
-   * If true, this plugin cannot be merged into a single filter_complex pass.
-   * Must implement buildMultiPassCommands instead.
-   */
+  /** If true, requires multi-pass processing */
   requiresMultiPass?: boolean
 
-  /**
-   * Build separate FFmpeg commands for multi-pass processing.
-   * Each command is executed sequentially.
-   */
-  buildMultiPassCommands?(params: Record<string, any>, ctx: PluginContext): FFmpegCommand[]
+  /** Build separate commands for multi-pass */
+  buildMultiPassCommands?(params: Record<string, any>, ctx: PluginContext): VideoEditCommand[]
 
-  /**
-   * Provides additional input files (e.g. watermark, audio).
-   * Called before buildFilters to register inputs.
-   */
+  /** Additional input files (e.g. watermark, audio) */
   getAdditionalInputs?(params: Record<string, any>, ctx: PluginContext): string[]
 
-  /**
-   * Provides extra output options (e.g. -map_metadata -1 for metadata strip).
-   * Merged into the final command's output options.
-   */
+  /** Extra output options (e.g. -map_metadata -1) */
   getOutputOptions?(params: Record<string, any>): string[]
 }
 
-// ── User-facing Config (saved in campaign params) ───
+// ── Serializable Plugin Metadata (for IPC / marketplace) ──
+
+export interface PluginManifest {
+  id: string
+  name: string
+  group: PluginGroup
+  icon: string
+  description: string
+  version: string
+  source: PluginSource
+  previewHint: PreviewHintType
+  configSchema: PluginConfigField[]
+  defaultEnabled?: boolean
+  allowMultipleInstances?: boolean
+  addInstanceLabel?: string
+  recommended?: boolean
+  warning?: string
+}
+
+// ── User-facing Operation (saved in campaign params) ──
 
 export interface VideoEditOperation {
   /** Unique ID for this operation instance */
@@ -183,7 +189,6 @@ export interface VideoEditOperation {
 
 /**
  * @deprecated Use VideoEditOperation[] instead
- * Kept for backward compatibility during migration
  */
 export interface VideoEditConfig {
   pluginId: string
@@ -205,4 +210,24 @@ export function migrateToOperations(configs: VideoEditConfig[]): VideoEditOperat
 /** Generate a unique operation ID */
 export function generateOperationId(): string {
   return `op_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+}
+
+/** Extract a PluginManifest from a VideoEditPlugin (strips runtime functions) */
+export function toPluginManifest(plugin: VideoEditPlugin): PluginManifest {
+  return {
+    id: plugin.id,
+    name: plugin.name,
+    group: plugin.group,
+    icon: plugin.icon,
+    description: plugin.description,
+    version: plugin.version || '1.0.0',
+    source: plugin.source || 'builtin',
+    previewHint: plugin.previewHint || 'none',
+    configSchema: plugin.configSchema,
+    defaultEnabled: plugin.defaultEnabled,
+    allowMultipleInstances: plugin.allowMultipleInstances,
+    addInstanceLabel: plugin.addInstanceLabel,
+    recommended: plugin.recommended,
+    warning: plugin.warning,
+  }
 }

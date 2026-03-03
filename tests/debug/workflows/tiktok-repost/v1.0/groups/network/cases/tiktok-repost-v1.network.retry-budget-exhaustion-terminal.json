@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "network",
+  "case": {
+    "id": "tiktok-repost-v1.network.retry-budget-exhaustion-terminal",
+    "title": "Network: Retry Budget Exhaustion Terminal Path",
+    "description": "Retry budget exhaustion transitions to terminal failed state with complete retry timeline in logs.",
+    "category": "network",
+    "group": "network",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-59",
+    "status": "runnable"
+  }
+}

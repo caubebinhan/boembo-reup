@@ -5,6 +5,7 @@ const COMPAT_CASE_BASE = {
   risk: 'safe' as const,
   category: 'compat',
   group: 'compat',
+  errorCode: 'DG-500',
   implemented: true
 }
 

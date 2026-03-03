@@ -9,8 +9,10 @@ import type { JobDocument } from '@main/db/models/Job'
 import { asyncTaskScheduler } from '@main/services/AsyncTaskScheduler'
 import { isNetworkError, isDiskError } from '../nodes/NodeHelpers'
 import { getFreeDiskSpaceMB } from '@main/utils/diskSpace'
+import { CodedError } from '@core/errors/CodedError'
+import type { NodeRetryPolicy } from '../nodes/NodeDefinition'
 
-// „Ÿ„Ÿ Error handling helpers „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+// â”€â”€ Error handling helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /** Auto-pause campaign on network error. Returns true if handled. */
 function handleNetworkError(errorMsg: string, campaignId: string, instanceId: string, store?: CampaignStore): boolean {
@@ -46,7 +48,23 @@ function handleDiskError(errorMsg: string, campaignId: string, instanceId: strin
   return true
 }
 
-// „Ÿ„Ÿ DRY Helpers „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+/**
+ * Compute retry delay based on policy and current attempt.
+ * Returns 0 if retry is not applicable.
+ */
+function computeRetryDelay(policy: NodeRetryPolicy | undefined, attempt: number): number {
+  if (!policy || policy.maxRetries <= 0 || attempt >= policy.maxRetries) return 0
+  const base = policy.initialDelayMs || 1000
+  const max = policy.maxDelayMs || 60000
+  switch (policy.backoff) {
+    case 'fixed':       return Math.min(base, max)
+    case 'linear':      return Math.min(base * (attempt + 1), max)
+    case 'exponential': return Math.min(base * Math.pow(2, attempt), max)
+    default:            return Math.min(base, max)
+  }
+}
+
+// â”€â”€ DRY Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /** Safely evaluate a conditional edge expression against data. */
 function safeEval(expression: string, data: any): boolean {
@@ -175,7 +193,7 @@ async function executeWithTimeout(NodeImpl: any, inputData: any, ctx: any, nodeD
   return resultPromise
 }
 
-// „Ÿ„Ÿ FlowEngine „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+// â”€â”€ FlowEngine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Core FlowEngine - a dumb executor.
@@ -210,7 +228,7 @@ export class FlowEngine {
     console.log('[FlowEngine] Stopped')
   }
 
-  // „Ÿ„Ÿ Pre-run health check „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+  // â”€â”€ Pre-run health check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   /**
    * Quick health check before starting a campaign.
    * Checks storage space and workflow service endpoints.
@@ -257,7 +275,7 @@ export class FlowEngine {
     return { ok: errors.length === 0, errors }
   }
 
-  // „Ÿ„Ÿ Trigger Campaign „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+  // â”€â”€ Trigger Campaign â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   public async triggerCampaign(campaignId: string) {
     const store = campaignRepo.tryOpen(campaignId)
     if (!store) return console.error(`[FlowEngine] Campaign ${campaignId} not found`)
@@ -299,7 +317,7 @@ export class FlowEngine {
   }
 
   public async resumeCampaign(campaignId: string) {
-    // Pre-run health check before resume
+    // â”€â”€ Pre-run health check before resume
     const health = await this.preRunHealthCheck(campaignId)
     if (!health.ok) {
       const errorMsg = health.errors.join('; ')
@@ -323,38 +341,49 @@ export class FlowEngine {
     }
   }
 
-  // „Ÿ„Ÿ Tick „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+  // â”€â”€ Tick â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private async tick() {
     const jobs = jobRepo.findPending(5)
     for (const job of jobs) {
-      await this.executeJob(job)
+      try {
+        await this.executeJob(job)
+      } catch (err: any) {
+        // Catch any unhandled error that escapes executeJob's own try-catch
+        console.error(`[FlowEngine] Unhandled error in tick for job ${job.id}:`, err?.message || err)
+        try {
+          jobRepo.updateStatus(job.id, 'failed', `Unhandled tick error: ${err?.message || err}`)
+        } catch (_) { /* DB error â€” nothing we can do */ }
+      }
     }
   }
 
-  // „Ÿ„Ÿ Execute Job „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+  // â”€â”€ Execute Job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private async executeJob(job: JobDocument) {
     try {
       jobRepo.updateStatus(job.id, 'running')
 
       const flow = FlowResolver.resolve(job.campaign_id)
-      if (!flow) throw new Error(`Flow for campaign ${job.campaign_id} not found`)
+      /** @throws DG-040 â€” Flow definition not found for campaign */
+      if (!flow) throw new CodedError('DG-040', `Flow for campaign ${job.campaign_id} not found`)
 
       const nodeDef = findNode(flow, job.instance_id)
-      if (!nodeDef) throw new Error(`Node ${job.instance_id} not found in flow`)
+      /** @throws DG-041 â€” Node instance not found in flow definition */
+      if (!nodeDef) throw new CodedError('DG-041', `Node ${job.instance_id} not found in flow`)
 
       const store = campaignRepo.open(job.campaign_id)
       const params = store.params
 
-      // „Ÿ„Ÿ Loop node? „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+      // â”€â”€ Loop node? â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (nodeDef.children && nodeDef.children.length > 0) {
         await this.executeLoop(job, flow, nodeDef, job.data, params, store)
         jobRepo.updateStatus(job.id, 'completed')
         return
       }
 
-      // „Ÿ„Ÿ Regular node execution „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+      // â”€â”€ Regular node execution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       const NodeImpl = nodeRegistry.get(nodeDef.node_id)
-      if (!NodeImpl) throw new Error(`Node impl ${nodeDef.node_id} not registered`)
+      /** @throws DG-042 â€” Node implementation not registered */
+      if (!NodeImpl) throw new CodedError('DG-042', `Node impl ${nodeDef.node_id} not registered`)
 
       const startTime = Date.now()
       ExecutionLogger.nodeStart(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id, {})
@@ -369,7 +398,7 @@ export class FlowEngine {
 
       jobRepo.updateStatus(job.id, 'completed')
 
-      // „Ÿ„Ÿ Flow control „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+      // â”€â”€ Flow control â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
       if (result.action === 'finish') {
         store.status = 'finished'
         store.save()
@@ -393,15 +422,47 @@ export class FlowEngine {
 
     } catch (err: any) {
       const errorMsg = err.message || String(err)
+      const errorCode = err instanceof CodedError ? err.errorCode : undefined
+
+      // â”€â”€ Retry logic: check manifest retryPolicy â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      const NodeImpl = nodeRegistry.get(job.node_id)
+      const retryPolicy = NodeImpl?.manifest?.retryPolicy
+      const retryCount = (job.data?._retryCount as number) || 0
+      const delayMs = computeRetryDelay(retryPolicy, retryCount)
+
+      if (delayMs > 0) {
+        // Retry is possible
+        jobRepo.updateStatus(job.id, 'failed', errorMsg)
+        ExecutionLogger.nodeError(job.campaign_id, job.id, job.instance_id, job.node_id, errorMsg)
+        ExecutionLogger.emitNodeEvent(job.campaign_id, job.instance_id, 'node:retry-scheduled', {
+          errorCode,
+          attempt: retryCount + 1,
+          maxRetries: retryPolicy!.maxRetries,
+          delayMs,
+          error: errorMsg,
+        })
+        console.log(`[FlowEngine] Retry ${retryCount + 1}/${retryPolicy!.maxRetries} for ${job.instance_id} in ${delayMs}ms`)
+        this.createJob(
+          job.campaign_id, job.workflow_id, job.instance_id, job.node_id,
+          { ...job.data, _retryCount: retryCount + 1 },
+          Date.now() + delayMs
+        )
+        return
+      }
+
+      // No retry â€” final failure
       jobRepo.updateStatus(job.id, 'failed', errorMsg)
       ExecutionLogger.nodeError(job.campaign_id, job.id, job.instance_id, job.node_id, errorMsg)
+      ExecutionLogger.emitNodeEvent(job.campaign_id, job.instance_id, 'node:failed', {
+        errorCode, error: errorMsg, retryable: false,
+      })
 
       handleNetworkError(errorMsg, job.campaign_id, job.instance_id)
       handleDiskError(errorMsg, job.campaign_id, job.instance_id)
     }
   }
 
-  // „Ÿ„Ÿ Loop Execution „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+  // â”€â”€ Loop Execution â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   /**
    * Core loop: iterate input array through child nodes sequentially.
    *
@@ -495,7 +556,7 @@ export class FlowEngine {
             { action: result.action }, durationMs)
           ExecutionLogger.nodeData(job.campaign_id, childDef.instance_id, childDef.node_id, result.data)
 
-          // Flow control from child
+          // â”€â”€ Flow control from child
           if (result.action === 'finish') {
             store.status = 'finished'
             store.save()
@@ -519,7 +580,7 @@ export class FlowEngine {
         } catch (err: any) {
           ExecutionLogger.nodeError(job.campaign_id, job.id, childDef.instance_id, childDef.node_id, err.message)
 
-          // „Ÿ„Ÿ YAML events handling: match error -> event key -> action + emit „Ÿ„Ÿ
+          // â”€â”€ YAML events handling: match error -> event key -> action + emit â”€â”€â”€
           const matchedEvent = matchNodeEvent(childDef, err.message)
           if (matchedEvent) {
             const { eventKey, handler } = matchedEvent
@@ -577,7 +638,7 @@ export class FlowEngine {
     }
   }
 
-  // „Ÿ„Ÿ Create Job „Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ„Ÿ
+  // â”€â”€ Create Job â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   private createJob(campaignId: string, workflowId: string, instanceId: string, nodeId: string, data: any, scheduledAt?: number) {
     const jobId = jobRepo.createJob({
       campaign_id: campaignId,

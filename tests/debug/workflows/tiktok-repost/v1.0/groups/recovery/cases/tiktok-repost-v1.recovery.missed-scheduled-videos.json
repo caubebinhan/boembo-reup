@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "recovery",
+  "case": {
+    "id": "tiktok-repost-v1.recovery.missed-scheduled-videos",
+    "title": "Recovery Reschedules Missed Videos",
+    "description": "Crash recovery detects past-due queued videos and reschedules them from now with interval spacing.",
+    "category": "recovery",
+    "group": "recovery",
+    "risk": "safe",
+    "level": "intermediate",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-96",
+    "status": "runnable"
+  }
+}

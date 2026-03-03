@@ -6,6 +6,9 @@ Debug casebook hub:
 
 - `tests/debug/CASEBOOK.md`
 - `tests/debug/CASE_INDEX.json`
+- `tests/debug/WORKFLOW_INDEX.json`
+- `tests/debug/workflows/<workflowId>/<version>/groups/<group>/cases/<case-id>.json` (implemented only)
+- `tests/debug/workflows/<workflowId>/<version>/groups/<group>/TODO.md` (planned/TODO only)
 - `tests/debug/EXCEPTION_MATRIX.md`
 
 ## Unit Cases

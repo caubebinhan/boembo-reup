@@ -5,6 +5,7 @@ import { DebugHelper } from './helpers/DebugHelper'
 import { SentryMain as Sentry } from '../../sentry'
 import fs from 'fs-extra'
 import path from 'node:path'
+import { CodedError } from '@core/errors/CodedError'
 
 interface VerifyOptions {
     useUniqueTag: boolean
@@ -55,7 +56,8 @@ export class PublishVerifier {
 
     private async waitForSuccessIndicator(): Promise<PublishResult | true> {
         for (let i = 0; i < 120; i++) {
-            if (this.page.isClosed()) throw new Error('Browser page closed during verification')
+            /** @throws DG-117 — Browser page closed during publish verification */
+            if (this.page.isClosed()) throw new CodedError('DG-117', 'Browser page closed during verification')
             try { await this.page.waitForTimeout(1000) } catch { break }
 
             const uploading =

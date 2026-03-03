@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "thumbnail",
+  "case": {
+    "id": "tiktok-repost-v1.thumbnail.malformed-payload-fallback",
+    "title": "Thumbnail Malformed Payload Fallback",
+    "description": "Malformed thumbnail payload should normalize to empty string/fallback without crashing campaign load or UI.",
+    "category": "thumbnail",
+    "group": "thumbnail",
+    "risk": "safe",
+    "level": "intermediate",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-120",
+    "status": "runnable"
+  }
+}

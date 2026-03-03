@@ -2,11 +2,14 @@
 
 This folder is the single hub for debug/test investigation assets:
 
-- `CASE_INDEX.json`: machine-readable index for all cases and TODO items.
-- `CASEBOOK.md`: human-readable implementation backlog grouped by scope.
-- `WORKFLOW_INDEX.json`: workflow/version map to split case indexes.
-- `workflows/<workflowId>/<version>/CASE_INDEX.json`: per-workflow case index.
-- `workflows/<workflowId>/<version>/CASEBOOK.md`: per-workflow implementation queue.
+- `CASE_INDEX.json`: root summary index (implemented JSON only + workflow paths).
+- `CASEBOOK.md`: root TODO backlog (markdown only).
+- `WORKFLOW_INDEX.json`: workflow/version map.
+- `workflows/<workflowId>/<version>/CASE_INDEX.json`: per-workflow summary.
+- `workflows/<workflowId>/<version>/CASEBOOK.md`: per-workflow TODO queue.
+- `workflows/<workflowId>/<version>/groups/<group>/CASE_INDEX.json`: per-group implemented index.
+- `workflows/<workflowId>/<version>/groups/<group>/cases/<case-id>.json`: one file per implemented case.
+- `workflows/<workflowId>/<version>/groups/<group>/TODO.md`: TODO/planned cases for that group.
 - `EXCEPTION_MATRIX.md`: proposed extra edge/exception scenarios to convert into cases.
 - `artifacts/`: archived artifact bundles per run (`artifact-manifest.json`, screenshots, HTML dumps, logs, JSON snapshots).
 - `footprints/`: diagnostic footprint JSON exported per run.

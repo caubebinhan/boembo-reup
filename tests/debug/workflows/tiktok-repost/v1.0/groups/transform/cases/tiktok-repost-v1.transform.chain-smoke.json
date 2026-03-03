@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "transform",
+  "case": {
+    "id": "tiktok-repost-v1.transform.chain-smoke",
+    "title": "Transform Chain Smoke",
+    "description": "Run core transform/condition nodes in the v1 flow and verify key fields survive chain mutations.",
+    "category": "transform",
+    "group": "transform",
+    "risk": "safe",
+    "level": "basic",
+    "errorCode": "DG-400",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-125",
+    "status": "runnable"
+  }
+}

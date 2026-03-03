@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "async_verify",
+  "case": {
+    "id": "tiktok-repost-v1.async-verify.max-retries-exceeded-manual-fallback",
+    "title": "Async Verify Max Retries Exceeded → Manual Fallback",
+    "description": "Verify task exceeds maxAttempts; task transitions to manual_check and UI surfaces actionable next steps.",
+    "category": "async_verify",
+    "group": "async_verify",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-07",
+    "status": "runnable"
+  }
+}

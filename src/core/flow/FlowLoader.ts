@@ -2,6 +2,7 @@ import * as yaml from 'js-yaml'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { FlowDefinition, WorkflowUIDescriptor } from './ExecutionContracts'
+import { CodedError } from '@core/errors/CodedError'
 
 export class FlowLoader {
   private cache = new Map<string, FlowDefinition>()
@@ -124,7 +125,8 @@ export class FlowLoader {
 
   private parseRaw(raw: any): FlowDefinition {
     if (!raw.id || !raw.name || !raw.nodes || !raw.edges) {
-      throw new Error(`Invalid Flow: missing required fields. id=${raw.id}`)
+      /** @throws DG-043 — Flow YAML is missing required fields (id, name, nodes, edges) */
+      throw new CodedError('DG-043', `Invalid Flow: missing required fields. id=${raw.id}`)
     }
 
     const nodes = raw.nodes.map((n: any) => ({

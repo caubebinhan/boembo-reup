@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { TroubleshootingCaseId, TroubleshootingService } from '../services/TroubleshootingService'
 import { jobRepo } from '../db/repositories/JobRepo'
+import { CodedError } from '@core/errors/CodedError'
 
 function emitToAll(channel: string, payload: any) {
   try {
@@ -43,7 +44,8 @@ export function setupTroubleshootingIPC() {
 
   ipcMain.handle('troubleshooting:send-run-to-sentry', async (_event, payload?: { runId?: string }) => {
     const runId = payload?.runId
-    if (!runId) throw new Error('Missing troubleshooting runId')
+    /** @throws DG-050 — Missing runId in IPC request */
+    if (!runId) throw new CodedError('DG-050', 'Missing troubleshooting runId')
     return TroubleshootingService.sendRunToSentry(runId)
   })
 
@@ -64,7 +66,8 @@ export function setupTroubleshootingIPC() {
     }
   ) => {
     const caseId = payload?.caseId
-    if (!caseId) throw new Error('Missing troubleshooting caseId')
+    /** @throws DG-051 — Missing caseId in IPC request */
+    if (!caseId) throw new CodedError('DG-051', 'Missing troubleshooting caseId')
     const run = await TroubleshootingService.runCase(caseId, {
       onLog: (runId, entry) => emitToAll('troubleshooting:log', { runId, entry }),
       onUpdate: (record) => emitToAll('troubleshooting:run-update', { record }),
@@ -73,6 +76,31 @@ export function setupTroubleshootingIPC() {
     return run
   })
 
+  // ── Per-error troubleshooting handler (production) ──
+  ipcMain.handle('troubleshooting:run-for-error', async (
+    _event,
+    payload: { handlerId: string }
+  ) => {
+    const handlerId = payload?.handlerId
+    /** @throws DG-053 — Missing handlerId */
+    if (!handlerId) throw new CodedError('DG-053', 'Missing troubleshooting handlerId')
+
+    // Lazy import to avoid loading all handlers at startup
+    const { runHandler } = await import('@core/troubleshooting/handlers/handler-registry')
+    const logs: string[] = []
+    const logger = (msg: string) => {
+      logs.push(msg)
+      emitToAll('troubleshooting:handler-log', { handlerId, message: msg })
+    }
+
+    const result = await runHandler(handlerId, logger)
+    if (!result) {
+      return { success: false, title: 'Handler không tìm thấy', message: `Không tìm thấy handler: ${handlerId}`, logs }
+    }
+    return { ...result, logs }
+  })
+
+  // ── Test-only handlers ──
   if (process.env.NODE_ENV === 'test') {
     ipcMain.removeHandler('troubleshooting:test:enqueue-job')
     ipcMain.handle(
@@ -92,8 +120,9 @@ export function setupTroubleshootingIPC() {
         const workflowId = String(payload?.workflowId || '').trim()
         const nodeId = String(payload?.nodeId || '').trim()
         const instanceId = String(payload?.instanceId || '').trim()
+        /** @throws DG-052 — Incomplete enqueue payload */
         if (!campaignId || !workflowId || !nodeId || !instanceId) {
-          throw new Error('Missing required enqueue payload fields')
+          throw new CodedError('DG-052', 'Missing required enqueue payload fields')
         }
         const jobId = jobRepo.createJob({
           campaign_id: campaignId,

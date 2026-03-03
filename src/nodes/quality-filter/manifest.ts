@@ -6,6 +6,12 @@ const manifest: NodeManifest = {
   category: 'filter',
   icon: '🎯',
   description: 'Filter videos by views, likes, and duration',
+  errorPrefix: 'QFL',
+  behavior: {
+    sideEffects: [],
+    idempotent: true,
+    crashBehavior: 'skip_video',
+  },
 }
 
 export default manifest

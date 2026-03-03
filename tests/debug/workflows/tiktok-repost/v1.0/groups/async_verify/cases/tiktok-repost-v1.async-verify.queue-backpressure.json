@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "async_verify",
+  "case": {
+    "id": "tiktok-repost-v1.async-verify.queue-backpressure",
+    "title": "Async Verify Queue Backpressure (Many Pending Tasks)",
+    "description": "50+ pending verify tasks queue up; verify scheduler processes them sequentially per concurrency key without memory spike or starvation.",
+    "category": "async_verify",
+    "group": "async_verify",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-09",
+    "status": "runnable"
+  }
+}

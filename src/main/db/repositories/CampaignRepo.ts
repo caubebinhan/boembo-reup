@@ -6,6 +6,7 @@ import type {
   CampaignCounters,
 } from '../models/Campaign'
 import type { FlowDefinition } from '@core/flow/ExecutionContracts'
+import { CodedError } from '@core/errors/CodedError'
 
 function isPlainObject(value: unknown): value is Record<string, any> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -261,7 +262,8 @@ export class CampaignRepository extends BaseRepo<CampaignDocument> {
   /** Open campaign as a mutable CampaignStore */
   open(id: string): CampaignStore {
     const doc = this.findById(id)
-    if (!doc) throw new Error(`Campaign ${id} not found`)
+    /** @throws DG-030 — Campaign document not found by ID */
+    if (!doc) throw new CodedError('DG-030', `Campaign ${id} not found`)
     return new CampaignStore(doc, this)
   }
 

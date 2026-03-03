@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "recovery",
+  "totalImplemented": 10,
+  "cases": [
+    {
+      "id": "tiktok-repost-v1.recovery.boot-job-audit-stale-cleanup",
+      "title": "Boot Job Audit: Stale Running Jobs Cleaned Up",
+      "fingerprint": "case-TIKTOK-90",
+      "category": "recovery",
+      "group": "recovery",
+      "level": "intermediate",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/recovery/cases/tiktok-repost-v1.recovery.boot-job-audit-stale-cleanup.json"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.corrupted-campaign-doc",
+      "title": "Recovery: Corrupted Campaign Document",
+      "fingerprint": "case-TIKTOK-91",
+      "category": "recovery",
+      "group": "recovery",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/recovery/cases/tiktok-repost-v1.recovery.corrupted-campaign-doc.json"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.crash-mid-download",
+      "title": "Recovery: Crash During Video Download",
+      "fingerprint": "case-TIKTOK-92",
+      "category": "recovery",
+      "group": "recovery",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/recovery/cases/tiktok-repost-v1.recovery.crash-mid-download.json"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.db-lock-during-recovery",
+      "title": "Recovery: DB Locked During Recovery Write",
+      "fingerprint": "case-TIKTOK-93",
+      "category": "recovery",
+      "group": "recovery",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/recovery/cases/tiktok-repost-v1.recovery.db-lock-during-recovery.json"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.failed-counter-drift",
+      "title": "Recovery: failed_count Counter Drift After Rescheduling",
+      "fingerprint": "case-TIKTOK-94",
+      "category": "recovery",
+      "group": "recovery",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/recovery/cases/tiktok-repost-v1.recovery.failed-counter-drift.json"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.idempotent-second-run",
+      "title": "Recovery is Idempotent on Repeated Runs",
+      "fingerprint": "case-TIKTOK-95",
+      "category": "recovery",
+      "group": "recovery",
+      "level": "intermediate",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/recovery/cases/tiktok-repost-v1.recovery.idempotent-second-run.json"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.missed-scheduled-videos",
+      "title": "Recovery Reschedules Missed Videos",
+      "fingerprint": "case-TIKTOK-96",
+      "category": "recovery",
+      "group": "recovery",
+      "level": "intermediate",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/recovery/cases/tiktok-repost-v1.recovery.missed-scheduled-videos.json"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.multi-campaign-parallel-recovery",
+      "title": "Recovery: Multiple Campaigns Recover in Parallel",
+      "fingerprint": "case-TIKTOK-97",
+      "category": "recovery",
+      "group": "recovery",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/recovery/cases/tiktok-repost-v1.recovery.multi-campaign-parallel-recovery.json"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.reset-under-review",
+      "title": "Recovery Resets under_review to queued",
+      "fingerprint": "case-TIKTOK-98",
+      "category": "recovery",
+      "group": "recovery",
+      "level": "intermediate",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/recovery/cases/tiktok-repost-v1.recovery.reset-under-review.json"
+    },
+    {
+      "id": "tiktok-repost-v1.recovery.stuck-running-job-diagnostic",
+      "title": "Recovery Stuck Running Job Diagnostic",
+      "fingerprint": "case-TIKTOK-99",
+      "category": "recovery",
+      "group": "recovery",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/recovery/cases/tiktok-repost-v1.recovery.stuck-running-job-diagnostic.json"
+    }
+  ]
+}

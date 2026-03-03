@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "async_verify",
+  "case": {
+    "id": "tiktok-repost-v1.async-verify.cross-worker-dedup-safety",
+    "title": "Async Verify Cross-Worker Dedup Safety",
+    "description": "Two scheduler ticks fire nearly simultaneously; only one worker successfully claims each task due to atomic lease.",
+    "category": "async_verify",
+    "group": "async_verify",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-04",
+    "status": "runnable"
+  }
+}

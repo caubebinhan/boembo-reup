@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "thumbnail",
+  "case": {
+    "id": "tiktok-repost-v1.thumbnail.normalize-nested-object",
+    "title": "Thumbnail Normalize (Nested Object)",
+    "description": "Verify nested cover/origin_cover/url_list formats normalize into a renderable thumbnail URL.",
+    "category": "thumbnail",
+    "group": "thumbnail",
+    "risk": "safe",
+    "level": "intermediate",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-121",
+    "status": "runnable"
+  }
+}

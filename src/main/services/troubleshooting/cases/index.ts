@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type {
   TroubleshootingCaseArtifactSpec,
   TroubleshootingCaseDefinition,
@@ -34,15 +33,65 @@ console.log(
 let duplicateChecked = false
 let normalizedProviders: WorkflowTroubleshootingProvider[] | null = null
 
-function buildCaseFingerprint(caseDef: TroubleshootingCaseDefinition): string {
-  const seed = [
-    caseDef.workflowId || 'unscoped',
-    caseDef.workflowVersion || 'unversioned',
-    caseDef.id,
-    caseDef.group || caseDef.category || 'general',
-    caseDef.risk || 'safe',
-  ].join('|')
-  return `case-${createHash('sha1').update(seed).digest('hex').slice(0, 16)}`
+const WORKFLOW_FINGERPRINT_ALIAS: Record<string, string> = {
+  main: 'MAIN',
+  'tiktok-repost': 'TIKTOK',
+  'upload-local': 'UPLOAD',
+}
+
+function toWorkflowFingerprintCode(workflowId?: string): string {
+  const raw = String(workflowId || 'unscoped').trim().toLowerCase()
+  if (WORKFLOW_FINGERPRINT_ALIAS[raw]) return WORKFLOW_FINGERPRINT_ALIAS[raw]
+
+  const compact = raw
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .split('-')
+    .filter(Boolean)
+    .map(chunk => chunk.slice(0, 4))
+    .join('')
+    .toUpperCase()
+
+  return compact || 'CASE'
+}
+
+function buildReadableFingerprint(workflowCode: string, ordinal: number): string {
+  return `case-${workflowCode}-${String(ordinal).padStart(2, '0')}`
+}
+
+function compareCaseForFingerprintOrder(left: TroubleshootingCaseDefinition, right: TroubleshootingCaseDefinition): number {
+  const leftWorkflow = left.workflowId || 'unscoped'
+  const rightWorkflow = right.workflowId || 'unscoped'
+  if (leftWorkflow !== rightWorkflow) return leftWorkflow.localeCompare(rightWorkflow)
+
+  const leftVersion = left.workflowVersion || 'unversioned'
+  const rightVersion = right.workflowVersion || 'unversioned'
+  if (leftVersion !== rightVersion) {
+    return leftVersion.localeCompare(rightVersion, undefined, { numeric: true })
+  }
+
+  return left.id.localeCompare(right.id)
+}
+
+function assignReadableFingerprints(cases: TroubleshootingCaseDefinition[]): TroubleshootingCaseDefinition[] {
+  const counters = new Map<string, number>()
+  const byId = new Map<string, string>()
+  const sorted = [...cases].sort(compareCaseForFingerprintOrder)
+
+  for (const c of sorted) {
+    const code = toWorkflowFingerprintCode(c.workflowId)
+    const next = (counters.get(code) || 0) + 1
+    counters.set(code, next)
+    byId.set(c.id, buildReadableFingerprint(code, next))
+  }
+
+  return cases.map(c => ({
+    ...c,
+    fingerprint: byId.get(c.id) || c.fingerprint,
+  }))
+}
+
+function isImplementedCase(caseDef: TroubleshootingCaseDefinition): boolean {
+  return caseDef.implemented !== false
 }
 
 function buildDefaultArtifactsForCase(c: TroubleshootingCaseDefinition): TroubleshootingCaseArtifactSpec[] {
@@ -232,7 +281,6 @@ function normalizeCase(caseDef: TroubleshootingCaseDefinition): TroubleshootingC
     ...caseDef,
     group,
     tags,
-    fingerprint: caseDef.fingerprint || buildCaseFingerprint({ ...caseDef, group }),
     meta: mergeMeta(buildDefaultMetaForCase({ ...caseDef, group }), caseDef.meta),
   }
 }
@@ -242,13 +290,15 @@ function getProviders(): WorkflowTroubleshootingProvider[] {
   normalizedProviders = [...providers, ...syntheticProviders].map((provider) => {
     const workflowId = provider.workflowId
     const workflowVersion = provider.workflowVersion
+    const normalizedCases = (provider.cases || []).map((rawCase) => normalizeCase({
+      ...rawCase,
+      workflowId: rawCase.workflowId || workflowId,
+      workflowVersion: rawCase.workflowVersion || workflowVersion,
+    }))
+
     return {
       ...provider,
-      cases: (provider.cases || []).map((rawCase) => normalizeCase({
-        ...rawCase,
-        workflowId: rawCase.workflowId || workflowId,
-        workflowVersion: rawCase.workflowVersion || workflowVersion,
-      })),
+      cases: assignReadableFingerprints(normalizedCases),
     }
   })
   return normalizedProviders
@@ -269,25 +319,27 @@ function ensureNoDuplicateCaseIds() {
 
 export function listTroubleshootingCases(): TroubleshootingCaseDefinition[] {
   ensureNoDuplicateCaseIds()
-  return getProviders().flatMap(p => p.cases || [])
+  return getProviders()
+    .flatMap(p => p.cases || [])
+    .filter(isImplementedCase)
 }
 
 export function listTroubleshootingWorkflowSummaries(): TroubleshootingWorkflowSummary[] {
   ensureNoDuplicateCaseIds()
   return getProviders()
     .map((provider) => {
-      const cases = provider.cases || []
-      const totalCases = cases.length
-      const runnableCases = cases.filter(c => c.implemented !== false).length
-      const plannedCases = Math.max(0, totalCases - runnableCases)
+      const allCases = provider.cases || []
+      const runnableCases = allCases.filter(isImplementedCase).length
+      const plannedCases = allCases.filter(c => c.implemented === false).length
       return {
         workflowId: provider.workflowId,
         workflowVersion: provider.workflowVersion,
-        totalCases,
+        totalCases: allCases.length,
         runnableCases,
         plannedCases,
       }
     })
+    .filter(entry => entry.totalCases > 0)
     .sort((a, b) => {
       if (a.workflowId !== b.workflowId) return a.workflowId.localeCompare(b.workflowId)
       return a.workflowVersion.localeCompare(b.workflowVersion, undefined, { numeric: true })

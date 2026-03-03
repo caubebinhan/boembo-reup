@@ -2,22 +2,23 @@
 
 const manifest: NodeManifest = {
   id: 'core.monitoring',
-  name: 'Monitor',
+  name: 'Monitoring',
   label: 'Monitor',
-  color: '#06b6d4',
+  color: '#14b8a6',
   category: 'control',
-  icon: '👁',
-  description: 'Periodically re-scan sources for new videos and feed them to the scheduler',
-  editable_settings: {
-    fields: [
-      {
-        key: 'monitorIntervalMinutes',
-        label: 'Tần suất quét (phút)',
-        type: 'number',
-        default: 5,
-        description: 'Khoảng thời gian giữa các lần quét tìm video mới',
-      },
-    ],
+  icon: '📊',
+  description: 'Health check and monitoring node',
+  errorPrefix: 'MON',
+  retryPolicy: {
+    maxRetries: 1,
+    backoff: 'fixed',
+    initialDelayMs: 5000,
+    maxDelayMs: 5000,
+  },
+  behavior: {
+    sideEffects: ['network_call'],
+    idempotent: true,
+    crashBehavior: 'retry',
   },
 }
 

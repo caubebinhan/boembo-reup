@@ -1,6 +1,7 @@
 import { Page } from 'playwright-core'
 import { TIKTOK_SELECTORS } from './constants/selectors'
 import { DebugHelper } from './helpers/DebugHelper'
+import { CodedError } from '@core/errors/CodedError'
 
 // ── File uploader for TikTok Studio ─────────────────────────────────────────
 
@@ -25,7 +26,8 @@ export class FileUploader {
             }
         }
 
-        throw new Error(this.lastUploadError || `File upload failed after ${MAX_RETRIES} attempts`)
+        /** @throws DG-115 — File upload exhausted all retries */
+        throw new CodedError('DG-115', this.lastUploadError || `File upload failed after ${MAX_RETRIES} attempts`)
     }
 
     private async attemptUpload(filePath: string): Promise<boolean> {
@@ -58,11 +60,13 @@ export class FileUploader {
                 })
             } catch {
                 await DebugHelper.dumpPageState(this.page, 'upload_no_input')
-                throw new Error('File input not found on upload page — debug artifacts saved')
+                /** @throws DG-116 — File input element not found on TikTok upload page */
+                throw new CodedError('DG-116', 'File input not found on upload page — debug artifacts saved')
             }
         }
 
-        if (!fileInput) throw new Error('File input element missing')
+        /** @throws DG-116 — File input element is null */
+        if (!fileInput) throw new CodedError('DG-116', 'File input element missing')
 
         // ── Step 3: Set file ────────────────────────────
         console.log(`[FileUploader] Setting file: ${filePath}`)
@@ -114,7 +118,8 @@ export class FileUploader {
                 const el = this.page.locator(sel).first()
                 if (await el.isVisible({ timeout: 500 })) {
                     await DebugHelper.dumpPageState(this.page, 'captcha_during_upload')
-                    throw new Error('CAPTCHA_DETECTED: CAPTCHA appeared during upload')
+                    /** @throws DG-113 — CAPTCHA appeared during file upload */
+                    throw new CodedError('DG-113', 'CAPTCHA_DETECTED: CAPTCHA appeared during upload')
                 }
             } catch (e: any) {
                 if (e.message.includes('CAPTCHA_DETECTED')) throw e

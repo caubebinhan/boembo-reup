@@ -39,7 +39,7 @@ class ServiceHealthMonitor {
     this.rebuildServiceMap()
     this.intervalId = setInterval(() => this.tick(), PING_INTERVAL_MS)
     // Initial check after 10s (give app time to settle)
-    setTimeout(() => this.tick(), 10_000)
+    setTimeout(() => this.tick(), 10000)
     console.log('[ServiceHealthMonitor] Started — checking every', PING_INTERVAL_MS / 1000, 's')
   }
 

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "campaign",
+  "case": {
+    "id": "tiktok-repost-v1.campaign.stats-counter-integrity",
+    "title": "Campaign Stats Counter Integrity on Concurrent Updates",
+    "description": "Concurrent publish completions update published_count; verify counter reflects exact total without missed increments or double-counts.",
+    "category": "campaign",
+    "group": "campaign",
+    "risk": "safe",
+    "level": "advanced",
+    "errorCode": "DG-300",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-22",
+    "status": "runnable"
+  }
+}

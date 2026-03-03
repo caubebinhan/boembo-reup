@@ -1,0 +1,205 @@
+/* ═══════════════════════════════════════════════════
+   VintageDatePicker — Vintage Pastel Calendar Theme
+   ═══════════════════════════════════════════════════ */
+
+/* ── Input field ── */
+.vintage-datepicker-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1.5px solid var(--ev-c-gray-3, #e8e4db);
+  border-radius: 0.75rem;
+  background: var(--ev-c-white, #ffffff);
+  color: var(--ev-c-text-1, #2c2a29);
+  font-size: 0.875rem;
+  font-family: Inter, sans-serif;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.vintage-datepicker-input::placeholder {
+  color: var(--ev-c-text-3, #8a827c);
+}
+
+.vintage-datepicker-input:hover {
+  border-color: var(--ev-c-gray-2, #8a827c);
+}
+
+.vintage-datepicker-input:focus {
+  border-color: #c6a4d0;
+  box-shadow: 0 0 0 3px rgba(198, 164, 208, 0.2);
+}
+
+/* ── Calendar popup ── */
+.vintage-datepicker-popper {
+  z-index: 9999 !important;
+}
+
+.vintage-datepicker-calendar.react-datepicker {
+  font-family: Inter, sans-serif;
+  border: 1.5px solid var(--ev-c-gray-3, #e8e4db);
+  border-radius: 1rem;
+  background: var(--ev-c-white-soft, #fcfbf8);
+  box-shadow:
+    0 10px 40px rgba(44, 42, 41, 0.08),
+    0 2px 8px rgba(44, 42, 41, 0.04);
+  overflow: hidden;
+  animation: vintageFadeIn 0.2s ease;
+}
+
+@keyframes vintageFadeIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Header (month/year nav) ── */
+.vintage-datepicker-calendar .react-datepicker__header {
+  background: linear-gradient(135deg, var(--ev-c-pastel-pink, #f4dce0), var(--ev-c-pastel-peach, #f9e3d3));
+  border-bottom: 1px solid rgba(44, 42, 41, 0.06);
+  padding: 0.75rem 0.5rem 0.5rem;
+  border-radius: 1rem 1rem 0 0;
+}
+
+.vintage-datepicker-calendar .react-datepicker__current-month {
+  color: var(--ev-c-text-1, #2c2a29);
+  font-weight: 700;
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.vintage-datepicker-calendar .react-datepicker__day-names {
+  margin-top: 0.25rem;
+}
+
+.vintage-datepicker-calendar .react-datepicker__day-name {
+  color: var(--ev-c-text-2, #5c5551);
+  font-weight: 600;
+  font-size: 0.75rem;
+  width: 2.25rem;
+  margin: 0 0.1rem;
+}
+
+/* ── Navigation arrows ── */
+.vintage-datepicker-calendar .react-datepicker__navigation {
+  top: 0.75rem;
+}
+
+.vintage-datepicker-calendar .react-datepicker__navigation-icon::before {
+  border-color: var(--ev-c-text-2, #5c5551);
+  border-width: 2px 2px 0 0;
+}
+
+.vintage-datepicker-calendar .react-datepicker__navigation:hover .react-datepicker__navigation-icon::before {
+  border-color: var(--ev-c-text-1, #2c2a29);
+}
+
+/* ── Day cells ── */
+.vintage-datepicker-calendar .react-datepicker__month {
+  padding: 0.5rem;
+}
+
+.vintage-datepicker-calendar .react-datepicker__day {
+  width: 2.25rem;
+  height: 2.25rem;
+  line-height: 2.25rem;
+  margin: 0.1rem;
+  border-radius: 0.5rem;
+  color: var(--ev-c-text-1, #2c2a29);
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.vintage-datepicker-calendar .react-datepicker__day:hover {
+  background: var(--ev-c-pastel-peach, #f9e3d3);
+  color: var(--ev-c-text-1, #2c2a29);
+  border-radius: 0.5rem;
+}
+
+.vintage-datepicker-calendar .react-datepicker__day--selected,
+.vintage-datepicker-calendar .react-datepicker__day--keyboard-selected {
+  background: linear-gradient(135deg, #c6a4d0, #a888c0) !important;
+  color: white !important;
+  font-weight: 700;
+  border-radius: 0.5rem;
+  box-shadow: 0 2px 8px rgba(168, 136, 192, 0.3);
+}
+
+.vintage-datepicker-calendar .react-datepicker__day--today {
+  background: var(--ev-c-pastel-mint, #d4e8d8);
+  font-weight: 700;
+  border-radius: 0.5rem;
+}
+
+.vintage-datepicker-calendar .react-datepicker__day--disabled {
+  color: var(--ev-c-gray-2, #8a827c) !important;
+  opacity: 0.4;
+}
+
+.vintage-datepicker-calendar .react-datepicker__day--outside-month {
+  color: var(--ev-c-gray-2, #8a827c);
+  opacity: 0.4;
+}
+
+/* ── Time select panel ── */
+.vintage-datepicker-calendar .react-datepicker__time-container {
+  border-left: 1px solid var(--ev-c-gray-3, #e8e4db);
+  width: 90px;
+}
+
+.vintage-datepicker-calendar .react-datepicker__time-container .react-datepicker__time {
+  background: var(--ev-c-white-soft, #fcfbf8);
+}
+
+.vintage-datepicker-calendar .react-datepicker__header--time {
+  background: linear-gradient(135deg, var(--ev-c-pastel-blue, #d6e4f0), var(--ev-c-pastel-mint, #d4e8d8));
+  border-bottom: 1px solid rgba(44, 42, 41, 0.06);
+  padding: 0.5rem;
+}
+
+.vintage-datepicker-calendar .react-datepicker__header--time .react-datepicker-time__header {
+  color: var(--ev-c-text-1, #2c2a29);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
+.vintage-datepicker-calendar .react-datepicker__time-list-item {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.5rem !important;
+  transition: all 0.1s ease;
+}
+
+.vintage-datepicker-calendar .react-datepicker__time-list-item:hover {
+  background: var(--ev-c-pastel-peach, #f9e3d3) !important;
+  color: var(--ev-c-text-1, #2c2a29) !important;
+}
+
+.vintage-datepicker-calendar .react-datepicker__time-list-item--selected {
+  background: linear-gradient(135deg, #c6a4d0, #a888c0) !important;
+  color: white !important;
+  font-weight: 600;
+}
+
+/* ── Clear button ── */
+.vintage-datepicker-input ~ .react-datepicker__close-icon {
+  padding-right: 0.5rem;
+}
+
+.vintage-datepicker-input ~ .react-datepicker__close-icon::after {
+  background: var(--ev-c-gray-2, #8a827c);
+  font-size: 0.75rem;
+  height: 16px;
+  width: 16px;
+  line-height: 1;
+}
+
+.vintage-datepicker-input ~ .react-datepicker__close-icon:hover::after {
+  background: var(--ev-c-text-1, #2c2a29);
+}
+
+/* ── In-range highlight (for range pickers) ── */
+.vintage-datepicker-calendar .react-datepicker__day--in-range,
+.vintage-datepicker-calendar .react-datepicker__day--in-selecting-range {
+  background: var(--ev-c-pastel-pink, #f4dce0);
+  color: var(--ev-c-text-1, #2c2a29);
+  border-radius: 0;
+}

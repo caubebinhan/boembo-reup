@@ -5,7 +5,7 @@ import type {
   TroubleshootingRunResultLike,
   WorkflowTroubleshootingProvider,
 } from '@main/services/troubleshooting/types'
-import { debugDashboardVerify, runFullPublishE2ETest, runPublishTest } from '@main/tiktok/publisher/test-publish.ts'
+import { debugDashboardVerify, runFullPublishE2ETest, runPublishTest } from '@main/tiktok/publisher/test-publish'
 import { tiktokRepostV1Cases } from './cases'
 import { runBasicTiktokRepostCase } from './runners/basicCases'
 
@@ -65,8 +65,6 @@ async function runTiktokRepostV1Case(
   caseId: TroubleshootingCaseId,
   options?: TroubleshootingCaseRunOptions
 ): Promise<TroubleshootingRunResultLike | null> {
-  const logger = options?.logger
-
   if (caseId === 'tiktok-studio-smoke') {
     return withCaseEnvelope(caseId, await runPublishTest(runtimePublishOpts(options)), options?.runtime)
   }

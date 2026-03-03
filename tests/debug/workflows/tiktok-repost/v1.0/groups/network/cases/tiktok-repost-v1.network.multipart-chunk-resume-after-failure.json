@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "network",
+  "case": {
+    "id": "tiktok-repost-v1.network.multipart-chunk-resume-after-failure",
+    "title": "Network: Multipart Chunk Resume After Failure",
+    "description": "Chunk upload failures resume from last committed chunk and do not restart full payload when resumable mode is enabled.",
+    "category": "network",
+    "group": "network",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-52",
+    "status": "runnable"
+  }
+}

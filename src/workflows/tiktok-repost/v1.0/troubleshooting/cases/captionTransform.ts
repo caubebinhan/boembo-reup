@@ -3,6 +3,7 @@ import { meta, ttCase } from './_shared'
 
 const TRANSFORM_CASE_BASE = {
   risk: 'safe' as const,
+  errorCode: 'DG-400',
   implemented: true
 }
 

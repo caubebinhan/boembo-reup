@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "smoke",
+  "case": {
+    "id": "tiktok-studio-smoke",
+    "title": "TikTok Studio Smoke",
+    "description": "Open TikTok Studio upload page, scan selectors/buttons, detect captcha, dump page artifacts.",
+    "category": "smoke",
+    "group": "smoke",
+    "risk": "safe",
+    "level": "basic",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-129",
+    "status": "runnable"
+  }
+}

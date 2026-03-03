@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "network",
+  "case": {
+    "id": "tiktok-repost-v1.network.dual-stack-ipv6-to-ipv4-fallback",
+    "title": "Network: Dual Stack IPv6 to IPv4 Fallback",
+    "description": "IPv6 connection failures should fallback to IPv4 path where supported and preserve request id.",
+    "category": "network",
+    "group": "network",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/network.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-45",
+    "status": "runnable"
+  }
+}

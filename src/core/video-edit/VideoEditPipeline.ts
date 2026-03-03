@@ -1,38 +1,39 @@
 /**
  * Video Edit Pipeline
  * ───────────────────
- * Orchestrates video editing by chaining enabled operations into FFmpeg commands.
- * Supports multi-instance plugins (multiple watermarks, overlays, etc.).
+ * Orchestrates video editing by chaining enabled operations.
+ * Uses VideoProcessor port (DI) — no direct FFmpeg imports.
  *
  * Flow:
  *  1. Probe input video metadata
  *  2. Sort operations by order, filter enabled, validate params
  *  3. Separate single-pass (filter_complex) vs multi-pass operations
- *  4. Build and execute FFmpeg commands
+ *  4. Build and execute commands via VideoProcessor
  *  5. Return output file path
  */
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdtemp, rename, rm } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
-import { probeVideo, type VideoMetadata } from '@main/ffmpeg/FFmpegProbe'
-import { FFmpegCommandBuilder } from '@main/ffmpeg/FFmpegCommandBuilder'
-import { ensureFfmpegAvailable } from '@main/ffmpeg/FFmpegBinary'
 import { videoEditPluginRegistry } from './VideoEditPluginRegistry'
+import type { VideoProcessor, VideoMetadata } from './ports'
 import type {
   VideoEditPlugin,
   VideoEditOperation,
   VideoEditConfig,
   PluginContext,
-  FFmpegFilter,
+  VideoFilter,
 } from './types'
 import { migrateToOperations } from './types'
+import { CodedError } from '@core/errors/CodedError'
 
 // ── Public API ──────────────────────────────────────
 
 export interface PipelineOptions {
   /** Input video file path */
   inputPath: string
+  /** Video processor (FFmpeg adapter injected from infrastructure layer) */
+  processor: VideoProcessor
   /** Operations from campaign params (sorted by order) */
   operations?: VideoEditOperation[]
   /** @deprecated Legacy configs — auto-migrated to operations */
@@ -43,7 +44,7 @@ export interface PipelineOptions {
   onProgress?: (msg: string) => void
   /** Callback per operation applied */
   onOperationApplied?: (operationId: string, pluginId: string, durationMs: number) => void
-  /** Max execution timeout per FFmpeg command */
+  /** Max execution timeout per command */
   timeoutMs?: number
 }
 
@@ -68,10 +69,7 @@ interface ResolvedOperation {
  */
 export async function executeVideoEditPipeline(opts: PipelineOptions): Promise<PipelineResult> {
   const startTime = Date.now()
-
-  // 0. Check FFmpeg available
-  const avail = await ensureFfmpegAvailable()
-  if (!avail.ok) throw new Error(`FFmpeg not available: ${avail.reason}`)
+  const { processor } = opts
 
   // 1. Normalize: support both operations[] and legacy configs[]
   const operations = opts.operations
@@ -92,7 +90,7 @@ export async function executeVideoEditPipeline(opts: PipelineOptions): Promise<P
 
   // 3. Probe video
   opts.onProgress?.('Analyzing video...')
-  const metadata = await probeVideo(opts.inputPath)
+  const metadata = await processor.probe(opts.inputPath)
 
   // 4. Create temp dir for intermediate files
   const tempDir = await mkdtemp(join(tmpdir(), 'boembo-vedit-'))
@@ -180,7 +178,7 @@ function createPluginContext(
   return {
     inputWidth: metadata.width,
     inputHeight: metadata.height,
-    inputDurationSec: metadata.durationSec,
+    inputDurationSec: metadata.duration,
     inputFps: metadata.fps,
     tempDir,
     assetResolver: opts.assetResolver || ((id) => id),
@@ -197,19 +195,18 @@ async function executeSinglePass(
   tempDir: string,
   opts: PipelineOptions,
 ): Promise<void> {
-  const cmd = new FFmpegCommandBuilder()
-  cmd.input(inputPath)
-
+  const { processor } = opts
   const inputIndexRef = { value: 1 }
-  const allFilters: FFmpegFilter[] = []
+  const allFilters: VideoFilter[] = []
   const allOutputOptions: string[] = []
+  const additionalInputPaths: string[] = []
 
   for (const { operation, plugin } of resolved) {
     const ctx = createPluginContext(metadata, tempDir, operation.id, opts, inputIndexRef)
 
     // Register additional inputs
     const additionalInputs = plugin.getAdditionalInputs?.(operation.params, ctx) || []
-    for (const inp of additionalInputs) cmd.input(inp)
+    additionalInputPaths.push(...additionalInputs)
 
     // Collect filters
     const filters = plugin.buildFilters(operation.params, ctx)
@@ -220,42 +217,47 @@ async function executeSinglePass(
     allOutputOptions.push(...outOpts)
   }
 
+  // Build FFmpeg args manually (no FFmpegCommandBuilder dependency)
+  const args: string[] = ['-y']
+
+  // Inputs
+  args.push('-i', inputPath)
+  for (const inp of additionalInputPaths) args.push('-i', inp)
+
   // Build the filter_complex chain
   if (allFilters.length > 0) {
     const wiredFilters = autoWireFilters(allFilters)
-    cmd.filterComplex(wiredFilters)
+    const filterStr = buildFilterComplexString(wiredFilters)
+    args.push('-filter_complex', filterStr)
 
-    // Map video: last video output (should be [out])
-    cmd.map(wiredFilters[wiredFilters.length - 1].outputs?.[0] || 'out')
+    // Map video
+    const lastVideoOut = wiredFilters[wiredFilters.length - 1].outputs?.[0] || 'out'
+    args.push('-map', `[${lastVideoOut}]`)
 
-    // Map audio: find last audio filter output, fallback to 0:a
-    if (metadata.hasAudio) {
-      const lastAudioOutput = findLastAudioOutput(wiredFilters)
-      cmd.map(lastAudioOutput || '0:a')
+    // Map audio
+    const lastAudioOutput = findLastAudioOutput(wiredFilters)
+    if (lastAudioOutput) {
+      args.push('-map', `[${lastAudioOutput}]`)
+    } else {
+      args.push('-map', '0:a?')
     }
   }
 
-  cmd.output(outputPath, {
-    codec: 'libx264',
-    audioCodec: metadata.hasAudio ? 'aac' : undefined,
-    preset: 'medium',
-    movflags: '+faststart',
-    extra: allOutputOptions,
-  })
-
-  // Debug: log the command for troubleshooting
-  try {
-    const args = cmd.build()
-    console.log(`[VideoEdit] FFmpeg single-pass command:\n  ffmpeg ${args.join(' ')}`)
-  } catch (e) {
-    console.error('[VideoEdit] Failed to build FFmpeg args:', e)
+  // Output options
+  args.push('-c:v', 'libx264', '-preset', 'medium', '-movflags', '+faststart')
+  if (!allFilters.length || !findLastAudioOutput(allFilters.length > 0 ? autoWireFilters(allFilters) : [])) {
+    args.push('-c:a', 'aac')
   }
+  args.push(...allOutputOptions, outputPath)
 
-  const result = await cmd.execute(opts.timeoutMs || 300_000)
+  // Debug
+  console.log(`[VideoEdit] FFmpeg single-pass command:\n  ffmpeg ${args.join(' ')}`)
+
+  const result = await processor.execute('ffmpeg', args, opts.timeoutMs || 300_000)
   if (result.code !== 0) {
-    const stderr = result.stderr.toString('utf8')
-    console.error('[VideoEdit] FFmpeg stderr:', stderr.slice(0, 2000))
-    throw new Error(`FFmpeg single-pass failed (code ${result.code}): ${stderr.slice(0, 500)}`)
+    console.error('[VideoEdit] FFmpeg stderr:', result.stderr.slice(0, 2000))
+    /** @throws DG-610 — FFmpeg single-pass encoding returned non-zero */
+    throw new CodedError('DG-610', `FFmpeg single-pass failed (code ${result.code}): ${result.stderr.slice(0, 500)}`)
   }
 }
 
@@ -267,9 +269,11 @@ async function executeMultiPass(
   tempDir: string,
   opts: PipelineOptions,
 ): Promise<void> {
+  const { processor } = opts
   const { operation, plugin } = resolved
   if (!plugin.buildMultiPassCommands) {
-    throw new Error(`Plugin ${plugin.id} requires multi-pass but has no buildMultiPassCommands()`)
+    /** @throws DG-611 — Plugin declared multi-pass but has no buildMultiPassCommands() */
+    throw new CodedError('DG-611', `Plugin ${plugin.id} requires multi-pass but has no buildMultiPassCommands()`)
   }
 
   const inputIndexRef = { value: 1 }
@@ -283,21 +287,25 @@ async function executeMultiPass(
       ? join(tempDir, `mp_${randomBytes(4).toString('hex')}.mp4`)
       : outputPath
 
-    const builder = new FFmpegCommandBuilder()
-    builder.input(currentInput)
-    for (const inp of mpCmd.inputs) builder.input(inp.path, inp.options)
+    const args: string[] = ['-y']
+    args.push('-i', currentInput)
+    for (const inp of mpCmd.inputs) {
+      if (inp.options) args.push(...inp.options)
+      args.push('-i', inp.path)
+    }
 
     if (mpCmd.filters.length > 0) {
       const wired = autoWireFilters(mpCmd.filters)
-      builder.filterComplex(wired)
-      builder.map(wired[wired.length - 1].outputs?.[0] || 'out')
+      args.push('-filter_complex', buildFilterComplexString(wired))
+      args.push('-map', `[${wired[wired.length - 1].outputs?.[0] || 'out'}]`)
     }
 
-    builder.output(stepOutput, { codec: 'libx264', audioCodec: 'aac', preset: 'medium', movflags: '+faststart' })
+    args.push('-c:v', 'libx264', '-c:a', 'aac', '-preset', 'medium', '-movflags', '+faststart', stepOutput)
 
-    const result = await builder.execute(opts.timeoutMs || 300_000)
+    const result = await processor.execute('ffmpeg', args, opts.timeoutMs || 300_000)
     if (result.code !== 0) {
-      throw new Error(`FFmpeg multi-pass step ${i} failed: ${result.stderr.toString('utf8').slice(0, 500)}`)
+      /** @throws DG-612 — Multi-pass step N failed during pipeline execution */
+      throw new CodedError('DG-612', `FFmpeg multi-pass step ${i} failed: ${result.stderr.slice(0, 500)}`)
     }
     if (mpCmd.outputIsMainVideo !== false) currentInput = stepOutput
   }
@@ -305,9 +313,8 @@ async function executeMultiPass(
 
 /**
  * Find the last audio output pad in wired filters.
- * Audio filters output labels starting with 'a_' or 'noise_' or 'atempo_'.
  */
-function findLastAudioOutput(filters: FFmpegFilter[]): string | null {
+function findLastAudioOutput(filters: VideoFilter[]): string | null {
   let lastAudio: string | null = null
   const audioLabel = /^(a_|noise_|atempo_)/
   for (const f of filters) {
@@ -320,44 +327,30 @@ function findLastAudioOutput(filters: FFmpegFilter[]): string | null {
 
 /**
  * Auto-wire filters into a proper filter_complex chain.
- *
- * Tracks the "current video stream" label through the chain.
- * - Filters without explicit inputs get the current stream as input.
- * - Filters without explicit outputs get an auto-generated label.
- * - Filters with explicit `[0:v]` inputs get replaced with the current stream.
- * - The last filter always outputs `[out]`.
  */
-function autoWireFilters(filters: FFmpegFilter[]): FFmpegFilter[] {
+function autoWireFilters(filters: VideoFilter[]): VideoFilter[] {
   if (filters.length === 0) return filters
 
   let currentStream = '0:v'
-  const wired: FFmpegFilter[] = []
+  const wired: VideoFilter[] = []
 
   for (let i = 0; i < filters.length; i++) {
     const f = { ...filters[i] }
     const isLast = i === filters.length - 1
 
-    // Determine inputs
     if (!f.inputs?.length) {
-      // No explicit inputs → use current stream
       f.inputs = [currentStream]
     } else {
-      // Has explicit inputs → replace any [0:v] references with current stream
-      // (so blur-region's crop/overlay chains work after other plugins)
       f.inputs = f.inputs.map(inp => inp === '0:v' ? currentStream : inp)
     }
 
-    // Determine outputs
     if (!f.outputs?.length) {
-      // No explicit outputs → auto-generate
       f.outputs = isLast ? ['out'] : [`f${i}`]
       currentStream = f.outputs[0]
     } else {
-      // Has explicit outputs → the last output becomes current stream for next filter
       currentStream = f.outputs[f.outputs.length - 1]
     }
 
-    // If this is the last filter overall, ensure final output is [out]
     if (isLast && f.outputs[f.outputs.length - 1] !== 'out') {
       f.outputs = [...f.outputs.slice(0, -1), 'out']
     }
@@ -366,6 +359,27 @@ function autoWireFilters(filters: FFmpegFilter[]): FFmpegFilter[] {
   }
 
   return wired
+}
+
+/**
+ * Build filter_complex string from filters array.
+ */
+function buildFilterComplexString(filters: VideoFilter[]): string {
+  return filters.map(f => {
+    const inputPads = (f.inputs || []).map(i => `[${i}]`).join('')
+    const outputPads = (f.outputs || []).map(o => `[${o}]`).join('')
+    const entries = Object.entries(f.options).filter(([, v]) => v !== undefined && v !== null)
+    let optStr = ''
+    if (entries.length > 0) {
+      const parts = entries.map(([k, v]) => {
+        if (typeof v === 'boolean') return `${k}=${v ? '1' : '0'}`
+        if (typeof v === 'string' && v.includes(':')) return `${k}='${v}'`
+        return `${k}=${v}`
+      })
+      optStr = `=${parts.join(':')}`
+    }
+    return `${inputPads}${f.filter}${optStr}${outputPads}`
+  }).join(';')
 }
 
 function getExtension(filePath: string): string {

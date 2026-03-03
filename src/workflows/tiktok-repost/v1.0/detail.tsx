@@ -293,10 +293,37 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
                             </div>
                         </div>
 
-                        {/* Error / Status Messages */}
-                        {video.error && (
-                            <p className="text-[10px] text-red-600 mt-1.5 bg-red-50 rounded-lg px-2 py-1 border border-red-200">⚠ {video.error}</p>
-                        )}
+                        {/* Error / Status Messages — Enhanced with error code + CTA */}
+                        {video.error && (() => {
+                            const codeMatch = video.error.match(/\[?(DG-\d{3})\]?/)
+                            const errorCode = codeMatch?.[1]
+                            return (
+                                <div className="mt-1.5 rounded-xl bg-red-50 border border-red-200 overflow-hidden">
+                                    <div className="px-2.5 py-1.5 flex items-start gap-2">
+                                        <span className="text-red-400 text-sm shrink-0 mt-0.5">⚠️</span>
+                                        <div className="flex-1 min-w-0">
+                                            {errorCode && (
+                                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-600 border border-red-200 mr-1.5">{errorCode}</span>
+                                            )}
+                                            <span className="text-[10px] text-red-600 leading-relaxed">
+                                                {video.error.replace(/\[?DG-\d{3}\]?\s*[-–—]?\s*/, '')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            // Dispatch custom event to open NodeErrorModal from campaign detail
+                                            window.dispatchEvent(new CustomEvent('boembo:show-node-error', {
+                                                detail: { campaignId, errorCode, error: video.error, videoId: video.platform_id }
+                                            }))
+                                        }}
+                                        className="w-full px-2.5 py-1.5 text-[10px] font-bold text-red-600 bg-red-100/50 hover:bg-red-100 border-t border-red-200 transition cursor-pointer flex items-center justify-center gap-1"
+                                    >
+                                        📋 Xem chi tiết lỗi
+                                    </button>
+                                </div>
+                            )
+                        })()}
                         {video.statusMessage && ['under_review', 'verifying_publish', 'verification_incomplete', 'duplicate'].includes(video.status) && (
                             <p className="text-[10px] mt-1.5 rounded-lg px-2 py-1 border text-amber-700 bg-amber-50 border-amber-200">
                                 {video.statusMessage}

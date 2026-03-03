@@ -9,6 +9,7 @@ import type { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/Node
 import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 import { executeVideoEditPipeline, videoEditPluginRegistry } from '@core/video-edit'
 import type { VideoEditOperation } from '@core/video-edit'
+import { ffmpegProcessor } from '@main/ffmpeg/FFmpegAdapter'
 
 export default async function execute(
   input: Record<string, any>,
@@ -50,6 +51,7 @@ export default async function execute(
   try {
     const result = await executeVideoEditPipeline({
       inputPath: videoPath,
+      processor: ffmpegProcessor,
       operations: operations.length > 0 ? operations : undefined,
       configs: legacyConfigs,
       assetResolver: (assetId) => {

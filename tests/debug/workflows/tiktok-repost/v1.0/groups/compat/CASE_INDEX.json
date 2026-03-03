@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "compat",
+  "totalImplemented": 7,
+  "cases": [
+    {
+      "id": "tiktok-repost-v1.compat.db-schema-forward-compat-new-field",
+      "title": "Compat: DB Schema Forward Compat - Unknown Fields Survive Round-Trip",
+      "fingerprint": "case-TIKTOK-28",
+      "errorCode": "DG-500",
+      "category": "compat",
+      "group": "compat",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/compat/cases/tiktok-repost-v1.compat.db-schema-forward-compat-new-field.json"
+    },
+    {
+      "id": "tiktok-repost-v1.compat.flow-snapshot-version-lock",
+      "title": "Compat: Flow Snapshot Version Lock",
+      "fingerprint": "case-TIKTOK-29",
+      "errorCode": "DG-500",
+      "category": "compat",
+      "group": "compat",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/compat/cases/tiktok-repost-v1.compat.flow-snapshot-version-lock.json"
+    },
+    {
+      "id": "tiktok-repost-v1.compat.multi-workflow-coexistence",
+      "title": "Compat: tiktok-repost@1.0 and upload-local@1.0 Coexist",
+      "fingerprint": "case-TIKTOK-30",
+      "errorCode": "DG-500",
+      "category": "compat",
+      "group": "compat",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/compat/cases/tiktok-repost-v1.compat.multi-workflow-coexistence.json"
+    },
+    {
+      "id": "tiktok-repost-v1.compat.old-campaign-rerun-after-code-update",
+      "title": "Compat: Existing Campaign Re-runs After Workflow Code Update",
+      "fingerprint": "case-TIKTOK-31",
+      "errorCode": "DG-500",
+      "category": "compat",
+      "group": "compat",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/compat/cases/tiktok-repost-v1.compat.old-campaign-rerun-after-code-update.json"
+    },
+    {
+      "id": "tiktok-repost-v1.compat.orphan-async-tasks-deleted-video",
+      "title": "Compat: Orphan Async Tasks After Campaign Video Deleted",
+      "fingerprint": "case-TIKTOK-32",
+      "errorCode": "DG-500",
+      "category": "compat",
+      "group": "compat",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/compat/cases/tiktok-repost-v1.compat.orphan-async-tasks-deleted-video.json"
+    },
+    {
+      "id": "tiktok-repost-v1.compat.params-defaults-upgrade",
+      "title": "Compat: Params Defaults on Upgrade",
+      "fingerprint": "case-TIKTOK-33",
+      "errorCode": "DG-500",
+      "category": "compat",
+      "group": "compat",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/compat/cases/tiktok-repost-v1.compat.params-defaults-upgrade.json"
+    },
+    {
+      "id": "tiktok-repost-v1.compat.workflow-catalog-dynamic-discovery",
+      "title": "Compat: Dynamic Workflow/Version Discovery in Debug Tab",
+      "fingerprint": "case-TIKTOK-34",
+      "errorCode": "DG-500",
+      "category": "compat",
+      "group": "compat",
+      "level": "intermediate",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/compat/cases/tiktok-repost-v1.compat.workflow-catalog-dynamic-discovery.json"
+    }
+  ]
+}

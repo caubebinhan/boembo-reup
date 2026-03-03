@@ -4,10 +4,22 @@ const manifest: NodeManifest = {
   id: 'core.video_edit',
   name: 'Video Editor',
   label: 'Edit',
-  color: '#8b5cf6',
+  color: '#f59e0b',
   category: 'transform',
   icon: '🎬',
-  description: 'Process video with configurable editing plugins (watermark, crop, anti-detect, etc.)',
+  description: 'Apply video editing operations (crop, resize, watermark, etc.)',
+  errorPrefix: 'VED',
+  retryPolicy: {
+    maxRetries: 1,
+    backoff: 'fixed',
+    initialDelayMs: 2000,
+    maxDelayMs: 2000,
+  },
+  behavior: {
+    sideEffects: ['writes_to_disk', 'cpu_intensive'],
+    idempotent: true,
+    crashBehavior: 'skip_video',
+  },
 }
 
 export default manifest

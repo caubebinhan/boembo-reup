@@ -2,15 +2,15 @@
  * Video Edit Plugin Registry
  * ──────────────────────────
  * Singleton registry for video-edit plugins.
- * Plugins self-register at import time (similar to NodeRegistry).
+ * Supports builtin, marketplace, and local plugin sources.
  */
-import type { VideoEditPlugin, VideoEditOperation, PluginGroup } from './types'
-import { generateOperationId } from './types'
+import type { VideoEditPlugin, VideoEditOperation, PluginGroup, PluginSource, PluginManifest } from './types'
+import { generateOperationId, toPluginManifest } from './types'
 
 class VideoEditPluginRegistryImpl {
   private readonly plugins = new Map<string, VideoEditPlugin>()
 
-  /** Register a plugin. Throws if a plugin with the same ID already exists. */
+  /** Register a plugin */
   register(plugin: VideoEditPlugin): void {
     if (this.plugins.has(plugin.id)) {
       console.warn(`[VideoEditPluginRegistry] Overwriting plugin: ${plugin.id}`)
@@ -18,45 +18,37 @@ class VideoEditPluginRegistryImpl {
     this.plugins.set(plugin.id, plugin)
   }
 
-  /** Unregister a plugin by ID. */
-  unregister(pluginId: string): void {
-    this.plugins.delete(pluginId)
+  /** Unregister a plugin by ID */
+  unregister(pluginId: string): boolean {
+    return this.plugins.delete(pluginId)
   }
 
-  /** Get a plugin by ID. */
+  /** Get a plugin by ID */
   get(pluginId: string): VideoEditPlugin | undefined {
     return this.plugins.get(pluginId)
   }
 
-  /** Get all plugins in a specific group. */
+  /** Get all plugins in a specific group */
   getByGroup(group: PluginGroup): VideoEditPlugin[] {
     return [...this.plugins.values()].filter((p) => p.group === group)
   }
 
-  /** List all registered plugins. */
+  /** Get all plugins from a specific source */
+  getBySource(source: PluginSource): VideoEditPlugin[] {
+    return [...this.plugins.values()].filter((p) => (p.source || 'builtin') === source)
+  }
+
+  /** List all registered plugins */
   listAll(): VideoEditPlugin[] {
     return [...this.plugins.values()]
   }
 
   /**
-   * Get serializable plugin metadata for the renderer (wizard UI).
-   * Strips runtime functions (buildFilters, validate, etc.) — only UI-safe data.
+   * Get serializable plugin manifests for the renderer.
+   * Strips runtime functions — only UI-safe metadata.
    */
-  getPluginMetas() {
-    return [...this.plugins.values()].map((p) => ({
-      id: p.id,
-      name: p.name,
-      group: p.group,
-      icon: p.icon,
-      description: p.description,
-      defaultEnabled: p.defaultEnabled,
-      allowMultipleInstances: p.allowMultipleInstances,
-      addInstanceLabel: p.addInstanceLabel,
-      recommended: p.recommended,
-      warning: p.warning,
-      previewHint: p.previewHint || 'none',
-      configSchema: p.configSchema,
-    }))
+  getPluginMetas(): PluginManifest[] {
+    return [...this.plugins.values()].map(toPluginManifest)
   }
 
   /**
@@ -73,7 +65,7 @@ class VideoEditPluginRegistryImpl {
     }))
   }
 
-  /** Extract default param values from a plugin's configSchema. */
+  /** Extract default param values from a plugin's configSchema */
   private getDefaultParams(plugin: VideoEditPlugin): Record<string, any> {
     const params: Record<string, any> = {}
     for (const field of plugin.configSchema) {
@@ -84,7 +76,7 @@ class VideoEditPluginRegistryImpl {
     return params
   }
 
-  /** Get count of registered plugins. */
+  /** Get count of registered plugins */
   get size(): number {
     return this.plugins.size
   }

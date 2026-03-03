@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "caption",
+  "totalImplemented": 3,
+  "cases": [
+    {
+      "id": "tiktok-repost-v1.caption.generated-override",
+      "title": "Generated Caption Override",
+      "fingerprint": "case-TIKTOK-25",
+      "errorCode": "DG-400",
+      "category": "caption",
+      "group": "caption",
+      "level": "intermediate",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/caption/cases/tiktok-repost-v1.caption.generated-override.json"
+    },
+    {
+      "id": "tiktok-repost-v1.caption.source-fallback",
+      "title": "Caption Fallback to Source",
+      "fingerprint": "case-TIKTOK-26",
+      "errorCode": "DG-400",
+      "category": "caption",
+      "group": "caption",
+      "level": "basic",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/caption/cases/tiktok-repost-v1.caption.source-fallback.json"
+    },
+    {
+      "id": "tiktok-repost-v1.caption.unicode-hashtag-preserve",
+      "title": "Caption Unicode + Hashtag Preserve",
+      "fingerprint": "case-TIKTOK-27",
+      "errorCode": "DG-400",
+      "category": "caption",
+      "group": "caption",
+      "level": "intermediate",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/caption/cases/tiktok-repost-v1.caption.unicode-hashtag-preserve.json"
+    }
+  ]
+}

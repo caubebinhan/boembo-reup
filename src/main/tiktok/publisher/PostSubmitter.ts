@@ -1,6 +1,7 @@
 import { Page } from 'playwright-core'
 import { TIKTOK_SELECTORS } from './constants/selectors'
 import { DebugHelper } from './helpers/DebugHelper'
+import { CodedError } from '@core/errors/CodedError'
 
 // ── Post button submitter ────────────────────────────────────────────────────
 
@@ -38,7 +39,8 @@ export class PostSubmitter {
             await this.page.waitForTimeout(2000)
         }
 
-        throw new Error('Could not find or click Post button — debug artifacts saved')
+        /** @throws DG-112 — Post button not found after 5 attempts */
+        throw new CodedError('DG-112', 'Could not find or click Post button — debug artifacts saved')
     }
 
     // ── Click Post via data-e2e ──────────────────────────
@@ -85,7 +87,8 @@ export class PostSubmitter {
                 const el = this.page.locator(sel).first()
                 if (await el.isVisible({ timeout: 2000 })) {
                     await DebugHelper.dumpPageState(this.page, 'captcha_detected')
-                    throw new Error('CAPTCHA_DETECTED: TikTok requires CAPTCHA verification')
+                    /** @throws DG-113 — CAPTCHA detected during post submission */
+                    throw new CodedError('DG-113', 'CAPTCHA_DETECTED: TikTok requires CAPTCHA verification')
                 }
             } catch (e: any) {
                 if (e.message.includes('CAPTCHA_DETECTED')) throw e
@@ -101,7 +104,8 @@ export class PostSubmitter {
                 const el = this.page.locator(sel).first()
                 if (await el.isVisible({ timeout: 2000 })) {
                     await DebugHelper.dumpPageState(this.page, 'violation_detected')
-                    throw new Error('VIOLATION_DETECTED: TikTok detected content violation during upload')
+                    /** @throws DG-114 — TikTok flagged content violation */
+                    throw new CodedError('DG-114', 'VIOLATION_DETECTED: TikTok detected content violation during upload')
                 }
             } catch (e: any) {
                 if (e.message.includes('_DETECTED')) throw e

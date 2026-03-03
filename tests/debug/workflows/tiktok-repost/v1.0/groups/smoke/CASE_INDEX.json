@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "smoke",
+  "totalImplemented": 2,
+  "cases": [
+    {
+      "id": "tiktok-repost-v1.debug-panel.workflow-filter-smoke",
+      "title": "Debug Panel Workflow/Version Filter Smoke",
+      "fingerprint": "case-TIKTOK-35",
+      "category": "smoke",
+      "group": "smoke",
+      "level": "basic",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/smoke/cases/tiktok-repost-v1.debug-panel.workflow-filter-smoke.json"
+    },
+    {
+      "id": "tiktok-studio-smoke",
+      "title": "TikTok Studio Smoke",
+      "fingerprint": "case-TIKTOK-129",
+      "category": "smoke",
+      "group": "smoke",
+      "level": "basic",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/smoke/cases/tiktok-studio-smoke.json"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "async_verify",
+  "case": {
+    "id": "tiktok-repost-v1.async-verify.result-persisted-correct-campaign",
+    "title": "Async Verify Result Persisted to Correct Campaign",
+    "description": "Background verify completion updates the correct campaign video, not another campaign with similar platform_id.",
+    "category": "async_verify",
+    "group": "async_verify",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-10",
+    "status": "runnable"
+  }
+}

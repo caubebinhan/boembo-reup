@@ -5,6 +5,7 @@ import { campaignRepo } from '../db/repositories/CampaignRepo'
 import { settingsRepo } from '../db/repositories/SettingsRepo'
 import { AppSettingsService } from './AppSettingsService'
 import { sendSentryMessageToChannel, verifySentryEventIngestion } from './SentryStagingService'
+import { CodedError } from '@core/errors/CodedError'
 import {
   findTroubleshootingCase,
   listTroubleshootingCases,
@@ -49,6 +50,11 @@ const FOOTPRINT_PREVIEW_LEN = 400
 const DEBUG_ROOT_DIR = resolve(process.cwd(), 'tests', 'debug')
 const DEBUG_ARTIFACT_DIR = resolve(DEBUG_ROOT_DIR, 'artifacts')
 const DEBUG_FOOTPRINT_DIR = resolve(DEBUG_ROOT_DIR, 'footprints')
+const WORKFLOW_FINGERPRINT_ALIAS: Record<string, string> = {
+  main: 'MAIN',
+  'tiktok-repost': 'TIKTOK',
+  'upload-local': 'UPLOAD',
+}
 
 function detectRuntimeFlavor(): string {
   if (process.platform === 'win32') return 'windows'
@@ -59,6 +65,30 @@ function detectRuntimeFlavor(): string {
 
 function toStableHash(value: string | Buffer): string {
   return createHash('sha1').update(value).digest('hex')
+}
+
+function toWorkflowFingerprintCode(workflowId?: string): string {
+  const raw = String(workflowId || 'unscoped').trim().toLowerCase()
+  if (WORKFLOW_FINGERPRINT_ALIAS[raw]) return WORKFLOW_FINGERPRINT_ALIAS[raw]
+  const compact = raw
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .split('-')
+    .filter(Boolean)
+    .map(chunk => chunk.slice(0, 4))
+    .join('')
+    .toUpperCase()
+  return compact || 'CASE'
+}
+
+function toReadableCaseFingerprintFallback(caseId: string, workflowId?: string): string {
+  const workflowCode = toWorkflowFingerprintCode(workflowId)
+  const idTail = String(caseId || '')
+    .replaceAll(/[^a-zA-Z0-9]+/g, '-')
+    .split('-')
+    .filter(Boolean)
+    .slice(-1)[0]
+  const normalizedTail = (idTail || 'NA').slice(0, 6).toUpperCase()
+  return `case-${workflowCode}-${normalizedTail}`
 }
 
 function toCaseSlug(value: string | undefined): string {
@@ -491,7 +521,8 @@ export class TroubleshootingService {
 
   static async sendRunToSentry(runId: string) {
     const run = this.getRunById(runId)
-    if (!run) throw new Error(`Run not found: ${runId}`)
+    /** @throws DG-720 — Run not found by ID */
+    if (!run) throw new CodedError('DG-720', `Run not found: ${runId}`)
 
     const errorLines = (run.logs || []).filter(l => l.level === 'error').slice(-20)
     const warnLines = (run.logs || []).filter(l => l.level === 'warn').slice(-20)
@@ -557,13 +588,15 @@ export class TroubleshootingService {
     }, sentryEnv)
     const failDetail = sent.lastError ? ` (${sent.lastError})` : ''
     if (!sent.success || !sent.eventId) {
-      throw new Error(`Sentry staging send failed: ${sent.message}${failDetail}`)
+      /** @throws DG-721 — Sentry staging send returned failure */
+      throw new CodedError('DG-721', `Sentry staging send failed: ${sent.message}${failDetail}`)
     }
 
     const sentry = await verifySentryEventIngestion(sent.eventId, { channel: 'staging', env: sentryEnv })
     const verifyDetail = sentry.issueSearchUrl ? ` (${sentry.issueSearchUrl})` : ''
     if (sentry.strictRequired && !sentry.verified) {
-      throw new Error(`Sentry staging verification failed: ${sentry.message}${verifyDetail}`)
+      /** @throws DG-722 — Sentry staging verification failed */
+      throw new CodedError('DG-722', `Sentry staging verification failed: ${sentry.message}${verifyDetail}`)
     }
 
     return {
@@ -581,13 +614,16 @@ export class TroubleshootingService {
 
   static async runCase(caseId: TroubleshootingCaseId, hooks?: RunHooks): Promise<TroubleshootingRunRecord> {
     const def = findTroubleshootingCase(caseId)
-    if (!def) throw new Error(`Unknown troubleshooting case: ${caseId}`)
-    if (def.implemented === false) throw new Error(`Case not implemented yet: ${caseId}`)
-    if (this.running.has(caseId)) throw new Error(`Case is already running: ${caseId}`)
+    /** @throws DG-723 — Unknown troubleshooting case */
+    if (!def) throw new CodedError('DG-723', `Unknown troubleshooting case: ${caseId}`)
+    /** @throws DG-724 — Case exists but not yet implemented */
+    if (def.implemented === false) throw new CodedError('DG-724', `Case not implemented yet: ${caseId}`)
+    /** @throws DG-725 — Case is already running (concurrent guard) */
+    if (this.running.has(caseId)) throw new CodedError('DG-725', `Case is already running: ${caseId}`)
 
     const startedAt = Date.now()
     const runId = `${startedAt}_${Math.random().toString(36).slice(2, 8)}`
-    const caseFingerprint = def.fingerprint || `case-${toStableHash(def.id).slice(0, 16)}`
+    const caseFingerprint = def.fingerprint || toReadableCaseFingerprintFallback(def.id, def.workflowId)
     const runFingerprint = toRunFingerprint(caseFingerprint, runId, startedAt)
     const record: TroubleshootingRunRecord = {
       id: runId,
@@ -632,7 +668,8 @@ export class TroubleshootingService {
         logger: (line, meta) => pushLog(line, meta?.level || 'info'),
         runtime: hooks?.runtime,
       })
-      if (!result) throw new Error(`No runner registered for case: ${caseId}`)
+      /** @throws DG-726 — No runner registered for case */
+      if (!result) throw new CodedError('DG-726', `No runner registered for case: ${caseId}`)
 
       record.status = result.success ? 'passed' : 'failed'
       record.endedAt = Date.now()

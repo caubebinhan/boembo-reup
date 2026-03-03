@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "scan",
+  "case": {
+    "id": "tiktok-repost-v1.scan.channel-smoke",
+    "title": "Channel Scan Smoke",
+    "description": "Scan source channel and verify videos are added into campaign with expected fields and statuses.",
+    "category": "scan",
+    "group": "scan",
+    "risk": "safe",
+    "level": "basic",
+    "errorCode": "DG-200",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-101",
+    "status": "runnable"
+  }
+}

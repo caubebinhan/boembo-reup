@@ -1,16 +1,22 @@
 # Debug Casebook: main@1.0
 
-- Total cases: **11**
-- Runnable: **0**
-- Planned: **11**
-- Generated at: 2026-02-27T08:59:53.415Z
+- Implemented cases (JSON): **0**
+- TODO cases (Markdown): **11**
+- Generated at: 2026-03-03T04:07:06.366Z
 
-## Planned
+## Group Breakdown
+
+| Group | Implemented | TODO |
+|---|---:|---:|
+| external-e2e | 0 | 3 |
+| external-unit | 0 | 8 |
+
+## TODO Queue
 
 ### e2e.troubleshooting.artifact.screenshot-preview-visible
 - Title: E2E Mirror: screenshot artifact preview visible
 - Group: external-e2e | Category: e2e | Level: intermediate
-- Fingerprint: `case-1099ef16d144f29d`
+- Code: `case-MAIN-01`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -21,7 +27,7 @@
 ### e2e.troubleshooting.sentry.feedback-links-visible
 - Title: E2E Mirror: sentry feedback links visible
 - Group: external-e2e | Category: e2e | Level: intermediate
-- Fingerprint: `case-5dedf6ed8caec44b`
+- Code: `case-MAIN-02`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -32,7 +38,7 @@
 ### e2e.troubleshooting.suites.grouping-visible
 - Title: E2E Mirror: suite grouping visible
 - Group: external-e2e | Category: e2e | Level: intermediate
-- Fingerprint: `case-ecc4b013f6caa92a`
+- Code: `case-MAIN-03`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -43,7 +49,7 @@
 ### unit.core.pipeline-runner.sequence-resolve-vars
 - Title: Unit Mirror: pipeline runner resolves vars in sequence
 - Group: external-unit | Category: unit | Level: intermediate
-- Fingerprint: `case-784d5d592b844544`
+- Code: `case-MAIN-04`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -54,7 +60,7 @@
 ### unit.main.sentry-staging.service-contracts
 - Title: Unit Mirror: sentry staging service contracts
 - Group: external-unit | Category: unit | Level: intermediate
-- Fingerprint: `case-550086971f3045e0`
+- Code: `case-MAIN-05`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -65,7 +71,7 @@
 ### unit.troubleshooting.artifact-view.data-url-renders-image
 - Title: Unit Mirror: data URL renders as image
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-a0f5bcd585c2e0de`
+- Code: `case-MAIN-06`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -76,7 +82,7 @@
 ### unit.troubleshooting.artifact-view.screenshot-path-renders-image
 - Title: Unit Mirror: screenshot path renders as image
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-c860e164f1f2fdcd`
+- Code: `case-MAIN-07`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -87,7 +93,7 @@
 ### unit.troubleshooting.grouping.suite-and-group-order
 - Title: Unit Mirror: grouped ordering is deterministic
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-3cc19c318f21546c`
+- Code: `case-MAIN-08`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -98,7 +104,7 @@
 ### unit.troubleshooting.suite-classification.db-is-integration
 - Title: Unit Mirror: db tag maps to Integration suite
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-a21c5ca930eefe7c`
+- Code: `case-MAIN-09`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -109,7 +115,7 @@
 ### unit.troubleshooting.suite-classification.real-publish-is-e2e
 - Title: Unit Mirror: real_publish maps to E2E suite
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-231fe9cc2caeb919`
+- Code: `case-MAIN-10`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -120,7 +126,7 @@
 ### unit.troubleshooting.suite-classification.static-analysis-is-unit
 - Title: Unit Mirror: static-analysis maps to Unit suite
 - Group: external-unit | Category: unit | Level: basic
-- Fingerprint: `case-7d543143859da020`
+- Code: `case-MAIN-11`
 - Source: `src/main/services/troubleshooting/cases/nonWorkflowCases.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -128,6 +134,8 @@
 - TODO: Attach artifact outputs + diagnostic footprint for investigation.
 - TODO: Flip implemented=true after validation in Debug tab.
 
-## Runnable
+## Implemented JSON Layout
 
+- Implemented cases are split by group and written as one JSON file per case.
+- Path pattern: `groups/<group>/cases/<case-id>.json`
 

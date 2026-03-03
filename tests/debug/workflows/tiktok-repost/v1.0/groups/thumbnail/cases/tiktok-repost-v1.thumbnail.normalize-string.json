@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "thumbnail",
+  "case": {
+    "id": "tiktok-repost-v1.thumbnail.normalize-string",
+    "title": "Thumbnail Normalize (String)",
+    "description": "Verify thumbnail normalization when source thumbnail is already a string URL.",
+    "category": "thumbnail",
+    "group": "thumbnail",
+    "risk": "safe",
+    "level": "basic",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-122",
+    "status": "runnable"
+  }
+}

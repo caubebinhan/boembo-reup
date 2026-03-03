@@ -2,32 +2,33 @@
  * TikTok Repost — Workflow-specific IPC handlers
  *
  * Auto-loaded by src/workflows/index.ts via ipc.ts convention.
- * Register all IPC handlers that are specific to this workflow here.
+ * Register only IPC handlers that are specific to this workflow here.
+ *
+ * NOTE: video-edit:get-plugin-metas and video-edit:get-defaults are
+ * registered centrally in main/ipc/video-editor.ts — do NOT duplicate here.
  */
 import { ipcMain, BrowserWindow, shell } from 'electron'
 import { campaignRepo } from '@main/db/repositories/CampaignRepo'
 import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 import { normalizeTimeRanges, nextValidSlot } from '@nodes/_shared/timeWindow'
-import { videoEditPluginRegistry } from '@core/video-edit'
+import { IPC_CHANNELS } from '@shared/ipc-types'
+
+/** Guard against duplicate handler registration on hot-reload */
+const safeHandle = (channel: string, handler: Parameters<typeof ipcMain.handle>[1]) => {
+  ipcMain.removeHandler(channel)
+  ipcMain.handle(channel, handler)
+}
 
 export function setup() {
-  // ── Video Edit Plugins (auto-loaded from registry) ────
-  ipcMain.handle('video-edit:get-plugin-metas', () => {
-    return videoEditPluginRegistry.getPluginMetas()
-  })
-
-  ipcMain.handle('video-edit:get-defaults', () => {
-    return videoEditPluginRegistry.getDefaults()
-  })
   // ── Videos by campaign ────────────────────────────────
-  ipcMain.handle('campaign:get-videos', async (_event, { id }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_GET_VIDEOS, async (_event, { id }) => {
     const store = campaignRepo.tryOpen(id)
     if (!store) return []
     return store.videos.sort((a, b) => (a.queue_index ?? 0) - (b.queue_index ?? 0))
   })
 
   // ── Alerts by campaign ────────────────────────────────
-  ipcMain.handle('campaign:get-alerts', async (_event, { id, limit }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_GET_ALERTS, async (_event, { id, limit }) => {
     const store = campaignRepo.tryOpen(id)
     if (!store) return []
     const alerts = store.alerts.sort((a, b) => b.created_at - a.created_at)
@@ -35,7 +36,7 @@ export function setup() {
   })
 
   // ── Reschedule a single video ─────────────────────────
-  ipcMain.handle('video:reschedule', async (_event, { platformId, campaignId, scheduledFor }) => {
+  safeHandle(IPC_CHANNELS.VIDEO_RESCHEDULE, async (_event, { platformId, campaignId, scheduledFor }) => {
     const store = campaignRepo.tryOpen(campaignId)
     if (!store) return { success: false }
     store.updateVideo(platformId, { scheduled_for: scheduledFor })
@@ -44,13 +45,13 @@ export function setup() {
   })
 
   // ── Show video file in system explorer ────────────────
-  ipcMain.handle('video:show-in-explorer', async (_event, payload) => {
+  safeHandle(IPC_CHANNELS.VIDEO_SHOW_IN_EXPLORER, async (_event, payload) => {
     const filePath = typeof payload === 'string' ? payload : payload?.path
     if (filePath) shell.showItemInFolder(filePath)
   })
 
   // ── Reschedule ALL queued videos with new params ──────
-  ipcMain.handle('campaign:reschedule-all', async (_event, { id }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_RESCHEDULE_ALL, async (_event, { id }) => {
     const store = campaignRepo.tryOpen(id)
     if (!store) return { success: false, error: 'Campaign not found' }
 
@@ -82,7 +83,7 @@ export function setup() {
     })
 
     BrowserWindow.getAllWindows().forEach(w => {
-      w.webContents.send('campaigns-updated')
+      w.webContents.send(IPC_CHANNELS.CAMPAIGNS_UPDATED)
     })
 
     return { success: true, count: queuedVideos.length }

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "recovery",
+  "case": {
+    "id": "tiktok-repost-v1.recovery.stuck-running-job-diagnostic",
+    "title": "Recovery Stuck Running Job Diagnostic",
+    "description": "Detect/diagnose campaign jobs stuck in running state after crash and verify recovery emits actionable logs without corrupting queues.",
+    "category": "recovery",
+    "group": "recovery",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-99",
+    "status": "runnable"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "recovery",
+  "case": {
+    "id": "tiktok-repost-v1.recovery.reset-under-review",
+    "title": "Recovery Resets under_review to queued",
+    "description": "Current v1 recovery behavior resets under_review videos to queued and retriggers campaign.",
+    "category": "recovery",
+    "group": "recovery",
+    "risk": "safe",
+    "level": "intermediate",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-98",
+    "status": "runnable"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "recovery",
+  "case": {
+    "id": "tiktok-repost-v1.recovery.boot-job-audit-stale-cleanup",
+    "title": "Boot Job Audit: Stale Running Jobs Cleaned Up",
+    "description": "On boot, jobs still in running state from crashed session are detected; verify they are reset to failed or re-queued with TTL check.",
+    "category": "recovery",
+    "group": "recovery",
+    "risk": "safe",
+    "level": "intermediate",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-90",
+    "status": "runnable"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "campaign",
+  "case": {
+    "id": "tiktok-repost-v1.campaign.multi-campaign-same-source",
+    "title": "Multiple Campaigns Scanning Same Source Channel",
+    "description": "Two active campaigns both scan the same @channel; verify no cross-contamination of video rows.",
+    "category": "campaign",
+    "group": "campaign",
+    "risk": "safe",
+    "level": "advanced",
+    "errorCode": "DG-300",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/campaign.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-20",
+    "status": "runnable"
+  }
+}

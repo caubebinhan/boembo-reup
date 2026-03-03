@@ -8,6 +8,7 @@ import type {
 } from '@core/async-tasks/types'
 import { asyncTaskRepo } from '../db/repositories/AsyncTaskRepo'
 import * as crypto from 'node:crypto'
+import { CodedError } from '@core/errors/CodedError'
 
 const DEFAULT_TICK_INTERVAL = 30_000  // 30s
 const DEFAULT_LEASE_MS = 300_000       // 5 min
@@ -149,8 +150,9 @@ export class AsyncTaskScheduler {
       decision = await handler.execute(task, heartbeat)
     } catch (err: any) {
       const errorMsg = err?.message || String(err)
+      const errorCode = err instanceof CodedError ? err.errorCode : undefined
       console.error(`[AsyncTaskScheduler] Handler '${task.taskType}' crashed:`, errorMsg)
-      decision = { action: 'fail', error: errorMsg, retryable: true }
+      decision = { action: 'fail', error: errorMsg, retryable: true, errorCode }
     }
 
     // Apply decision
@@ -183,21 +185,22 @@ export class AsyncTaskScheduler {
         break
 
       case 'fail': {
+        const errPrefix = decision.errorCode ? `[${decision.errorCode}] ` : ''
         if (decision.retryable && task.attempt < task.maxAttempts) {
           // Retryable fail: reschedule with exponential backoff
           const backoffMs = Math.min(300_000, 30_000 * Math.pow(2, task.attempt - 1))
           asyncTaskRepo.applyDecision(task.id, 'pending', {
             nextRunAt: Date.now() + backoffMs,
-            lastError: decision.error,
+            lastError: `${errPrefix}${decision.error}`,
           })
           console.log(`[AsyncTaskScheduler] Task ${task.id} failed (retryable), retry in ${Math.round(backoffMs / 1000)}s`)
         } else if (decision.retryable && task.attempt >= task.maxAttempts) {
           asyncTaskRepo.applyDecision(task.id, 'timed_out', {
-            lastError: decision.error,
+            lastError: `${errPrefix}${decision.error}`,
           })
         } else {
           asyncTaskRepo.applyDecision(task.id, 'failed', {
-            lastError: decision.error,
+            lastError: `${errPrefix}${decision.error}`,
           })
         }
         break

@@ -76,7 +76,7 @@ export interface LeaseHeartbeat {
 export type AsyncTaskDecision =
   | { action: 'complete'; result?: Record<string, any> }
   | { action: 'reschedule'; nextRunAt: number; patchState?: Record<string, any> }
-  | { action: 'fail'; error: string; retryable?: boolean }
+  | { action: 'fail'; error: string; retryable?: boolean; errorCode?: string }
   | { action: 'cancel'; reason?: string }
 // Core decides 'timed_out' when attempt >= maxAttempts and handler returns reschedule or fail(retryable)
 

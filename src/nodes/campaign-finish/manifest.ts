@@ -8,6 +8,12 @@ const manifest: NodeManifest = {
   category: 'control',
   icon: '🏁',
   description: 'Mark campaign as finished and update final stats',
+  errorPrefix: 'FIN',
+  behavior: {
+    sideEffects: ['writes_to_db'],
+    idempotent: true,
+    crashBehavior: 'fail_job',
+  },
 }
 
 export default manifest

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "async_verify",
+  "case": {
+    "id": "tiktok-repost-v1.async-verify.nonblocking-smoke",
+    "title": "Async Verify Non-blocking Smoke",
+    "description": "Publisher schedules background verify task and returns immediately; loop proceeds to next item.",
+    "category": "async_verify",
+    "group": "async_verify",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/asyncVerify.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-08",
+    "status": "runnable"
+  }
+}

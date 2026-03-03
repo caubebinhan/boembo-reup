@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "scan",
+  "case": {
+    "id": "tiktok-repost-v1.scan.session-expired",
+    "title": "Channel Scan Session Expired",
+    "description": "Simulate expired session/cookies during scan and verify error handling / user-facing logs.",
+    "category": "scan",
+    "group": "scan",
+    "risk": "safe",
+    "level": "intermediate",
+    "errorCode": "DG-200",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/scan.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-114",
+    "status": "runnable"
+  }
+}

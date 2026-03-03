@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -9,8 +8,10 @@ const CASEBOOK_MD = path.join(DEBUG_DIR, 'CASEBOOK.md')
 const WORKFLOW_INDEX_ROOT = path.join(DEBUG_DIR, 'workflows')
 const WORKFLOW_INDEX_JSON = path.join(DEBUG_DIR, 'WORKFLOW_INDEX.json')
 
-function sha1(value) {
-  return createHash('sha1').update(value).digest('hex')
+const WORKFLOW_FINGERPRINT_ALIAS = {
+  main: 'MAIN',
+  'tiktok-repost': 'TIKTOK',
+  'upload-local': 'UPLOAD',
 }
 
 function toPathSlug(value) {
@@ -92,9 +93,50 @@ function pickBool(block, key) {
   return match ? match[1] === 'true' : undefined
 }
 
+function parseNamedObjectLiterals(text) {
+  const out = new Map()
+  const pattern = /const\s+([A-Za-z0-9_]+)\s*=\s*{/g
+  let match
+
+  while ((match = pattern.exec(text))) {
+    const name = match[1]
+    const braceStart = text.indexOf('{', match.index)
+    if (braceStart < 0) continue
+    const braceEnd = findMatchingBrace(text, braceStart)
+    if (braceEnd < 0) continue
+    const block = text.slice(braceStart, braceEnd + 1)
+    out.set(name, {
+      category: pickString(block, 'category'),
+      group: pickString(block, 'group'),
+      risk: pickString(block, 'risk'),
+      level: pickString(block, 'level'),
+      errorCode: pickString(block, 'errorCode'),
+      implemented: pickBool(block, 'implemented'),
+    })
+  }
+
+  return out
+}
+
+function parseSpreadDefaults(block, namedObjects) {
+  const out = {}
+  const spreadPattern = /\.\.\.([A-Za-z0-9_]+)/g
+  let spreadMatch
+
+  while ((spreadMatch = spreadPattern.exec(block))) {
+    const name = spreadMatch[1]
+    const named = namedObjects.get(name)
+    if (!named) continue
+    Object.assign(out, named)
+  }
+
+  return out
+}
+
 function parseCasesFromFile(filePath, defaults = {}) {
   const text = fs.readFileSync(filePath, 'utf8')
   const idPattern = /id:\s*'([^']+)'/g
+  const namedObjects = parseNamedObjectLiterals(text)
   const seen = new Set()
   const out = []
 
@@ -105,17 +147,24 @@ function parseCasesFromFile(filePath, defaults = {}) {
       ? `${defaults.idPrefix}${rawId}`
       : rawId
     if (seen.has(id)) continue
+
     const block = extractObjectBlockFromId(text, match.index)
     if (!block) continue
+
+    const spreadDefaults = parseSpreadDefaults(block, namedObjects)
     const title = pickString(block, 'title')
     const description = pickString(block, 'description')
     if (!title || !description) continue
 
-    const category = pickString(block, 'category') || defaults.category || 'general'
-    const group = pickString(block, 'group') || category
-    const risk = pickString(block, 'risk') || defaults.risk || 'safe'
-    const level = pickString(block, 'level') || defaults.level || 'basic'
+    const category = pickString(block, 'category') || spreadDefaults.category || defaults.category || 'general'
+    const group = pickString(block, 'group') || spreadDefaults.group || category
+    const risk = pickString(block, 'risk') || spreadDefaults.risk || defaults.risk || 'safe'
+    const level = pickString(block, 'level') || spreadDefaults.level || defaults.level || 'basic'
+    const errorCode = pickString(block, 'errorCode') || spreadDefaults.errorCode
     const implemented = pickBool(block, 'implemented')
+    const spreadImplemented = typeof spreadDefaults.implemented === 'boolean'
+      ? spreadDefaults.implemented
+      : undefined
 
     out.push({
       id,
@@ -125,7 +174,10 @@ function parseCasesFromFile(filePath, defaults = {}) {
       group,
       risk,
       level,
-      implemented: implemented === undefined ? !!defaults.implemented : implemented,
+      errorCode,
+      implemented: implemented === undefined
+        ? (spreadImplemented === undefined ? !!defaults.implemented : spreadImplemented)
+        : implemented,
       sourceFile: path.relative(ROOT, filePath).replaceAll('\\', '/'),
       workflowId: defaults.workflowId,
       workflowVersion: defaults.workflowVersion,
@@ -183,103 +235,72 @@ function parseSyntheticCases() {
   })
 }
 
-function withFingerprint(entry) {
-  const seed = [
-    entry.workflowId || 'unscoped',
-    entry.workflowVersion || 'unversioned',
-    entry.id,
-    entry.group || entry.category || 'general',
-    entry.risk || 'safe',
-  ].join('|')
-  return {
-    ...entry,
-    fingerprint: `case-${sha1(seed).slice(0, 16)}`,
-  }
+function toWorkflowCode(workflowId) {
+  const raw = String(workflowId || 'unscoped').trim().toLowerCase()
+  if (WORKFLOW_FINGERPRINT_ALIAS[raw]) return WORKFLOW_FINGERPRINT_ALIAS[raw]
+
+  const compact = raw
+    .replaceAll(/[^a-z0-9]+/g, '-')
+    .split('-')
+    .filter(Boolean)
+    .map(chunk => chunk.slice(0, 4))
+    .join('')
+    .toUpperCase()
+
+  return compact || 'CASE'
 }
 
-function withTodos(entry) {
-  if (entry.implemented) {
-    return {
-      ...entry,
-      todos: [
-        'Keep runner branch stable and keep output summary deterministic.',
-        'Keep artifact payload compatible with Debug tab preview.',
-        'Keep fingerprint stable unless case identity changes.',
-      ],
-      status: 'runnable',
-    }
+function compareFingerprintOrder(left, right) {
+  const leftWorkflow = left.workflowId || 'unscoped'
+  const rightWorkflow = right.workflowId || 'unscoped'
+  if (leftWorkflow !== rightWorkflow) return leftWorkflow.localeCompare(rightWorkflow)
+
+  const leftVersion = left.workflowVersion || 'unversioned'
+  const rightVersion = right.workflowVersion || 'unversioned'
+  if (leftVersion !== rightVersion) {
+    return leftVersion.localeCompare(rightVersion, undefined, { numeric: true })
   }
-  return {
-    ...entry,
-    todos: [
-      'Implement runner branch and wire caseId dispatch.',
-      'Add deterministic fixture/setup for reproducible debug reruns.',
-      'Assert DB/UI/log/event checks from case meta.',
-      'Attach artifact outputs + diagnostic footprint for investigation.',
-      'Flip implemented=true after validation in Debug tab.',
-    ],
-    status: 'planned',
-  }
+
+  return left.id.localeCompare(right.id)
 }
 
-function buildCasebook(entries) {
-  const total = entries.length
-  const runnable = entries.filter(e => e.status === 'runnable').length
-  const planned = entries.filter(e => e.status === 'planned').length
-  const byWorkflow = new Map()
-  for (const entry of entries) {
-    const key = `${entry.workflowId || 'unscoped'}@${entry.workflowVersion || 'unversioned'}`
-    if (!byWorkflow.has(key)) byWorkflow.set(key, { total: 0, runnable: 0, planned: 0 })
-    const bucket = byWorkflow.get(key)
-    bucket.total += 1
-    if (entry.status === 'runnable') bucket.runnable += 1
-    if (entry.status === 'planned') bucket.planned += 1
+function assignReadableFingerprints(entries) {
+  const counters = new Map()
+  const byId = new Map()
+  const sorted = [...entries].sort(compareFingerprintOrder)
+
+  for (const entry of sorted) {
+    const workflowCode = toWorkflowCode(entry.workflowId)
+    const next = (counters.get(workflowCode) || 0) + 1
+    counters.set(workflowCode, next)
+    byId.set(entry.id, `case-${workflowCode}-${String(next).padStart(2, '0')}`)
   }
 
-  const lines = []
-  lines.push('# Debug Casebook')
-  lines.push('')
-  lines.push('Central backlog/index for all troubleshooting/debug scenarios.')
-  lines.push('')
-  lines.push('## Summary')
-  lines.push('')
-  lines.push(`- Total cases: **${total}**`)
-  lines.push(`- Runnable: **${runnable}**`)
-  lines.push(`- Planned: **${planned}**`)
-  lines.push(`- Generated at: ${new Date().toISOString()}`)
-  lines.push('')
-  lines.push('## Workflow Breakdown')
-  lines.push('')
-  lines.push('| Scope | Total | Runnable | Planned |')
-  lines.push('|---|---:|---:|---:|')
-  for (const [scope, stat] of [...byWorkflow.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-    lines.push(`| ${scope} | ${stat.total} | ${stat.runnable} | ${stat.planned} |`)
-  }
-  lines.push('')
-  lines.push('## Implementation Queue')
-  lines.push('')
-  for (const entry of entries.filter(e => e.status === 'planned')) {
-    lines.push(`### ${entry.id}`)
-    lines.push(`- Title: ${entry.title}`)
-    lines.push(`- Scope: ${(entry.workflowId || 'unscoped')}@${entry.workflowVersion || 'unversioned'}`)
-    lines.push(`- Group: ${entry.group} | Category: ${entry.category} | Level: ${entry.level}`)
-    lines.push(`- Fingerprint: \`${entry.fingerprint}\``)
-    lines.push(`- Source: \`${entry.sourceFile}\``)
-    for (const todo of entry.todos) lines.push(`- TODO: ${todo}`)
-    lines.push('')
-  }
-  lines.push('## Runnable Cases')
-  lines.push('')
-  for (const entry of entries.filter(e => e.status === 'runnable')) {
-    lines.push(`- ${entry.id} (\`${entry.fingerprint}\`) -> ${entry.sourceFile}`)
-  }
-  lines.push('')
-  lines.push('## Notes')
-  lines.push('')
-  lines.push('- Case runtime metadata and artifacts are persisted by `TroubleshootingService` into `tests/debug/artifacts` and `tests/debug/footprints`.')
-  lines.push('- Use `npm run debug:casebook` after adding/editing case definitions.')
-  lines.push('')
-  return lines.join('\n')
+  return entries.map(entry => ({
+    ...entry,
+    fingerprint: byId.get(entry.id) || entry.fingerprint,
+  }))
+}
+
+function withStatus(entries) {
+  return entries.map(entry => ({
+    ...entry,
+    status: entry.implemented ? 'runnable' : 'planned',
+  }))
+}
+
+function plannedTodos(_entry) {
+  return [
+    'Implement runner branch and wire caseId dispatch.',
+    'Add deterministic fixture/setup for reproducible debug reruns.',
+    'Assert DB/UI/log/event checks from case meta.',
+    'Attach artifact outputs + diagnostic footprint for investigation.',
+    'Flip implemented=true after validation in Debug tab.',
+  ]
+}
+
+function sortById(entries) {
+  return [...entries].sort((a, b) => a.id.localeCompare(b.id))
 }
 
 function scopeKey(entry) {
@@ -288,49 +309,150 @@ function scopeKey(entry) {
   return `${workflowId}@${workflowVersion}`
 }
 
-function groupEntriesByScope(entries) {
-  const grouped = new Map()
-  for (const entry of entries) {
-    const key = scopeKey(entry)
-    if (!grouped.has(key)) grouped.set(key, [])
-    grouped.get(key).push(entry)
-  }
-  return grouped
-}
-
 function toVersionFolder(workflowVersion) {
   const raw = String(workflowVersion || 'unversioned')
   return raw.startsWith('v') ? raw : `v${raw}`
 }
 
-function buildScopedCasebook(workflowId, workflowVersion, entries) {
-  const runnable = entries.filter(e => e.status === 'runnable').length
-  const planned = entries.filter(e => e.status === 'planned').length
+function toRelativePath(filePath) {
+  return path.relative(ROOT, filePath).replaceAll('\\', '/')
+}
+
+function writeJson(filePath, payload) {
+  fs.writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8')
+}
+
+function toImplementedCasePayload(entry) {
+  return {
+    id: entry.id,
+    title: entry.title,
+    description: entry.description,
+    category: entry.category,
+    group: entry.group,
+    risk: entry.risk,
+    level: entry.level,
+    errorCode: entry.errorCode,
+    implemented: true,
+    sourceFile: entry.sourceFile,
+    workflowId: entry.workflowId,
+    workflowVersion: entry.workflowVersion,
+    suite: entry.suite,
+    fingerprint: entry.fingerprint,
+    status: 'runnable',
+  }
+}
+
+function buildGroupTodoMarkdown(workflowId, workflowVersion, group, plannedEntries) {
+  const lines = []
+  lines.push(`# TODO Cases: ${workflowId}@${workflowVersion} / ${group}`)
+  lines.push('')
+  lines.push(`- Total TODO: **${plannedEntries.length}**`)
+  lines.push(`- Generated at: ${new Date().toISOString()}`)
+  lines.push('')
+
+  for (const entry of plannedEntries) {
+    lines.push(`## ${entry.id}`)
+    lines.push(`- Title: ${entry.title}`)
+    lines.push(`- Code: \`${entry.fingerprint}\``)
+    lines.push(`- Category: ${entry.category} | Group: ${entry.group} | Level: ${entry.level}`)
+    lines.push(`- Source: \`${entry.sourceFile}\``)
+    for (const todo of plannedTodos(entry)) lines.push(`- TODO: ${todo}`)
+    lines.push('')
+  }
+
+  return lines.join('\n')
+}
+
+function buildWorkflowCasebook(workflowId, workflowVersion, implementedEntries, plannedEntries, groupRows) {
   const lines = []
   lines.push(`# Debug Casebook: ${workflowId}@${workflowVersion}`)
   lines.push('')
-  lines.push(`- Total cases: **${entries.length}**`)
-  lines.push(`- Runnable: **${runnable}**`)
-  lines.push(`- Planned: **${planned}**`)
+  lines.push(`- Implemented cases (JSON): **${implementedEntries.length}**`)
+  lines.push(`- TODO cases (Markdown): **${plannedEntries.length}**`)
   lines.push(`- Generated at: ${new Date().toISOString()}`)
   lines.push('')
-  lines.push('## Planned')
+  lines.push('## Group Breakdown')
   lines.push('')
-  for (const entry of entries.filter(e => e.status === 'planned')) {
+  lines.push('| Group | Implemented | TODO |')
+  lines.push('|---|---:|---:|')
+  for (const row of groupRows) {
+    lines.push(`| ${row.group} | ${row.implemented} | ${row.todo} |`)
+  }
+  lines.push('')
+  lines.push('## TODO Queue')
+  lines.push('')
+  if (plannedEntries.length === 0) {
+    lines.push('- No TODO cases in this workflow scope.')
+    lines.push('')
+  } else {
+    for (const entry of plannedEntries) {
+      lines.push(`### ${entry.id}`)
+      lines.push(`- Title: ${entry.title}`)
+      lines.push(`- Group: ${entry.group} | Category: ${entry.category} | Level: ${entry.level}`)
+      lines.push(`- Code: \`${entry.fingerprint}\``)
+      lines.push(`- Source: \`${entry.sourceFile}\``)
+      for (const todo of plannedTodos(entry)) lines.push(`- TODO: ${todo}`)
+      lines.push('')
+    }
+  }
+  lines.push('## Implemented JSON Layout')
+  lines.push('')
+  lines.push('- Implemented cases are split by group and written as one JSON file per case.')
+  lines.push('- Path pattern: `groups/<group>/cases/<case-id>.json`')
+  lines.push('')
+  return lines.join('\n')
+}
+
+function buildRootCasebook(entries, workflowRows) {
+  const implemented = entries.filter(e => e.implemented)
+  const planned = entries.filter(e => !e.implemented)
+  const lines = []
+  lines.push('# Debug Casebook')
+  lines.push('')
+  lines.push('Central backlog/index for troubleshooting/debug scenarios.')
+  lines.push('')
+  lines.push('## Summary')
+  lines.push('')
+  lines.push(`- Total implemented cases (JSON): **${implemented.length}**`)
+  lines.push(`- Total TODO cases (Markdown): **${planned.length}**`)
+  lines.push(`- Generated at: ${new Date().toISOString()}`)
+  lines.push('')
+  lines.push('## Workflow Breakdown')
+  lines.push('')
+  lines.push('| Scope | Implemented | TODO |')
+  lines.push('|---|---:|---:|')
+  for (const row of workflowRows) {
+    lines.push(`| ${row.scope} | ${row.runnable} | ${row.planned} |`)
+  }
+  lines.push('')
+  lines.push('## TODO Queue')
+  lines.push('')
+
+  if (planned.length === 0) {
+    lines.push('- No TODO cases.')
+    lines.push('')
+    return lines.join('\n')
+  }
+
+  const sortedPlanned = [...planned].sort((a, b) => {
+    const scopeCompare = scopeKey(a).localeCompare(scopeKey(b))
+    if (scopeCompare !== 0) return scopeCompare
+    const groupCompare = (a.group || '').localeCompare(b.group || '')
+    if (groupCompare !== 0) return groupCompare
+    return a.id.localeCompare(b.id)
+  })
+
+  for (const entry of sortedPlanned) {
     lines.push(`### ${entry.id}`)
     lines.push(`- Title: ${entry.title}`)
+    lines.push(`- Scope: ${(entry.workflowId || 'unscoped')}@${entry.workflowVersion || 'unversioned'}`)
     lines.push(`- Group: ${entry.group} | Category: ${entry.category} | Level: ${entry.level}`)
-    lines.push(`- Fingerprint: \`${entry.fingerprint}\``)
+    lines.push(`- Code: \`${entry.fingerprint}\``)
     lines.push(`- Source: \`${entry.sourceFile}\``)
-    for (const todo of entry.todos) lines.push(`- TODO: ${todo}`)
+    for (const todo of plannedTodos(entry)) lines.push(`- TODO: ${todo}`)
     lines.push('')
   }
-  lines.push('## Runnable')
-  lines.push('')
-  for (const entry of entries.filter(e => e.status === 'runnable')) {
-    lines.push(`- ${entry.id} (\`${entry.fingerprint}\`) -> ${entry.sourceFile}`)
-  }
-  lines.push('')
+
   return lines.join('\n')
 }
 
@@ -338,14 +460,20 @@ function writeWorkflowIndexes(entries, generatedAt) {
   fs.rmSync(WORKFLOW_INDEX_ROOT, { recursive: true, force: true })
   fs.mkdirSync(WORKFLOW_INDEX_ROOT, { recursive: true })
 
-  const grouped = groupEntriesByScope(entries)
-  const workflowIndexRows = []
+  const byScope = new Map()
+  for (const entry of entries) {
+    const key = scopeKey(entry)
+    if (!byScope.has(key)) byScope.set(key, [])
+    byScope.get(key).push(entry)
+  }
 
-  for (const [key, rawEntries] of [...grouped.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-    const first = rawEntries[0] || {}
+  const workflowRows = []
+
+  for (const [scope, scopeEntriesRaw] of [...byScope.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const scopeEntries = sortById(scopeEntriesRaw)
+    const first = scopeEntries[0] || {}
     const workflowId = first.workflowId || 'unscoped'
     const workflowVersion = first.workflowVersion || 'unversioned'
-    const scopeEntries = [...rawEntries].sort((a, b) => a.id.localeCompare(b.id))
     const workflowDir = path.join(
       WORKFLOW_INDEX_ROOT,
       toPathSlug(workflowId),
@@ -353,42 +481,117 @@ function writeWorkflowIndexes(entries, generatedAt) {
     )
     fs.mkdirSync(workflowDir, { recursive: true })
 
-    const indexPath = path.join(workflowDir, 'CASE_INDEX.json')
-    const casebookPath = path.join(workflowDir, 'CASEBOOK.md')
+    const implementedEntries = scopeEntries.filter(entry => entry.implemented)
+    const plannedEntries = scopeEntries.filter(entry => !entry.implemented)
+    const groupBuckets = new Map()
+    for (const entry of scopeEntries) {
+      const group = entry.group || entry.category || 'general'
+      if (!groupBuckets.has(group)) groupBuckets.set(group, { implemented: [], planned: [] })
+      if (entry.implemented) groupBuckets.get(group).implemented.push(entry)
+      else groupBuckets.get(group).planned.push(entry)
+    }
 
-    fs.writeFileSync(indexPath, `${JSON.stringify({
-      schemaVersion: 1,
+    const groupRows = []
+    for (const [group, bucket] of [...groupBuckets.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+      const groupDir = path.join(workflowDir, 'groups', toPathSlug(group))
+      const casesDir = path.join(groupDir, 'cases')
+      fs.mkdirSync(casesDir, { recursive: true })
+
+      const caseRows = []
+      for (const entry of sortById(bucket.implemented)) {
+        const caseFile = path.join(casesDir, `${toPathSlug(entry.id)}.json`)
+        writeJson(caseFile, {
+          schemaVersion: 2,
+          generatedAt,
+          workflowId,
+          workflowVersion,
+          group,
+          case: toImplementedCasePayload(entry),
+        })
+
+        caseRows.push({
+          id: entry.id,
+          title: entry.title,
+          fingerprint: entry.fingerprint,
+          errorCode: entry.errorCode,
+          category: entry.category,
+          group: entry.group,
+          level: entry.level,
+          risk: entry.risk,
+          caseFilePath: toRelativePath(caseFile),
+        })
+      }
+
+      const groupIndexPath = path.join(groupDir, 'CASE_INDEX.json')
+      writeJson(groupIndexPath, {
+        schemaVersion: 2,
+        generatedAt,
+        workflowId,
+        workflowVersion,
+        group,
+        totalImplemented: caseRows.length,
+        cases: caseRows,
+      })
+
+      let todoPath = null
+      if (bucket.planned.length > 0) {
+        todoPath = path.join(groupDir, 'TODO.md')
+        fs.writeFileSync(
+          todoPath,
+          `${buildGroupTodoMarkdown(workflowId, workflowVersion, group, sortById(bucket.planned))}\n`,
+          'utf8'
+        )
+      }
+
+      groupRows.push({
+        group,
+        implemented: bucket.implemented.length,
+        todo: bucket.planned.length,
+        caseIndexPath: toRelativePath(groupIndexPath),
+        todoPath: todoPath ? toRelativePath(todoPath) : null,
+        casesDirPath: toRelativePath(casesDir),
+      })
+    }
+
+    const workflowIndexPath = path.join(workflowDir, 'CASE_INDEX.json')
+    const workflowCasebookPath = path.join(workflowDir, 'CASEBOOK.md')
+
+    writeJson(workflowIndexPath, {
+      schemaVersion: 2,
       generatedAt,
       workflowId,
       workflowVersion,
-      total: scopeEntries.length,
-      entries: scopeEntries,
-    }, null, 2)}\n`, 'utf8')
+      totalImplemented: implementedEntries.length,
+      totalTodo: plannedEntries.length,
+      groups: groupRows,
+    })
 
-    fs.writeFileSync(casebookPath, `${buildScopedCasebook(workflowId, workflowVersion, scopeEntries)}\n`, 'utf8')
+    fs.writeFileSync(
+      workflowCasebookPath,
+      `${buildWorkflowCasebook(workflowId, workflowVersion, implementedEntries, plannedEntries, groupRows)}\n`,
+      'utf8'
+    )
 
-    const runnable = scopeEntries.filter(e => e.status === 'runnable').length
-    const planned = scopeEntries.filter(e => e.status === 'planned').length
-    workflowIndexRows.push({
+    workflowRows.push({
       workflowId,
       workflowVersion,
-      scope: key,
-      total: scopeEntries.length,
-      runnable,
-      planned,
-      caseIndexPath: path.relative(ROOT, indexPath).replaceAll('\\', '/'),
-      casebookPath: path.relative(ROOT, casebookPath).replaceAll('\\', '/'),
+      scope,
+      total: implementedEntries.length,
+      runnable: implementedEntries.length,
+      planned: plannedEntries.length,
+      caseIndexPath: toRelativePath(workflowIndexPath),
+      casebookPath: toRelativePath(workflowCasebookPath),
     })
   }
 
-  fs.writeFileSync(WORKFLOW_INDEX_JSON, `${JSON.stringify({
-    schemaVersion: 1,
+  writeJson(WORKFLOW_INDEX_JSON, {
+    schemaVersion: 2,
     generatedAt,
-    totalWorkflows: workflowIndexRows.length,
-    workflows: workflowIndexRows,
-  }, null, 2)}\n`, 'utf8')
+    totalWorkflows: workflowRows.length,
+    workflows: workflowRows,
+  })
 
-  return workflowIndexRows
+  return workflowRows
 }
 
 function main() {
@@ -400,10 +603,10 @@ function main() {
     if (!byId.has(entry.id)) byId.set(entry.id, entry)
   }
 
-  const entries = [...byId.values()]
-    .map(withFingerprint)
-    .map(withTodos)
-    .sort((a, b) => a.id.localeCompare(b.id))
+  const entries = withStatus(assignReadableFingerprints([...byId.values()]))
+  const sortedEntries = sortById(entries)
+  const implementedEntries = sortedEntries.filter(entry => entry.implemented)
+  const plannedEntries = sortedEntries.filter(entry => !entry.implemented)
   const generatedAt = Date.now()
 
   fs.mkdirSync(DEBUG_DIR, { recursive: true })
@@ -411,19 +614,30 @@ function main() {
   fs.mkdirSync(path.join(DEBUG_DIR, 'footprints'), { recursive: true })
   fs.mkdirSync(path.join(DEBUG_DIR, 'runs'), { recursive: true })
 
-  fs.writeFileSync(INDEX_JSON, `${JSON.stringify({
-    schemaVersion: 1,
+  const workflowRows = writeWorkflowIndexes(sortedEntries, generatedAt)
+
+  writeJson(INDEX_JSON, {
+    schemaVersion: 2,
     generatedAt,
-    total: entries.length,
-    entries,
-  }, null, 2)}\n`, 'utf8')
+    totalImplemented: implementedEntries.length,
+    totalTodo: plannedEntries.length,
+    totalWorkflows: workflowRows.length,
+    workflows: workflowRows.map((row) => ({
+      workflowId: row.workflowId,
+      workflowVersion: row.workflowVersion,
+      scope: row.scope,
+      totalImplemented: row.runnable,
+      totalTodo: row.planned,
+      caseIndexPath: row.caseIndexPath,
+      casebookPath: row.casebookPath,
+    })),
+  })
 
-  fs.writeFileSync(CASEBOOK_MD, `${buildCasebook(entries)}\n`, 'utf8')
-  const workflowIndexes = writeWorkflowIndexes(entries, generatedAt)
+  fs.writeFileSync(CASEBOOK_MD, `${buildRootCasebook(sortedEntries, workflowRows)}\n`, 'utf8')
 
-  console.log(`[debug-casebook] Wrote ${entries.length} cases to ${path.relative(ROOT, INDEX_JSON)}`)
-  console.log(`[debug-casebook] Wrote casebook to ${path.relative(ROOT, CASEBOOK_MD)}`)
-  console.log(`[debug-casebook] Wrote ${workflowIndexes.length} workflow case indexes under ${path.relative(ROOT, WORKFLOW_INDEX_ROOT)}`)
+  console.log(`[debug-casebook] Wrote summary index to ${path.relative(ROOT, INDEX_JSON)}`)
+  console.log(`[debug-casebook] Wrote root TODO casebook to ${path.relative(ROOT, CASEBOOK_MD)}`)
+  console.log(`[debug-casebook] Wrote ${workflowRows.length} workflow trees under ${path.relative(ROOT, WORKFLOW_INDEX_ROOT)}`)
   console.log(`[debug-casebook] Wrote workflow index map to ${path.relative(ROOT, WORKFLOW_INDEX_JSON)}`)
 }
 

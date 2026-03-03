@@ -4,6 +4,7 @@ import {
   type SentryConnectedProject,
   type SentryOAuthConnectionSettings,
 } from './AppSettingsService'
+import { CodedError } from '@core/errors/CodedError'
 
 const DEFAULT_BASE_URL = 'https://sentry.io'
 const DEFAULT_SCOPE = 'org:read project:read event:read'
@@ -144,7 +145,8 @@ async function apiGetJson(url: string, token: string): Promise<JsonObject | Json
   const payload = await tryReadJson(response)
   if (!response.ok) {
     const detail = text((payload as any)?.detail) || `HTTP ${response.status}`
-    throw new Error(`Sentry API failed: ${detail}`)
+    /** @throws DG-700 — Sentry API returned error response */
+    throw new CodedError('DG-700', `Sentry API failed: ${detail}`)
   }
   return payload
 }
@@ -247,7 +249,8 @@ export class SentryOAuthService {
   static async startDeviceAuthorization(env: NodeJS.ProcessEnv = process.env): Promise<SentryOAuthStartResult> {
     const clientId = resolveClientId(env)
     if (!clientId) {
-      throw new Error('Missing SENTRY_OAUTH_CLIENT_ID. Configure client id before connect.')
+      /** @throws DG-701 — SENTRY_OAUTH_CLIENT_ID not configured */
+      throw new CodedError('DG-701', 'Missing SENTRY_OAUTH_CLIENT_ID. Configure client id before connect.')
     }
     const baseUrl = resolveBase(env)
     const scope = resolveScope(env)
@@ -260,7 +263,8 @@ export class SentryOAuthService {
     if (!response.ok) {
       const detail = text(payload.detail || payload.error || payload.error_description)
       const detailSuffix = detail ? `: ${detail}` : ''
-      throw new Error(`Sentry device authorization failed${detailSuffix}`)
+      /** @throws DG-702 — Device authorization grant failed */
+      throw new CodedError('DG-702', `Sentry device authorization failed${detailSuffix}`)
     }
 
     const deviceCode = text(payload.device_code)
@@ -270,7 +274,8 @@ export class SentryOAuthService {
     const intervalSec = Math.max(2, Number.parseInt(String(payload.interval || '5'), 10) || 5)
     const expiresInSec = Math.max(60, Number.parseInt(String(payload.expires_in || '600'), 10) || 600)
     if (!deviceCode || !userCode || !verificationUri) {
-      throw new Error('Sentry device authorization response missing required fields.')
+      /** @throws DG-703 — Device auth response missing required fields */
+      throw new CodedError('DG-703', 'Sentry device authorization response missing required fields.')
     }
 
     const session: PendingSession = {
@@ -398,7 +403,8 @@ export class SentryOAuthService {
     stagingProjectSlug?: string
   }): SentryOAuthConnectionView {
     const current = AppSettingsService.getSentryOAuthConnection()
-    if (!current) throw new Error('Sentry is not connected.')
+    /** @throws DG-704 — No active Sentry OAuth connection */
+    if (!current) throw new CodedError('DG-704', 'Sentry is not connected.')
     const projects = ensureArray<SentryConnectedProject>(current.projects)
     const productionProjectSlug = pickProductionProjectSlug(projects, text(input.productionProjectSlug))
     const stagingProjectSlug = pickStagingProjectSlug(projects, text(input.stagingProjectSlug))
@@ -434,15 +440,18 @@ export class SentryOAuthService {
     const orgPayload = await apiGetJson(`${tokenData.baseUrl}/api/0/organizations/`, tokenData.accessToken)
     const orgs = ensureArray<JsonObject>(orgPayload)
     if (orgs.length === 0) {
-      throw new Error('Authorized token has no accessible organizations.')
+      /** @throws DG-705 — Connected token has no accessible organizations */
+      throw new CodedError('DG-705', 'Authorized token has no accessible organizations.')
     }
     const pickedOrg = orgs.find(o => text(o.slug) === orgHint) || orgs[0]
     const orgSlug = text(pickedOrg?.slug)
-    if (!orgSlug) throw new Error('Unable to determine organization slug.')
+    /** @throws DG-706 — Could not determine organization slug */
+    if (!orgSlug) throw new CodedError('DG-706', 'Unable to determine organization slug.')
 
     const projects = await fetchProjectsWithDsn(tokenData.baseUrl, tokenData.accessToken, orgSlug)
     if (projects.length === 0) {
-      throw new Error(`Organization ${orgSlug} has no accessible projects.`)
+      /** @throws DG-707 — Organization has no accessible projects */
+      throw new CodedError('DG-707', `Organization ${orgSlug} has no accessible projects.`)
     }
 
     const selectedProductionProjectSlug = pickProductionProjectSlug(projects, previous?.selectedProductionProjectSlug)

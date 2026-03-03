@@ -1,32 +1,18 @@
 {
-  "schemaVersion": 1,
-  "generatedAt": 1772182793399,
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
   "workflowId": "upload-local",
   "workflowVersion": "1.0",
-  "total": 1,
-  "entries": [
+  "totalImplemented": 0,
+  "totalTodo": 1,
+  "groups": [
     {
-      "id": "upload-local-v1.workflow-smoke",
-      "title": "Upload Local v1 Smoke (Planned)",
-      "description": "Planned smoke case placeholder for upload-local@1.0. Add workflow-specific debug cases here.",
-      "category": "smoke",
       "group": "smoke",
-      "risk": "safe",
-      "level": "basic",
-      "implemented": false,
-      "sourceFile": "src/workflows/upload-local/v1.0/troubleshooting/cases/index.ts",
-      "workflowId": "upload-local",
-      "workflowVersion": "1.0",
-      "suite": "debug",
-      "fingerprint": "case-baff0f25c0db0f49",
-      "todos": [
-        "Implement runner branch and wire caseId dispatch.",
-        "Add deterministic fixture/setup for reproducible debug reruns.",
-        "Assert DB/UI/log/event checks from case meta.",
-        "Attach artifact outputs + diagnostic footprint for investigation.",
-        "Flip implemented=true after validation in Debug tab."
-      ],
-      "status": "planned"
+      "implemented": 0,
+      "todo": 1,
+      "caseIndexPath": "tests/debug/workflows/upload-local/v1.0/groups/smoke/CASE_INDEX.json",
+      "todoPath": "tests/debug/workflows/upload-local/v1.0/groups/smoke/TODO.md",
+      "casesDirPath": "tests/debug/workflows/upload-local/v1.0/groups/smoke/cases"
     }
   ]
 }

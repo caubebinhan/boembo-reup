@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "publish",
+  "case": {
+    "id": "dashboard-verify",
+    "title": "Dashboard Verify Debug",
+    "description": "Full publish → dump flags → force recheck after 30s. Diagnoses verify/retry branch behavior.",
+    "category": "publish",
+    "group": "publish",
+    "risk": "real_publish",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-01",
+    "status": "runnable"
+  }
+}

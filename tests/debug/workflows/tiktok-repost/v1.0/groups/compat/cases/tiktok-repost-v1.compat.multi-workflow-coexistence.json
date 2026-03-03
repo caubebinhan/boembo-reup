@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "compat",
+  "case": {
+    "id": "tiktok-repost-v1.compat.multi-workflow-coexistence",
+    "title": "Compat: tiktok-repost@1.0 and upload-local@1.0 Coexist",
+    "description": "Both workflow types run simultaneously; verify no shared mutable state, duplicate event listeners, or job queue cross-contamination.",
+    "category": "compat",
+    "group": "compat",
+    "risk": "safe",
+    "level": "advanced",
+    "errorCode": "DG-500",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-30",
+    "status": "runnable"
+  }
+}

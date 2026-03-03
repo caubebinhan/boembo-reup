@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "thumbnail",
+  "case": {
+    "id": "tiktok-repost-v1.thumbnail.bulk-mixed-shapes-grid-snapshot",
+    "title": "Thumbnail Mixed Shapes Grid Snapshot",
+    "description": "Large mixed thumbnail dataset renders grid/list previews and captures screenshot for visual regression checks.",
+    "category": "thumbnail",
+    "group": "thumbnail",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-118",
+    "status": "runnable"
+  }
+}

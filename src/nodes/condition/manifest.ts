@@ -20,6 +20,12 @@ const manifest: NodeManifest = {
       },
     ],
   },
+  errorPrefix: 'CND',
+  behavior: {
+    sideEffects: [],
+    idempotent: true,
+    crashBehavior: 'fail_job',
+  },
 }
 
 export default manifest

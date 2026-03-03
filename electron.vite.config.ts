@@ -18,7 +18,7 @@ export default defineConfig({
     resolve: {
       alias: {
         ...sharedAlias,
-        '@renderer':  resolve('src/renderer/src'),
+        '@renderer':  resolve('src/renderer'),
         '@workflows': resolve('src/workflows'),
       },
       conditions: ['browser', 'import', 'module', 'default'],

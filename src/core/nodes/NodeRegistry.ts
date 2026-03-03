@@ -4,7 +4,11 @@ export class NodeRegistry {
   private nodes = new Map<string, NodeDefinition>()
 
   register(node: NodeDefinition) {
-    this.nodes.set(node.manifest.id, node)
+    const id = node.manifest.id
+    if (this.nodes.has(id)) {
+      console.warn(`[NodeRegistry] ⚠ Duplicate node id "${id}" — overwriting previous registration`)
+    }
+    this.nodes.set(id, node)
   }
 
   get(id: string): NodeDefinition | undefined {

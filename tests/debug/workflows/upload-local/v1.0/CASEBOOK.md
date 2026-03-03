@@ -1,16 +1,21 @@
 # Debug Casebook: upload-local@1.0
 
-- Total cases: **1**
-- Runnable: **0**
-- Planned: **1**
-- Generated at: 2026-02-27T08:59:53.420Z
+- Implemented cases (JSON): **0**
+- TODO cases (Markdown): **1**
+- Generated at: 2026-03-03T04:07:06.497Z
 
-## Planned
+## Group Breakdown
+
+| Group | Implemented | TODO |
+|---|---:|---:|
+| smoke | 0 | 1 |
+
+## TODO Queue
 
 ### upload-local-v1.workflow-smoke
 - Title: Upload Local v1 Smoke (Planned)
 - Group: smoke | Category: smoke | Level: basic
-- Fingerprint: `case-baff0f25c0db0f49`
+- Code: `case-UPLOAD-01`
 - Source: `src/workflows/upload-local/v1.0/troubleshooting/cases/index.ts`
 - TODO: Implement runner branch and wire caseId dispatch.
 - TODO: Add deterministic fixture/setup for reproducible debug reruns.
@@ -18,6 +23,8 @@
 - TODO: Attach artifact outputs + diagnostic footprint for investigation.
 - TODO: Flip implemented=true after validation in Debug tab.
 
-## Runnable
+## Implemented JSON Layout
 
+- Implemented cases are split by group and written as one JSON file per case.
+- Path pattern: `groups/<group>/cases/<case-id>.json`
 

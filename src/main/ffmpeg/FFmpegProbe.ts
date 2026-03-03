@@ -4,6 +4,7 @@
  * Probe video files via ffprobe to extract duration, dimensions, fps, codecs, etc.
  */
 import { resolveBinary, runBinary } from './FFmpegBinary'
+import { CodedError } from '@core/errors/CodedError'
 
 export interface VideoMetadata {
   durationSec: number
@@ -69,21 +70,24 @@ export async function probeVideo(filePath: string): Promise<VideoMetadata> {
 
   const res = await runBinary(resolveBinary('ffprobe'), args, 20_000)
   if (res.code !== 0) {
-    throw new Error(`ffprobe failed (code ${res.code}): ${res.stderr.toString('utf8').slice(0, 300)}`)
+    /** @throws DG-011 — ffprobe returned non-zero exit code */
+    throw new CodedError('DG-011', `ffprobe failed (code ${res.code}): ${res.stderr.toString('utf8').slice(0, 300)}`)
   }
 
   let probe: ProbeResponse
   try {
     probe = JSON.parse(res.stdout.toString('utf8'))
   } catch {
-    throw new Error('ffprobe returned invalid JSON')
+    /** @throws DG-012 — ffprobe stdout is not valid JSON */
+    throw new CodedError('DG-012', 'ffprobe returned invalid JSON')
   }
 
   const videoStream = probe.streams?.find((s) => s.codec_type === 'video')
   const audioStream = probe.streams?.find((s) => s.codec_type === 'audio')
 
   if (!videoStream) {
-    throw new Error('No video stream found in file')
+    /** @throws DG-013 — Probed file has no video stream */
+    throw new CodedError('DG-013', `No video stream found in file: ${filePath}`)
   }
 
   const durationSec =

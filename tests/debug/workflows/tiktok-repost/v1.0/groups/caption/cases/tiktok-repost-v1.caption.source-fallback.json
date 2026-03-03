@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "caption",
+  "case": {
+    "id": "tiktok-repost-v1.caption.source-fallback",
+    "title": "Caption Fallback to Source",
+    "description": "When generated caption is missing, publish path uses source description fallback.",
+    "category": "caption",
+    "group": "caption",
+    "risk": "safe",
+    "level": "basic",
+    "errorCode": "DG-400",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-26",
+    "status": "runnable"
+  }
+}

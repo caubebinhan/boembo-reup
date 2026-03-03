@@ -11,16 +11,55 @@ import { jobRepo } from '../db/repositories/JobRepo'
 import { createCampaignDocument } from '../db/models/Campaign'
 import { db } from '../db/Database'
 
+/**
+ * Safe IPC wrapper — catches all errors and returns structured { success, error } responses
+ * so the renderer can always display meaningful error messages.
+ */
+function safeHandle(channel: string, handler: (...args: any[]) => Promise<any>) {
+  ipcMain.handle(channel, async (...args) => {
+    try {
+      return await handler(...args)
+    } catch (err: any) {
+      const message = err?.message || String(err)
+      console.error(`[IPC:${channel}] Error:`, message)
+      ExecutionLogger.sendToast('error', `IPC Error: ${channel}`, message)
+      throw err // Re-throw so renderer sees the rejection
+    }
+  })
+}
+
 export function setupCampaignIPC() {
-  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_LIST, async () => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_LIST, async () => {
     return campaignRepo.findAll()
   })
 
-  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_GET, async (_event, { id }) => {
+  // Open campaign detail in a new window
+  safeHandle('campaign-detail:open', async (_event, { id }: { id: string }) => {
+    const { join } = require('node:path')
+    const { is } = require('@electron-toolkit/utils')
+    const detailWin = new BrowserWindow({
+      width: 1100,
+      height: 750,
+      title: 'Campaign Detail',
+      autoHideMenuBar: true,
+      webPreferences: {
+        preload: join(__dirname, '../preload/index.js'),
+        sandbox: false,
+        webSecurity: false,
+      }
+    })
+    if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+      await detailWin.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#/campaign-detail/${id}`)
+    } else {
+      await detailWin.loadFile(join(__dirname, '../renderer/index.html'), { hash: `/campaign-detail/${id}` })
+    }
+  })
+
+  safeHandle(IPC_CHANNELS.CAMPAIGN_GET, async (_event, { id }) => {
     return campaignRepo.findById(id)
   })
 
-  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_CREATE, async (_event, payload) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_CREATE, async (_event, payload) => {
     const flow = flowLoader.get(payload.workflow_id || 'tiktok-repost')
     const doc = createCampaignDocument({
       id: crypto.randomBytes(4).toString('hex'),
@@ -34,15 +73,19 @@ export function setupCampaignIPC() {
     campaignRepo.save(doc)
 
     BrowserWindow.getAllWindows().forEach(w => {
-      w.webContents.send('campaign:created', doc)
-      w.webContents.send('campaigns-updated')
+      try {
+        w.webContents.send('campaign:created', doc)
+        w.webContents.send('campaigns-updated')
+      } catch (e) {
+        // Window may be destroyed
+      }
     })
 
     return doc
   })
 
   //  Campaign Delete (cascade: jobs, async_tasks, execution_logs)
-  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_DELETE, async (_event, { id }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_DELETE, async (_event, { id }) => {
     const deleteCascade = db.transaction((campaignId: string) => {
       db.prepare('DELETE FROM jobs WHERE campaign_id = ?').run(campaignId)
       db.prepare('DELETE FROM async_tasks WHERE campaign_id = ?').run(campaignId)
@@ -54,22 +97,22 @@ export function setupCampaignIPC() {
   })
 
   //  Run / Pause / Resume 
-  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_TRIGGER, async (_event, { id }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_TRIGGER, async (_event, { id }) => {
     flowEngine.triggerCampaign(id)
     return true
   })
 
-  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_PAUSE, async (_event, { id }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_PAUSE, async (_event, { id }) => {
     flowEngine.pauseCampaign(id)
     return true
   })
 
-  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_RESUME, async (_event, { id }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_RESUME, async (_event, { id }) => {
     flowEngine.resumeCampaign(id)
     return true
   })
 
-  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_TOGGLE_STATUS, async (_event, { id }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_TOGGLE_STATUS, async (_event, { id }) => {
     const doc = campaignRepo.findById(id)
     if (doc) {
       if (doc.status === 'active' || doc.status === 'running') {
@@ -82,7 +125,7 @@ export function setupCampaignIPC() {
   })
 
   //  Flow presets 
-  ipcMain.handle('flow:get-presets', async () => {
+  safeHandle('flow:get-presets', async () => {
     return flowLoader.getAll().map(f => ({
       id: f.id,
       name: f.name,
@@ -93,7 +136,7 @@ export function setupCampaignIPC() {
     }))
   })
 
-  ipcMain.handle('flow:list', async () => {
+  safeHandle('flow:list', async () => {
     return flowLoader.getAll().map(f => ({
       id: f.id,
       name: f.name,
@@ -103,17 +146,17 @@ export function setupCampaignIPC() {
     }))
   })
 
-  ipcMain.handle('flow:get-ui-descriptor', async (_event, flowId) => {
+  safeHandle('flow:get-ui-descriptor', async (_event, flowId) => {
     const flow = flowLoader.get(flowId)
     return flow?.ui || null
   })
 
   //  Jobs & Flow Nodes 
-  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_GET_JOBS, async (_event, { id }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_GET_JOBS, async (_event, { id }) => {
     return jobRepo.findByCampaign(id)
   })
 
-  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_GET_FLOW_NODES, async (_event, { workflowId, campaignId }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_GET_FLOW_NODES, async (_event, { workflowId, campaignId }) => {
     // Use campaign snapshot if available, else latest
     const flow = campaignId ? FlowResolver.resolve(campaignId) : flowLoader.get(workflowId)
     if (!flow) return null
@@ -143,12 +186,12 @@ export function setupCampaignIPC() {
   })
 
   //  Execution Logs 
-  ipcMain.handle('campaign:get-logs', async (_event, { id, limit }) => {
+  safeHandle('campaign:get-logs', async (_event, { id, limit }) => {
     return ExecutionLogger.getLogsForCampaign(id, limit || 200)
   })
 
   //  Node Progress 
-  ipcMain.handle('campaign:get-node-progress', async (_event, { id }) => {
+  safeHandle('campaign:get-node-progress', async (_event, { id }) => {
     return db.prepare(`
       SELECT e.instance_id, e.message
       FROM execution_logs e
@@ -163,7 +206,7 @@ export function setupCampaignIPC() {
   })
 
   //  Per-Video Event History 
-  ipcMain.handle('campaign:get-video-events', async (_event, { campaignId, videoId, limit }) => {
+  safeHandle('campaign:get-video-events', async (_event, { campaignId, videoId, limit }) => {
     return db.prepare(`
       SELECT event, message, data_json as data, created_at
       FROM execution_logs
@@ -179,19 +222,23 @@ export function setupCampaignIPC() {
   })
 
   //  Update campaign params (merge) 
-  ipcMain.handle(IPC_CHANNELS.CAMPAIGN_UPDATE_PARAMS, async (_event, { id, params }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_UPDATE_PARAMS, async (_event, { id, params }) => {
     const store = campaignRepo.tryOpen(id)
     if (!store) return { success: false, error: 'Campaign not found' }
     Object.assign(store.doc.params, params)
     store.save()
     BrowserWindow.getAllWindows().forEach(w => {
-      w.webContents.send('campaign:params-updated', { id, params: store.doc.params })
+      try {
+        w.webContents.send('campaign:params-updated', { id, params: store.doc.params })
+      } catch (e) {
+        // Window may be destroyed
+      }
     })
     return { success: true, params: store.doc.params }
   })
 
   //  Trigger event on campaign (e.g. reschedule) 
-  ipcMain.handle('campaign:trigger-event', async (_event, { id, event, params }) => {
+  safeHandle('campaign:trigger-event', async (_event, { id, event, params }) => {
     const store = campaignRepo.tryOpen(id)
     if (!store) return { success: false, error: 'Campaign not found' }
 
@@ -215,12 +262,69 @@ export function setupCampaignIPC() {
       store.save()
 
       BrowserWindow.getAllWindows().forEach(w => {
-        w.webContents.send('campaigns-updated')
-        w.webContents.send('campaign:params-updated', { id, params: store.doc.params })
+        try {
+          w.webContents.send('campaigns-updated')
+          w.webContents.send('campaign:params-updated', { id, params: store.doc.params })
+        } catch (e) {
+          // Window may be destroyed
+        }
       })
       return { success: true, message: `Rescheduled ${videos.length} videos with ${intervalMinutes}min interval` }
     }
 
     return { success: false, error: `Unknown event: ${event}` }
+  })
+
+  // ── Pipeline: Retry node (user-initiated from Visualizer) ──
+  safeHandle('pipeline:retry-node', async (_event, { campaignId, instanceId }: { campaignId: string; instanceId: string }) => {
+    const store = campaignRepo.tryOpen(campaignId)
+    if (!store) return { success: false, error: 'Campaign not found' }
+
+    const flow = FlowResolver.resolve(campaignId)
+    if (!flow) return { success: false, error: 'Flow not found for campaign' }
+
+    const nodeDef = flow.nodes.find(n => n.instance_id === instanceId)
+    if (!nodeDef) return { success: false, error: `Node ${instanceId} not found in flow` }
+
+    // Ensure campaign is active
+    if (store.status !== 'active' && store.status !== 'paused') {
+      store.status = 'active'
+      store.save()
+    }
+
+    // Create a new job for this node (manual retry, _retryCount = 0)
+    const jobId = jobRepo.createJob({
+      campaign_id: campaignId,
+      workflow_id: store.doc.workflow_id,
+      node_id: nodeDef.node_id,
+      instance_id: instanceId,
+      type: 'FLOW_STEP',
+      data: { _retryCount: 0, _manualRetry: true },
+      scheduled_at: Date.now(),
+    })
+
+    ExecutionLogger.campaignEvent(campaignId, 'pipeline:manual-retry',
+      `Manual retry for node "${instanceId}" (job: ${jobId})`)
+
+    return { success: true, jobId }
+  })
+
+  // ── Pipeline: Skip node (user-initiated from NodeErrorModal) ──
+  safeHandle('pipeline:skip-node', async (_event, { campaignId, instanceId }: { campaignId: string; instanceId: string }) => {
+    // Mark recent failed jobs for this instance as 'skipped'
+    const failedJobs = db.prepare(`
+      SELECT id FROM jobs
+      WHERE campaign_id = ? AND instance_id = ? AND status = 'failed'
+      ORDER BY created_at DESC LIMIT 5
+    `).all(campaignId, instanceId) as { id: string }[]
+
+    for (const job of failedJobs) {
+      jobRepo.updateStatus(job.id, 'skipped')
+    }
+
+    ExecutionLogger.campaignEvent(campaignId, 'pipeline:manual-skip',
+      `User skipped node "${instanceId}" (${failedJobs.length} jobs marked skipped)`)
+
+    return { success: true, skippedCount: failedJobs.length }
   })
 }

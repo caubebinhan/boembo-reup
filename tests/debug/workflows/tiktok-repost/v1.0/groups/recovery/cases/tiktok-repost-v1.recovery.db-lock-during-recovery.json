@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "recovery",
+  "case": {
+    "id": "tiktok-repost-v1.recovery.db-lock-during-recovery",
+    "title": "Recovery: DB Locked During Recovery Write",
+    "description": "Another process holds DB write lock during recovery; verify recovery retries gracefully instead of crashing.",
+    "category": "recovery",
+    "group": "recovery",
+    "risk": "safe",
+    "level": "advanced",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/recovery.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-93",
+    "status": "runnable"
+  }
+}

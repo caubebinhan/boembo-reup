@@ -1,6 +1,7 @@
 import { constants as fsConstants } from 'node:fs'
 import { access } from 'fs/promises'
 import { resolveBinary, runBinary, ensureFfmpegAvailable } from '@main/ffmpeg'
+import { CodedError } from '@core/errors/CodedError'
 
 type ProbeStream = {
   codec_type?: string
@@ -150,7 +151,8 @@ async function extractVideoRawFrames(filePath: string): Promise<Buffer> {
     'pipe:1',
   ]
   const res = await runBinary(resolveBinary('ffmpeg'), args, 60_000)
-  if (res.code !== 0) throw new Error(`ffmpeg_video_extract_failed: ${res.stderr.toString('utf8').slice(0, 300)}`)
+  /** @throws DG-018 — FFmpeg failed to extract video frame hashes */
+  if (res.code !== 0) throw new CodedError('DG-018', `ffmpeg_video_extract_failed: ${res.stderr.toString('utf8').slice(0, 300)}`)
   return res.stdout
 }
 
@@ -166,7 +168,8 @@ async function extractAudioPcm(filePath: string): Promise<Buffer> {
     'pipe:1',
   ]
   const res = await runBinary(resolveBinary('ffmpeg'), args, 60_000)
-  if (res.code !== 0) throw new Error(`ffmpeg_audio_extract_failed: ${res.stderr.toString('utf8').slice(0, 300)}`)
+  /** @throws DG-019 — FFmpeg failed to extract audio PCM data */
+  if (res.code !== 0) throw new CodedError('DG-019', `ffmpeg_audio_extract_failed: ${res.stderr.toString('utf8').slice(0, 300)}`)
   return res.stdout
 }
 

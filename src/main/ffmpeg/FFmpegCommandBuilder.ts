@@ -17,6 +17,7 @@
  *     .build()
  */
 import { resolveBinary, runBinary, type CommandResult } from './FFmpegBinary'
+import { CodedError } from '@core/errors/CodedError'
 
 export interface FFmpegFilter {
   /** FFmpeg filter name (e.g. 'scale', 'overlay', 'hflip') */
@@ -127,8 +128,10 @@ export class FFmpegCommandBuilder {
    * Build the complete FFmpeg args array.
    */
   build(): string[] {
-    if (!this.outputPath) throw new Error('FFmpegCommandBuilder: output path is required')
-    if (this.inputs.length === 0) throw new Error('FFmpegCommandBuilder: at least one input is required')
+    /** @throws DG-014 — output path not set */
+    if (!this.outputPath) throw new CodedError('DG-014', 'FFmpegCommandBuilder: output path is required')
+    /** @throws DG-015 — no input files added */
+    if (this.inputs.length === 0) throw new CodedError('DG-015', 'FFmpegCommandBuilder: at least one input is required')
 
     const args: string[] = ['-y', ...this.globalArgs]
 

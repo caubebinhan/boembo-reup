@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "compat",
+  "case": {
+    "id": "tiktok-repost-v1.compat.flow-snapshot-version-lock",
+    "title": "Compat: Flow Snapshot Version Lock",
+    "description": "Old campaign with frozen flow_snapshot continues to run after code changes without version drift.",
+    "category": "compat",
+    "group": "compat",
+    "risk": "safe",
+    "level": "advanced",
+    "errorCode": "DG-500",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/compat.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-29",
+    "status": "runnable"
+  }
+}

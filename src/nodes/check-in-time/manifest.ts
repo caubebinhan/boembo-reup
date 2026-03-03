@@ -8,6 +8,12 @@ const manifest: NodeManifest = {
   category: 'control',
   icon: '⏰',
   description: 'Gate loop execution: sleep until within active daily time window',
+  errorPrefix: 'TIM',
+  behavior: {
+    sideEffects: [],
+    idempotent: true,
+    crashBehavior: 'retry',
+  },
 }
 
 export default manifest

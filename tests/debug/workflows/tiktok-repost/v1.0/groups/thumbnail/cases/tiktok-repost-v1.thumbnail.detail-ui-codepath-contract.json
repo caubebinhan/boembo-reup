@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "thumbnail",
+  "case": {
+    "id": "tiktok-repost-v1.thumbnail.detail-ui-codepath-contract",
+    "title": "Thumbnail Detail UI Codepath Contract",
+    "description": "Static analysis verifies campaign detail view renders thumbnail <img>, local-thumb fallback, and string thumbnail fallback path.",
+    "category": "thumbnail",
+    "group": "thumbnail",
+    "risk": "safe",
+    "level": "basic",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/thumbnail.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-119",
+    "status": "runnable"
+  }
+}

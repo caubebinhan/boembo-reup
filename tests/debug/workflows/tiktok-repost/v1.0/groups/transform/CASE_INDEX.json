@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "transform",
+  "totalImplemented": 5,
+  "cases": [
+    {
+      "id": "tiktok-repost-v1.transform-pipeline.field-integrity-db-assert",
+      "title": "Transform Pipeline Field Integrity DB Assert",
+      "fingerprint": "case-TIKTOK-124",
+      "errorCode": "DG-400",
+      "category": "transform",
+      "group": "transform",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/transform/cases/tiktok-repost-v1.transform-pipeline.field-integrity-db-assert.json"
+    },
+    {
+      "id": "tiktok-repost-v1.transform.chain-smoke",
+      "title": "Transform Chain Smoke",
+      "fingerprint": "case-TIKTOK-125",
+      "errorCode": "DG-400",
+      "category": "transform",
+      "group": "transform",
+      "level": "basic",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/transform/cases/tiktok-repost-v1.transform.chain-smoke.json"
+    },
+    {
+      "id": "tiktok-repost-v1.transform.condition-skip-item",
+      "title": "Condition Skip Item",
+      "fingerprint": "case-TIKTOK-126",
+      "errorCode": "DG-400",
+      "category": "transform",
+      "group": "transform",
+      "level": "intermediate",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/transform/cases/tiktok-repost-v1.transform.condition-skip-item.json"
+    },
+    {
+      "id": "tiktok-repost-v1.transform.null-input-guard",
+      "title": "Null Input Guard in Loop",
+      "fingerprint": "case-TIKTOK-127",
+      "errorCode": "DG-400",
+      "category": "transform",
+      "group": "transform",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/transform/cases/tiktok-repost-v1.transform.null-input-guard.json"
+    },
+    {
+      "id": "tiktok-repost-v1.transform.on-error-continue-policy",
+      "title": "Transform Error Continue Policy",
+      "fingerprint": "case-TIKTOK-128",
+      "errorCode": "DG-400",
+      "category": "transform",
+      "group": "transform",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/transform/cases/tiktok-repost-v1.transform.on-error-continue-policy.json"
+    }
+  ]
+}

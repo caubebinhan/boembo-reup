@@ -1,5 +1,6 @@
 ﻿import { NodeExecutionContext } from '@core/nodes/NodeDefinition'
 import { accountRepo } from '../../db/repositories/AccountRepo'
+import { CodedError } from '@core/errors/CodedError'
 
 export type PublishAccountSelection = {
   account: any
@@ -15,14 +16,17 @@ function readSelectedAccounts(ctx: NodeExecutionContext): string[] {
 
 function resolveAccountById(accountId: string) {
   const account = accountRepo.findById(accountId)
-  if (!account) throw new Error(`Account not found: ${accountId}`)
-  if (account.session_status === 'expired') throw new Error('SESSION_EXPIRED: Account session invalid')
+  /** @throws DG-130 — Account ID not found in database */
+  if (!account) throw new CodedError('DG-130', `Account not found: ${accountId}`)
+  /** @throws DG-131 — Account session cookies are expired or invalid */
+  if (account.session_status === 'expired') throw new CodedError('DG-131', 'SESSION_EXPIRED: Account session invalid')
   return account
 }
 
 export function selectPublishAccount(video: any, ctx: NodeExecutionContext): PublishAccountSelection {
   const selectedAccounts = readSelectedAccounts(ctx)
-  if (selectedAccounts.length === 0) throw new Error('No publish accounts configured')
+  /** @throws DG-132 — No publish accounts configured for campaign */
+  if (selectedAccounts.length === 0) throw new CodedError('DG-132', 'No publish accounts configured')
 
   const presetId = String(video?.publish_target_account_id || '').trim()
   if (presetId) {

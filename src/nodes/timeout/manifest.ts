@@ -8,6 +8,12 @@ const manifest: NodeManifest = {
   category: 'control',
   icon: '⏳',
   description: 'Wait between items with configurable delay and jitter',
+  errorPrefix: 'TMO',
+  behavior: {
+    sideEffects: [],
+    idempotent: true,
+    crashBehavior: 'retry',
+  },
 }
 
 export default manifest

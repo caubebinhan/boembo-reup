@@ -5,6 +5,7 @@ const SCAN_CASE_BASE = {
   risk: 'safe' as const,
   category: 'scan',
   group: 'scan',
+  errorCode: 'DG-200',
   implemented: false
 }
 
@@ -20,7 +21,7 @@ export const scanCases: TroubleshootingCaseDefinition[] = [
     implemented: true,
     meta: meta({
       parameters: [
-        { key: 'files', value: 'Step2_Sources.tsx + workflows/tiktok-repost/v1.0/wizard.ts' }
+        { key: 'files', value: 'WizardSources.tsx + workflows/tiktok-repost/v1.0/wizard.ts' }
       ],
       checks: {
         ui: ['Step2 renders filter controls: Min Likes, Min Views, Max Views, Within Days'],

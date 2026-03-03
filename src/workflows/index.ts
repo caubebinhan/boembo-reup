@@ -22,15 +22,23 @@ function extractWorkflowId(p: string): string | null {
   return p.match(/^\.\/([^/]+)\//)?.[1] || null
 }
 
+// Extract version from path like ./tiktok-repost/v1.0/events.ts
+function extractVersion(p: string): string | null {
+  return p.match(/\/(v[\d.]+)\//)?.[1] || null
+}
+
 // ── Recovery modules ────────────────────────────────────
 const recoveryModules = import.meta.glob('./*/v*/recovery.ts', { eager: true })
 let recoveryCount = 0
 for (const [path, mod] of Object.entries(recoveryModules)) {
   const wfId = extractWorkflowId(path)
+  const ver = extractVersion(path)
   if (!wfId) continue
   const m = mod as RecoveryModule
   if (typeof m.recover === 'function') {
-    CrashRecoveryService.registerRecovery(wfId, { recover: m.recover })
+    // Register with version-aware key so v2 doesn't silently overwrite v1
+    const key = ver ? `${wfId}@${ver}` : wfId
+    CrashRecoveryService.registerRecovery(key, { recover: m.recover })
     recoveryCount++
   }
 }

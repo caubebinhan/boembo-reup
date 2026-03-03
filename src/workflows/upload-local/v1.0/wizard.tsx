@@ -1,5 +1,5 @@
 import { WizardStepConfig, WizardStepProps } from '@renderer/wizard/WizardStepTypes'
-import { Step5_Target } from '@renderer/components/wizard/Step5_Target'
+import { WizardTarget } from '@renderer/components/wizard/WizardTarget'
 import { FormField, TextInput } from '@renderer/wizard/shared'
 import React, { useRef } from 'react'
 
@@ -150,7 +150,7 @@ export const uploadLocalSteps: WizardStepConfig[] = [
     title: 'Target',
     icon: '🎯',
     description: 'Select accounts to publish to',
-    component: Step5_Target,
+    component: WizardTarget,
     validate: (data) => {
       const accounts = data.selectedAccounts || data.accounts || []
       if (accounts.length === 0) return 'Select at least one publish account'

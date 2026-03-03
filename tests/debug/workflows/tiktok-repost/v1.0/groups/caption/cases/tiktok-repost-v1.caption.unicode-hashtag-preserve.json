@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "caption",
+  "case": {
+    "id": "tiktok-repost-v1.caption.unicode-hashtag-preserve",
+    "title": "Caption Unicode + Hashtag Preserve",
+    "description": "Unicode, emoji-like text, and hashtags survive transform chain and publish input sanitation without accidental stripping.",
+    "category": "caption",
+    "group": "caption",
+    "risk": "safe",
+    "level": "intermediate",
+    "errorCode": "DG-400",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/captionTransform.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-27",
+    "status": "runnable"
+  }
+}

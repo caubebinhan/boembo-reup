@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "smoke",
+  "case": {
+    "id": "tiktok-repost-v1.debug-panel.workflow-filter-smoke",
+    "title": "Debug Panel Workflow/Version Filter Smoke",
+    "description": "Open troubleshooting tab, filter to tiktok-repost@1.0, and capture UI snapshot showing grouped cases.",
+    "category": "smoke",
+    "group": "smoke",
+    "risk": "safe",
+    "level": "basic",
+    "implemented": true,
+    "sourceFile": "src/workflows/tiktok-repost/v1.0/troubleshooting/cases/smoke.ts",
+    "workflowId": "tiktok-repost",
+    "workflowVersion": "1.0",
+    "suite": "debug",
+    "fingerprint": "case-TIKTOK-35",
+    "status": "runnable"
+  }
+}

@@ -37,7 +37,10 @@ export class CrashRecoveryService {
       const activeCampaigns = campaignRepo.findByStatus('active')
 
       for (const campaign of activeCampaigns) {
-        const handler = this.recoveryModules.get(campaign.workflow_id)
+        // Try version-aware key first (workflowId@version), fallback to plain workflowId
+        const version = campaign.workflow_version
+        const versionKey = version ? `${campaign.workflow_id}@${version}` : null
+        const handler = (versionKey && this.recoveryModules.get(versionKey)) || this.recoveryModules.get(campaign.workflow_id)
         if (handler?.recover) {
           console.log(`[CrashRecovery] Running ${campaign.workflow_id} recovery for campaign ${campaign.id}`)
           try {

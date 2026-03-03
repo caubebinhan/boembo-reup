@@ -5,6 +5,7 @@ import path from 'node:path'
 import { net } from 'electron'
 import { AppSettingsService } from '@main/services/AppSettingsService'
 import { Downloader } from '@tobyg74/tiktok-api-dl'
+import { CodedError } from '@core/errors/CodedError'
 
 //  Interfaces 
 
@@ -376,7 +377,8 @@ export class TikTokScanner {
       console.error(`[TikTokScanner] Library extraction failed:`, err.message)
     }
 
-    if (!streamUrl) throw new Error(`Could not extract download URL for video ${videoId}`)
+    /** @throws DG-210 — Could not extract download URL from video page */
+    if (!streamUrl) throw new CodedError('DG-210', `Could not extract download URL for video ${videoId}`)
 
     // Phase 2: Download mp4 binary
     console.log(`[TikTokScanner] Downloading video ${videoId}...`)
@@ -386,10 +388,12 @@ export class TikTokScanner {
         'Referer': 'https://www.tiktok.com/',
       },
     })
-    if (!response.ok) throw new Error(`Download failed: ${response.status}`)
+    /** @throws DG-211 — HTTP download returned non-200 status */
+    if (!response.ok) throw new CodedError('DG-211', `Download failed: ${response.status}`)
 
     const buffer = Buffer.from(await response.arrayBuffer())
-    if (buffer.length < 50 * 1024) throw new Error(`Downloaded file too small (${buffer.length}B)  - likely not a video`)
+    /** @throws DG-212 — Downloaded file is suspiciously small */
+    if (buffer.length < 50 * 1024) throw new CodedError('DG-212', `Downloaded file too small (${buffer.length}B)  - likely not a video`)
 
     fs.writeFileSync(filePath, buffer)
     console.log(`[TikTokScanner] Downloaded: ${filePath} (${(buffer.length / 1024 / 1024).toFixed(1)}MB)`)

@@ -5,6 +5,7 @@ const PUBLISH_CASE_BASE = {
   risk: 'safe' as const,
   category: 'publish',
   group: 'publish',
+  errorCode: 'DG-106',
   implemented: false
 }
 

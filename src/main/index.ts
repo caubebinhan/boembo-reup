@@ -7,6 +7,8 @@ import { PipelineEventBus } from '../core/engine/PipelineEventBus'
 
 import { initDb } from './db/Database'
 import { setupWizardIPC } from './ipc/wizard'
+import { setupVideoEditorIPC } from './ipc/video-editor'
+import { setupAccountsIPC } from './ipc/accounts'
 import { initSentry } from './sentry'
 import { flowEngine } from '../core/engine/FlowEngine'
 import { setupCampaignIPC } from './ipc/campaigns'
@@ -104,6 +106,8 @@ app.whenReady().then(() => {
 
   setupCampaignIPC()
   setupWizardIPC()
+  setupVideoEditorIPC()
+  setupAccountsIPC()
   setupSettingsIPC()
   setupTroubleshootingIPC()
   // Register local-thumb:// protocol to serve local thumbnail files

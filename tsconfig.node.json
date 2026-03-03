@@ -7,10 +7,12 @@
     "src/shared/**/*",
     "src/core/**/*",
     "src/nodes/**/*",
-    "src/workflows/**/*"
+    "src/workflows/**/*",
+    "src/renderer/**/*"
   ],
   "compilerOptions": {
     "composite": true,
+    "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
       "@main/*": [
@@ -24,6 +26,9 @@
       ],
       "@shared/*": [
         "src/shared/*"
+      ],
+      "@renderer/*": [
+        "src/renderer/*"
       ]
     },
     "types": [

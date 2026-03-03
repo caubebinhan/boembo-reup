@@ -6,6 +6,12 @@ const manifest: NodeManifest = {
   category: 'filter',
   icon: '🔢',
   description: 'Limit the number of videos processed',
+  errorPrefix: 'LMT',
+  behavior: {
+    sideEffects: [],
+    idempotent: true,
+    crashBehavior: 'skip_video',
+  },
 }
 
 export default manifest

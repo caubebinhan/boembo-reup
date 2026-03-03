@@ -11,6 +11,7 @@ import { DebugHelper, PublishDebugRecorder } from './helpers/DebugHelper'
 import { OverlayHelper } from './helpers/OverlayHelper'
 import fs from 'fs-extra'
 import path from 'node:path'
+import { CodedError } from '@core/errors/CodedError'
 
 // ── VideoPublisher: orchestrates the full TikTok upload flow ─────────────────
 
@@ -47,7 +48,8 @@ export class VideoPublisher {
             currentStage = 'init_browser'
             await browserService.init(false)
             page = await browserService.newPage()
-            if (!page) throw new Error('Failed to create page')
+            /** @throws DG-110 — Playwright failed to create browser page */
+            if (!page) throw new CodedError('DG-110', 'Failed to create page')
             recorder = new PublishDebugRecorder(page, 'tiktok_publish')
             recorder.attach()
             recorder.record('publish_start', {
@@ -115,7 +117,8 @@ export class VideoPublisher {
             await uploader.upload(filePath)
             await recorder?.checkpoint('after_upload')
 
-            if (page.isClosed()) throw new Error('Browser closed unexpectedly before posting')
+            /** @throws DG-111 — Browser tab closed before post submission */
+            if (page.isClosed()) throw new CodedError('DG-111', 'Browser closed unexpectedly before posting')
             await page.waitForTimeout(1000)
 
             // ── Clean overlays before caption (joyride blocks editor) ──
@@ -129,7 +132,8 @@ export class VideoPublisher {
             await captionSetter.setCaption(finalCaption)
             await recorder?.checkpoint('after_caption')
 
-            if (page.isClosed()) throw new Error('Browser closed unexpectedly before posting')
+            /** @throws DG-111 — Browser tab closed after caption */
+            if (page.isClosed()) throw new CodedError('DG-111', 'Browser closed unexpectedly before posting')
 
             // ── Clean overlays again before submit ──────────
             if (onProgress) onProgress('Cleaning overlays...')
@@ -249,7 +253,8 @@ export class VideoPublisher {
         try {
             await browserService.init(false)
             page = await browserService.newPage()
-            if (!page) throw new Error('Failed to create page for publish recheck')
+            /** @throws DG-118 — Failed to create page for publish recheck */
+            if (!page) throw new CodedError('DG-118', 'Failed to create page for publish recheck')
             await page.context().addCookies(sanitizeCookies(cookies || []))
             const verifier = new PublishVerifier(page)
             return await verifier.recheckDashboardStatus({

@@ -6,6 +6,8 @@ export interface TroubleshootingCaseDefinition {
   description: string
   fingerprint?: string
   risk: 'safe' | 'real_publish'
+  /** Diagnostic error code, e.g. 'DG-100'. Must be registered in error-codes.ts. */
+  errorCode?: string
   workflowId?: string
   workflowVersion?: string
   category?: string
@@ -16,11 +18,27 @@ export interface TroubleshootingCaseDefinition {
   meta?: TroubleshootingCaseMeta
 }
 
+/** Structured failure data for machine-readable error reporting */
+export interface TroubleshootingRunFailure {
+  /** Diagnostic error code, e.g. 'DG-100' */
+  errorCode: string
+  /** Human-readable error message */
+  message: string
+  /** Additional context for debugging (e.g. selector name, URL, file path) */
+  context?: Record<string, any>
+  /** Stack trace if available */
+  stack?: string
+  /** Timestamp of when the failure was captured */
+  capturedAt?: number
+}
+
 export interface TroubleshootingRunRecord {
   id: string
   caseId: TroubleshootingCaseId
   title: string
   status: 'running' | 'passed' | 'failed'
+  /** Diagnostic error code from the case or inferred from run result */
+  errorCode?: string
   startedAt: number
   endedAt?: number
   summary?: string
@@ -38,6 +56,7 @@ export interface TroubleshootingRunRecord {
   logStats?: TroubleshootingRunLogStats
   logs: Array<{ ts: number; level: 'info' | 'warn' | 'error'; line: string }>
   result?: any
+  failure?: TroubleshootingRunFailure
   diagnosticFootprint?: TroubleshootingDiagnosticFootprint
 }
 
@@ -186,6 +205,8 @@ export interface TroubleshootingCaseRunOptions {
 export interface TroubleshootingRunResultLike {
   success: boolean
   summary: string
+  /** Diagnostic error code. If omitted, inherits from CaseDefinition or defaults to DG-000. */
+  errorCode?: string
   accountUsername?: string
   videoPath?: string
   result?: any
@@ -194,6 +215,7 @@ export interface TroubleshootingRunResultLike {
   messages?: string[]
   errors?: string[]
   checks?: TroubleshootingCaseChecks
+  failure?: TroubleshootingRunFailure
 }
 
 export interface TroubleshootingVideoCandidate {

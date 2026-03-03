@@ -1,9 +1,9 @@
 import { WizardStepConfig } from '@renderer/wizard/WizardStepTypes'
-import { Step1_Details } from '@renderer/components/wizard/Step1_Details'
-import { Step2_Sources } from '@renderer/components/wizard/Step2_Sources'
-import { Step3_VideoEdit } from '@renderer/components/wizard/Step3_VideoEdit'
-import { Step4_Schedule } from '@renderer/components/wizard/Step4_Schedule'
-import { Step5_Target } from '@renderer/components/wizard/Step5_Target'
+import { WizardDetails } from '@renderer/components/wizard/WizardDetails'
+import { WizardSources } from '@renderer/components/wizard/WizardSources'
+import { WizardVideoEdit } from '@renderer/components/wizard/WizardVideoEdit'
+import { WizardSchedule } from '@renderer/components/wizard/WizardSchedule'
+import { WizardTarget } from '@renderer/components/wizard/WizardTarget'
 
 export const tiktokRepostSteps: WizardStepConfig[] = [
   {
@@ -11,7 +11,7 @@ export const tiktokRepostSteps: WizardStepConfig[] = [
     title: 'Details',
     icon: '📝',
     description: 'Campaign name, type, schedule, and captions',
-    component: Step1_Details,
+    component: WizardDetails,
     validate: (data) => {
       if (!data.name?.trim()) return 'Campaign name is required'
       return null
@@ -22,7 +22,7 @@ export const tiktokRepostSteps: WizardStepConfig[] = [
     title: 'Sources',
     icon: '📡',
     description: 'Configure channels and keywords to monitor',
-    component: Step2_Sources,
+    component: WizardSources,
     validate: (data) => {
       const sources = data.sources || []
       if (sources.length === 0) return 'Add at least one source (channel or keyword)'
@@ -36,21 +36,21 @@ export const tiktokRepostSteps: WizardStepConfig[] = [
     title: 'Video Edit',
     icon: '🎬',
     description: 'Configure video editing operations',
-    component: Step3_VideoEdit,
+    component: WizardVideoEdit,
   },
   {
     id: 'schedule',
     title: 'Schedule',
     icon: '📅',
     description: 'Preview and adjust publish schedule',
-    component: Step4_Schedule,
+    component: WizardSchedule,
   },
   {
     id: 'target',
     title: 'Target',
     icon: '🎯',
     description: 'Select accounts to publish to',
-    component: Step5_Target,
+    component: WizardTarget,
     validate: (data) => {
       const accounts = data.selectedAccounts || data.accounts || []
       if (accounts.length === 0) return 'Select at least one publish account'

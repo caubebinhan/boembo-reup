@@ -22,6 +22,8 @@ const P = {
     pastelMint: '#d4e8d8',
     pastelBlue: '#d6e4f0',
     pastelPeach: '#f9e3d3',
+    pastelYellow: '#fef3c7',
+    pastelLavender: '#ede8f5',
 }
 
 export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCardProps) {
@@ -35,7 +37,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
 
     // ── Live state from IPC events ──
     const [liveMsg, setLiveMsg] = useState<string | null>(null)
-    const [alerts, setAlerts] = useState<{ type: 'captcha' | 'publish_failed' | 'error'; message: string }[]>([])
+    const [alerts, setAlerts] = useState<{ type: string; message: string }[]>([])
 
     useEffect(() => {
         const api = (window as any).api
@@ -55,33 +57,43 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                     return [...prev, { type: 'captcha', message: 'CAPTCHA detected — needs resolve' }]
                 })
             } else if (ev.event === 'violation:detected') {
-                setAlerts(prev => [...prev, { type: 'publish_failed', message: ev.data?.error || 'Publish failed — content violation' }])
+                setAlerts(prev => [...prev, { type: 'violation', message: ev.data?.error || 'Content violation detected' }])
+            } else if (ev.event === 'session:expired') {
+                setAlerts(prev => {
+                    if (prev.some(a => a.type === 'session_expired')) return prev
+                    return [...prev, { type: 'session_expired', message: 'Session expired — re-login required' }]
+                })
+            } else if (ev.event === 'node:failed') {
+                setAlerts(prev => [...prev, { type: 'error', message: ev.data?.error || 'Node execution failed' }])
             }
         })
 
-        const offStatus = api.on?.('campaigns-updated', () => {
-            setLiveMsg(null)
+        // Listen for campaign-level health check failures
+        const offHealthCheck = api.on?.('campaign:healthcheck-failed', (ev: any) => {
+            if (ev.campaign_id === campaign.id) {
+                setAlerts(prev => [...prev, { type: 'error', message: ev.message || 'Health check failed' }])
+            }
         })
+
+        const offStatus = api.on?.('campaigns-updated', () => setLiveMsg(null))
 
         return () => {
             if (typeof offProgress === 'function') offProgress()
             if (typeof offNodeEvent === 'function') offNodeEvent()
+            if (typeof offHealthCheck === 'function') offHealthCheck()
             if (typeof offStatus === 'function') offStatus()
         }
     }, [campaign.id])
 
     useEffect(() => {
-        if (campaign.status !== 'active' && campaign.status !== 'running') {
-            setAlerts([])
-        }
+        if (campaign.status !== 'active' && campaign.status !== 'running') setAlerts([])
     }, [campaign.status])
 
     useEffect(() => {
-        if (['idle', 'finished', 'paused', 'error'].includes(campaign.status)) {
-            setLiveMsg(null)
-        }
+        if (['idle', 'finished', 'paused', 'error'].includes(campaign.status)) setLiveMsg(null)
     }, [campaign.status])
 
+    // ── Status config — covers ALL possible campaign statuses ──
     const statusConfig: Record<string, { label: string; emoji: string; color: string; bg: string; border: string; blink?: boolean }> = {
         idle: { label: 'Idle', emoji: '💤', color: P.textDim, bg: P.cream, border: P.beige },
         active: { label: 'Running', emoji: '🌿', color: '#2e7d32', bg: P.pastelMint, border: '#94c8a0', blink: true },
@@ -89,18 +101,93 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
         paused: { label: 'Paused', emoji: '☕', color: '#8e5a2b', bg: P.pastelPeach, border: '#e0b896' },
         finished: { label: 'Done', emoji: '🎉', color: '#2e5a88', bg: P.pastelBlue, border: '#93b4d4' },
         error: { label: 'Error', emoji: '🥀', color: '#9e3d4d', bg: P.pastelPink, border: '#e0a8b0' },
+        cancelled: { label: 'Cancelled', emoji: '🚫', color: '#6b6b6b', bg: '#f0f0f0', border: '#d0d0d0' },
         needs_captcha: { label: 'Captcha', emoji: '🧩', color: '#8e5a2b', bg: P.pastelPeach, border: '#e0b896' },
+        scheduling: { label: 'Scheduling', emoji: '📋', color: '#7c3aed', bg: P.pastelLavender, border: '#c09ee0', blink: true },
     }
 
     const badge = statusConfig[campaign.status] || statusConfig.idle!
     const sourceCount = config.sources?.length || 0
     const counters = campaign.counters || {}
+
+    // ── Comprehensive counters ──
     const queued = counters.queued || 0
+    const pendingApproval = counters.pending_approval || 0
     const downloaded = counters.downloaded || 0
-    const published = (counters.published || 0) + (counters.verification_incomplete || 0)
+    const captioned = counters.captioned || 0
+    const published = counters.published || 0
+    const verified = counters.verified || 0
+    const underReview = counters.under_review || 0
+    const verificationIncomplete = counters.verification_incomplete || 0
     const failed = counters.failed || 0
-    const total = queued + downloaded + published + failed
-    const progressPct = total > 0 ? Math.round((published / total) * 100) : 0
+    const publishFailed = counters.publish_failed || 0
+    const duplicate = counters.duplicate || 0
+    const captcha = counters.captcha || 0
+    const sessionExpired = counters.session_expired || 0
+    const skipped = counters.skipped || 0
+
+    // Total = all non-zero statuses
+    const total = queued + pendingApproval + downloaded + captioned + published + verified +
+        underReview + verificationIncomplete + failed + publishFailed + duplicate + captcha +
+        sessionExpired + skipped
+
+    // Terminal success = published + verified + under_review + verification_incomplete
+    const successCount = published + verified + underReview + verificationIncomplete
+    // Terminal fail = failed + publish_failed
+    const failCount = failed + publishFailed
+    // Progress = terminal states / total
+    const terminalCount = successCount + failCount + duplicate + skipped
+    const progressPct = total > 0 ? Math.round((terminalCount / total) * 100) : 0
+
+    // Target account info
+    const targetAccount = config.targetChannel || config.publishAccount || null
+    const interval = config.intervalMinutes || null
+    const videoEdits = config.videoEditOperations?.filter((o: any) => o.enabled)?.length || 0
+
+    // Schedule info
+    const scheduleLabel = useMemo(() => {
+        if (!interval) return null
+        if (interval < 60) return `Every ${interval}min`
+        if (interval === 60) return 'Every 1h'
+        if (interval % 60 === 0) return `Every ${interval / 60}h`
+        return `Every ${Math.floor(interval / 60)}h ${interval % 60}m`
+    }, [interval])
+
+    // Next scheduled video
+    const nextScheduled = useMemo(() => {
+        try {
+            const videos = campaign.videos || []
+            const now = Date.now()
+            const upcoming = videos
+                .filter((v: any) => v.status === 'queued' && v.scheduled_for && v.scheduled_for > now)
+                .sort((a: any, b: any) => a.scheduled_for - b.scheduled_for)
+            if (upcoming.length === 0) return null
+            const t = new Date(upcoming[0].scheduled_for)
+            return t.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+        } catch { return null }
+    }, [campaign.videos])
+
+    // Last activity
+    const lastActivity = useMemo(() => {
+        const updatedAt = campaign.updated_at || campaign.created_at
+        if (!updatedAt) return null
+        const diff = Date.now() - new Date(updatedAt).getTime()
+        if (diff < 60_000) return 'Just now'
+        if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
+        if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
+        return `${Math.floor(diff / 86400_000)}d ago`
+    }, [campaign.updated_at, campaign.created_at])
+
+    const createdDate = new Date(campaign.created_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+
+    // Error message from campaign data
+    const errorMessage = useMemo(() => {
+        if (campaign.status !== 'error') return null
+        return campaign.error_message || campaign.last_error || null
+    }, [campaign.status, campaign.error_message, campaign.last_error])
+
+    // Workflow version
+    const workflowVersion = campaign.workflow_version || null
 
     return (
         <div
@@ -113,7 +200,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                 background: P.bg,
                 border: `1px solid ${P.beige}`,
                 borderRadius: 16,
-                padding: '20px',
+                padding: 0,
                 boxShadow: '0 1px 4px rgba(44,42,41,0.04)',
             }}
             onMouseEnter={e => {
@@ -129,80 +216,101 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
             {total > 0 && (
                 <div className="absolute top-0 left-0 right-0" style={{ height: 3, background: P.beige }}>
                     <div className="h-full transition-all duration-700"
-                        style={{ width: `${progressPct}%`, background: `linear-gradient(90deg, ${P.accent}, #d4e8d8)` }} />
+                        style={{ width: `${progressPct}%`, background: `linear-gradient(90deg, ${P.accent}, #a78bfa, ${P.pastelMint})` }} />
                 </div>
             )}
 
-            <div className="flex items-center gap-4">
-                {/* Left: Name + meta + live message */}
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                        <h3 className="font-bold text-base truncate transition" style={{ color: P.charcoal }}>{campaign.name}</h3>
-                        <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${badge.blink ? 'animate-pulse' : ''}`}
-                            style={{ backgroundColor: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>
-                            <span className="text-xs">{badge.emoji}</span>
-                            {badge.label}
-                        </div>
-                        {liveMsg && (campaign.status === 'active' || campaign.status === 'running') && (
-                            <>
-                                <span className="text-xs" style={{ color: P.beige }}>·</span>
-                                <span className="text-[11px] truncate max-w-[200px]" style={{ color: P.textDim }} title={liveMsg}>{liveMsg}</span>
-                            </>
-                        )}
+            {/* Main content */}
+            <div style={{ padding: '16px 20px 12px' }}>
+                {/* Row 1: Name + Status + Live message */}
+                <div className="flex items-center gap-2.5 mb-2">
+                    <h3 className="font-bold text-[15px] truncate flex-1" style={{ color: P.charcoal }}>{campaign.name}</h3>
+                    <div className={`flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full shrink-0 ${badge.blink ? 'animate-pulse' : ''}`}
+                        style={{ backgroundColor: badge.bg, color: badge.color, border: `1px solid ${badge.border}` }}>
+                        <span className="text-xs">{badge.emoji}</span>
+                        {badge.label}
                     </div>
-                    <p className="text-xs" style={{ color: P.textDim }}>
-                        {sourceCount} source{sourceCount !== 1 ? 's' : ''} · {new Date(campaign.created_at).toLocaleDateString('vi-VN')}
-                    </p>
                 </div>
 
-                {/* Center: Compact stats with pastel pill backgrounds */}
-                <div className="flex items-center gap-2 text-xs shrink-0">
-                    <StatPill emoji="📥" value={queued} label="Queued" bg={P.pastelBlue} />
-                    <StatPill emoji="💾" value={downloaded} label="Downloaded" bg={P.pastelPeach} />
-                    <StatPill emoji="🌸" value={published} label="Published" bg={P.pastelMint}
-                        valueColor={published > 0 ? '#2e7d32' : P.textDim} bold={published > 0} />
-                    {failed > 0 && (
-                        <StatPill emoji="🥀" value={failed} label="Failed" bg={P.pastelPink} valueColor="#9e3d4d" bold />
+                {/* Row 2: Meta chips — target account, sources, schedule, created, video edits, version, next scheduled */}
+                <div className="flex items-center gap-2 mb-2.5 flex-wrap">
+                    {targetAccount && (
+                        <MetaChip icon="👤" text={typeof targetAccount === 'object' ? (targetAccount.display_name || targetAccount.username || 'Account') : targetAccount} />
                     )}
+                    <MetaChip icon="📺" text={`${sourceCount} source${sourceCount !== 1 ? 's' : ''}`} />
+                    {scheduleLabel && <MetaChip icon="⏰" text={scheduleLabel} />}
+                    {videoEdits > 0 && <MetaChip icon="🎬" text={`${videoEdits} edit${videoEdits !== 1 ? 's' : ''}`} />}
+                    {nextScheduled && <MetaChip icon="⏭️" text={`Next: ${nextScheduled}`} highlight />}
+                    {workflowVersion && <MetaChip icon="📦" text={`v${workflowVersion}`} dim />}
+                    <MetaChip icon="📅" text={createdDate} dim />
+                    {lastActivity && <MetaChip icon="🕐" text={lastActivity} dim />}
+                </div>
+
+                {/* Error message banner */}
+                {errorMessage && (
+                    <div className="flex items-center gap-2 mb-2.5 px-3 py-2 rounded-xl text-[11px]"
+                        style={{ background: P.pastelPink, color: '#9e3d4d', border: `1px solid #e0a8b0` }}>
+                        <span>🥀</span>
+                        <span className="truncate flex-1">{errorMessage}</span>
+                    </div>
+                )}
+
+                {/* Live message */}
+                {liveMsg && (campaign.status === 'active' || campaign.status === 'running') && (
+                    <div className="flex items-center gap-1.5 mb-2.5 px-2.5 py-1.5 rounded-lg"
+                        style={{ background: P.pastelMint + '60', border: `1px solid ${P.pastelMint}` }}>
+                        <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ background: '#2e7d32' }} />
+                        <span className="text-[11px] truncate" style={{ color: '#2e7d32' }}>{liveMsg}</span>
+                    </div>
+                )}
+            </div>
+
+            {/* Row 3: Stats bar + Actions */}
+            <div className="flex items-center justify-between px-5 py-2.5"
+                style={{ background: P.cream, borderTop: `1px solid ${P.beige}` }}>
+                {/* Stats */}
+                <div className="flex items-center gap-1.5 text-xs flex-wrap">
+                    <StatPill emoji="📥" value={queued} label="Queued" bg={P.pastelBlue} />
+                    {pendingApproval > 0 && <StatPill emoji="⏳" value={pendingApproval} label="Pending Approval" bg={P.pastelYellow} />}
+                    <StatPill emoji="💾" value={downloaded} label="Downloaded" bg={P.pastelPeach} />
+                    {captioned > 0 && <StatPill emoji="✍️" value={captioned} label="Captioned" bg={P.pastelLavender} />}
+                    <StatPill emoji="🌸" value={successCount} label="Published" bg={P.pastelMint}
+                        valueColor={successCount > 0 ? '#2e7d32' : P.textDim} bold={successCount > 0} />
+                    {underReview > 0 && <StatPill emoji="👁️" value={underReview} label="Under Review" bg={P.pastelYellow} valueColor="#92400e" />}
+                    {verificationIncomplete > 0 && <StatPill emoji="⏱️" value={verificationIncomplete} label="Verifying" bg={P.pastelPeach} valueColor="#8e5a2b" />}
+                    {captcha > 0 && <StatPill emoji="🧩" value={captcha} label="Captcha" bg={P.pastelPeach} valueColor="#8e5a2b" bold />}
+                    {duplicate > 0 && <StatPill emoji="🔄" value={duplicate} label="Duplicate" bg={P.cream} />}
+                    {sessionExpired > 0 && <StatPill emoji="🔑" value={sessionExpired} label="Session Expired" bg={P.pastelPink} valueColor="#9e3d4d" bold />}
+                    {failCount > 0 && (
+                        <StatPill emoji="🥀" value={failCount} label="Failed" bg={P.pastelPink} valueColor="#9e3d4d" bold />
+                    )}
+                    {skipped > 0 && <StatPill emoji="⏭️" value={skipped} label="Skipped" bg={P.cream} />}
                     {total > 0 && (
-                        <div className="flex flex-col items-center ml-1 pl-2" style={{ borderLeft: `1px solid ${P.beige}` }} title="Progress">
-                            <span className="text-[10px] font-medium" style={{ color: P.textDim }}>Done</span>
+                        <div className="flex items-center gap-1 ml-1 pl-2" style={{ borderLeft: `1px solid ${P.beige}` }} title="Progress">
                             <span className="font-bold text-sm" style={{ color: P.accent }}>{progressPct}%</span>
                         </div>
                     )}
                 </div>
 
-                {/* Right: Action buttons */}
-                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                {/* Action buttons */}
+                <div className="flex items-center gap-1.5 shrink-0">
                     {(campaign.status === 'idle' || campaign.status === 'error') && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onAction('campaign:trigger', { id: campaign.id }) }}
-                            className="px-3 py-1.5 text-xs rounded-full font-bold transition shadow-sm cursor-pointer active:scale-95"
-                            style={{ background: P.pastelMint, color: '#2e7d32', border: `1px solid #94c8a0` }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#c3dac6')}
-                            onMouseLeave={e => (e.currentTarget.style.background = P.pastelMint)}>
+                        <ActionBtn onClick={e => { e.stopPropagation(); onAction('campaign:trigger', { id: campaign.id }) }}
+                            bg={P.pastelMint} color="#2e7d32" hoverBg="#c3dac6" borderColor="#94c8a0">
                             🌿 Run
-                        </button>
+                        </ActionBtn>
                     )}
                     {(campaign.status === 'active' || campaign.status === 'running') && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onAction('campaign:pause', { id: campaign.id }) }}
-                            className="px-3 py-1.5 text-xs rounded-full font-bold transition cursor-pointer active:scale-95"
-                            style={{ background: P.pastelPeach, color: '#8e5a2b', border: `1px solid #e0b896` }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#ebd5c5')}
-                            onMouseLeave={e => (e.currentTarget.style.background = P.pastelPeach)}>
+                        <ActionBtn onClick={e => { e.stopPropagation(); onAction('campaign:pause', { id: campaign.id }) }}
+                            bg={P.pastelPeach} color="#8e5a2b" hoverBg="#ebd5c5" borderColor="#e0b896">
                             ☕ Pause
-                        </button>
+                        </ActionBtn>
                     )}
                     {campaign.status === 'paused' && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onAction('campaign:resume', { id: campaign.id }) }}
-                            className="px-3 py-1.5 text-xs rounded-full font-bold transition cursor-pointer active:scale-95"
-                            style={{ background: P.pastelMint, color: '#2e7d32', border: `1px solid #94c8a0` }}
-                            onMouseEnter={e => (e.currentTarget.style.background = '#c3dac6')}
-                            onMouseLeave={e => (e.currentTarget.style.background = P.pastelMint)}>
+                        <ActionBtn onClick={e => { e.stopPropagation(); onAction('campaign:resume', { id: campaign.id }) }}
+                            bg={P.pastelMint} color="#2e7d32" hoverBg="#c3dac6" borderColor="#94c8a0">
                             🌿 Resume
-                        </button>
+                        </ActionBtn>
                     )}
                     <button
                         onClick={(e) => {
@@ -222,28 +330,50 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
 
             {/* Alert banners */}
             {alerts.length > 0 && (
-                <div className="mt-3 flex flex-col gap-1">
-                    {alerts.map((alert, i) => {
-                        const alertStyle = alert.type === 'captcha'
-                            ? { bg: P.pastelPeach, color: '#8e5a2b', border: '#e0b896', emoji: '🧩' }
-                            : alert.type === 'publish_failed'
-                                ? { bg: P.pastelPink, color: '#9e3d4d', border: '#e0a8b0', emoji: '🥀' }
-                                : { bg: '#fef3c7', color: '#92400e', border: '#fcd34d', emoji: '⚡' }
+                <div className="px-5 pb-3 flex flex-col gap-1">
+                    {alerts.slice(0, 3).map((alert, i) => {
+                        const alertStyles: Record<string, { bg: string; color: string; border: string; emoji: string }> = {
+                            captcha: { bg: P.pastelPeach, color: '#8e5a2b', border: '#e0b896', emoji: '🧩' },
+                            violation: { bg: P.pastelPink, color: '#9e3d4d', border: '#e0a8b0', emoji: '⛔' },
+                            session_expired: { bg: P.pastelYellow, color: '#92400e', border: '#fcd34d', emoji: '🔑' },
+                            publish_failed: { bg: P.pastelPink, color: '#9e3d4d', border: '#e0a8b0', emoji: '🥀' },
+                            error: { bg: P.pastelPink, color: '#9e3d4d', border: '#e0a8b0', emoji: '⚠️' },
+                        }
+                        const s = alertStyles[alert.type] || alertStyles.error!
                         return (
                             <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] font-medium"
-                                style={{ background: alertStyle.bg, color: alertStyle.color, border: `1px solid ${alertStyle.border}` }}>
-                                <span>{alertStyle.emoji}</span>
+                                style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
+                                <span>{s.emoji}</span>
                                 <span className="truncate">{alert.message}</span>
                             </div>
                         )
                     })}
+                    {alerts.length > 3 && (
+                        <span className="text-[10px] pl-2" style={{ color: P.textDim }}>+{alerts.length - 3} more alerts</span>
+                    )}
                 </div>
             )}
         </div>
     )
 }
 
-// ── Stat Pill Component ──
+// ── Sub Components ──
+
+function MetaChip({ icon, text, dim, highlight }: { icon: string; text: string; dim?: boolean; highlight?: boolean }) {
+    return (
+        <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full"
+            style={{
+                background: highlight ? P.accentSoft : (dim ? 'transparent' : P.cream),
+                color: highlight ? P.accent : (dim ? P.textDim : P.textMuted),
+                border: `1px solid ${highlight ? '#c09ee0' : (dim ? 'transparent' : P.beige)}`,
+                fontWeight: highlight ? 600 : 'normal',
+            }}>
+            <span className="text-[10px]">{icon}</span>
+            <span className="truncate max-w-[120px]">{text}</span>
+        </span>
+    )
+}
+
 function StatPill({ emoji, value, label, bg, valueColor, bold }: {
     emoji: string; value: number; label: string; bg: string
     valueColor?: string; bold?: boolean
@@ -255,5 +385,19 @@ function StatPill({ emoji, value, label, bg, valueColor, bold }: {
             <span className={`text-[11px] ${bold ? 'font-bold' : 'font-medium'}`}
                 style={{ color: valueColor || '#5c5551' }}>{value}</span>
         </div>
+    )
+}
+
+function ActionBtn({ onClick, bg, color, hoverBg, borderColor, children }: {
+    onClick: (e: React.MouseEvent) => void; bg: string; color: string; hoverBg: string; borderColor: string; children: React.ReactNode
+}) {
+    return (
+        <button onClick={onClick}
+            className="px-3 py-1.5 text-xs rounded-full font-bold transition shadow-sm cursor-pointer active:scale-95"
+            style={{ background: bg, color, border: `1px solid ${borderColor}` }}
+            onMouseEnter={e => (e.currentTarget.style.background = hoverBg)}
+            onMouseLeave={e => (e.currentTarget.style.background = bg)}>
+            {children}
+        </button>
     )
 }

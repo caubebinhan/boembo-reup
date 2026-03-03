@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": 1772510826311,
+  "workflowId": "tiktok-repost",
+  "workflowVersion": "1.0",
+  "group": "scan",
+  "totalImplemented": 7,
+  "cases": [
+    {
+      "id": "tiktok-repost-v1.scan.channel-smoke",
+      "title": "Channel Scan Smoke",
+      "fingerprint": "case-TIKTOK-101",
+      "errorCode": "DG-200",
+      "category": "scan",
+      "group": "scan",
+      "level": "basic",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/scan/cases/tiktok-repost-v1.scan.channel-smoke.json"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.empty-channel",
+      "title": "Channel Scan Empty Result",
+      "fingerprint": "case-TIKTOK-103",
+      "errorCode": "DG-200",
+      "category": "scan",
+      "group": "scan",
+      "level": "basic",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/scan/cases/tiktok-repost-v1.scan.empty-channel.json"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.filter-thresholds-fixture",
+      "title": "Scanner Filter Thresholds Fixture (min likes/views/max views/withinDays)",
+      "fingerprint": "case-TIKTOK-105",
+      "errorCode": "DG-200",
+      "category": "scan",
+      "group": "scan",
+      "level": "basic",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/scan/cases/tiktok-repost-v1.scan.filter-thresholds-fixture.json"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.rescan-dedupe-existing-items",
+      "title": "Channel Re-scan Dedupe Existing Items",
+      "fingerprint": "case-TIKTOK-111",
+      "errorCode": "DG-200",
+      "category": "scan",
+      "group": "scan",
+      "level": "intermediate",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/scan/cases/tiktok-repost-v1.scan.rescan-dedupe-existing-items.json"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.session-expired",
+      "title": "Channel Scan Session Expired",
+      "fingerprint": "case-TIKTOK-114",
+      "errorCode": "DG-200",
+      "category": "scan",
+      "group": "scan",
+      "level": "intermediate",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/scan/cases/tiktok-repost-v1.scan.session-expired.json"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.wizard-sources-edge-validation-gaps",
+      "title": "Wizard Sources Edge Validation Gaps",
+      "fingerprint": "case-TIKTOK-116",
+      "errorCode": "DG-200",
+      "category": "scan",
+      "group": "scan",
+      "level": "advanced",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/scan/cases/tiktok-repost-v1.scan.wizard-sources-edge-validation-gaps.json"
+    },
+    {
+      "id": "tiktok-repost-v1.scan.wizard-sources-main-validation",
+      "title": "Wizard Sources Main Validation (Step Contract)",
+      "fingerprint": "case-TIKTOK-117",
+      "errorCode": "DG-200",
+      "category": "scan",
+      "group": "scan",
+      "level": "basic",
+      "risk": "safe",
+      "caseFilePath": "tests/debug/workflows/tiktok-repost/v1.0/groups/scan/cases/tiktok-repost-v1.scan.wizard-sources-main-validation.json"
+    }
+  ]
+}
