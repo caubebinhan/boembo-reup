@@ -47,7 +47,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
         result = await scanner.scanKeyword(source.name, scanOpts)
       }
 
-      const sourceLabel = source.type === 'channel' ? `@${source.name.replace('@','')}` : `🔑${source.name}`
+      const sourceLabel = source.type === 'channel' ? `@${source.name.replace('@', '')}` : `#${source.name}`
       let mapped = (result.videos || []).map((v: any) => ({
         platform_id: v.platform_id || v.id,
         platform: 'tiktok',
@@ -91,7 +91,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
 
       allVideos.push(...mapped)
       sourceCounts.push(`${sourceLabel}: ${mapped.length}`)
-      ctx.onProgress(`✅ ${sourceLabel}: ${mapped.length} videos${filteredOut > 0 ? ` (${filteredOut} filtered)` : ''}`)
+      ctx.onProgress(`${sourceLabel}: ${mapped.length} videos${filteredOut > 0 ? ` (${filteredOut} filtered)` : ''}`)
     } catch (err: any) {
       ctx.logger.error(`Failed to scan ${source.name}`, err)
     }
@@ -108,7 +108,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     dedupedVideos.push(v)
   }
   if (dedupedVideos.length < beforeDedup) {
-    ctx.logger.info(`[Scanner] Deduped across sources: ${beforeDedup} → ${dedupedVideos.length} unique videos`)
+    ctx.logger.info(`[Scanner] Deduped across sources: ${beforeDedup} -> ${dedupedVideos.length} unique videos`)
   }
   // Replace allVideos with deduplicated list
   allVideos.length = 0
@@ -116,8 +116,8 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
 
   // Build summary progress with per-source breakdown
   const summary = sources.length > 1
-    ? `🔍 ${allVideos.length} videos (${sourceCounts.join(', ')})`
-    : `🔍 Scanned ${allVideos.length} videos`
+    ? `Scanned ${allVideos.length} videos (${sourceCounts.join(', ')})`
+    : `Scanned ${allVideos.length} videos`
   ctx.logger.info(`Scanner found ${allVideos.length} videos from ${sources.length} sources`)
   ctx.onProgress(summary)
 

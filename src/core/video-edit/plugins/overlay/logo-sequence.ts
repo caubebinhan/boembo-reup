@@ -52,6 +52,17 @@ const logoSequence: VideoEditPlugin = {
       ],
       description: 'Add time ranges + positions for logo appearances',
     },
+    {
+      key: 'timeJitterSec',
+      type: 'slider',
+      label: 'Random time jitter',
+      default: 0,
+      min: 0,
+      max: 10,
+      step: 0.1,
+      unit: 's',
+      description: 'Randomly shifts each appearance timing on render',
+    },
   ],
 
   getAdditionalInputs(params, ctx) {
@@ -66,12 +77,13 @@ const logoSequence: VideoEditPlugin = {
 
     if (appearances.length === 0) return []
 
-    const inputIdx = ctx.nextInputIndex() - 1
+    const inputIdx = ctx.additionalInputStartIndex ?? ctx.nextInputIndex()
     const key = ctx.instanceKey
     const sizePercent = (params.size ?? 10) / 100
     const targetW = Math.round(ctx.inputWidth * sizePercent)
     const opacity = params.opacity ?? 0.9
     const padding = 15
+    const jitter = Math.max(0, Number(params.timeJitterSec ?? 0))
 
     const filters: VideoFilter[] = []
 
@@ -100,12 +112,14 @@ const logoSequence: VideoEditPlugin = {
       const a = appearances[i]
       const { x, y } = resolveOverlayPosition(a.position, padding)
       const outLabel = i === appearances.length - 1 ? `out_${key}` : `logo_step_${key}_${i}`
+      const start = clampTime(Number(a.startTime ?? 0) + randomJitter(jitter), 0, ctx.inputDurationSec)
+      const end = clampTime(Number(a.endTime ?? ctx.inputDurationSec) + randomJitter(jitter), start + 0.05, ctx.inputDurationSec)
 
       filters.push({
         filter: 'overlay',
         options: {
           x, y,
-          enable: `between(t,${a.startTime},${a.endTime})`,
+          enable: `between(t,${start},${end})`,
         },
         inputs: [prevVideoLabel, logoLabel],
         outputs: [outLabel],
@@ -140,6 +154,17 @@ function resolveOverlayPosition(position: string, padding: number): { x: string;
     'bottom-right':  { x: `W-w-${padding}`, y: `H-h-${padding}` },
   }
   return POSITIONS[position] || POSITIONS['top-right']
+}
+
+function randomJitter(maxSeconds: number): number {
+  if (maxSeconds <= 0) return 0
+  return (Math.random() * 2 - 1) * maxSeconds
+}
+
+function clampTime(value: number, min: number, max: number): number {
+  const v = Number.isFinite(value) ? value : min
+  if (max <= min) return max
+  return Math.max(min, Math.min(max, v))
 }
 
 export default logoSequence

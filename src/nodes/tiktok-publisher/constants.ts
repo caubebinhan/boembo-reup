@@ -68,7 +68,7 @@ export const STATUS_UI: Record<string, StatusUIConfig> = {
   captioned:                { label: 'CAPTIONED',       color: '#0284c7', bg: '#f0f9ff', border: '#7dd3fc' },
   publishing:               { label: 'PUBLISHING',      color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd' },
   published:                { label: 'PUBLISHED',       color: '#059669', bg: '#ecfdf5', border: '#6ee7b7' },
-  verification_incomplete:  { label: 'VERIFY ?',        color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
+  verification_incomplete:  { label: 'ĐÃ GỬI, CHỜ XÁC MINH', color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
   under_review:             { label: 'UNDER REVIEW',    color: '#d97706', bg: '#fffbeb', border: '#fcd34d' },
   verifying_publish:        { label: 'VERIFYING',       color: '#16a34a', bg: '#f0fdf4', border: '#86efac' },
   duplicate:                { label: 'DUPLICATE',       color: '#ea580c', bg: '#fff7ed', border: '#fdba74' },

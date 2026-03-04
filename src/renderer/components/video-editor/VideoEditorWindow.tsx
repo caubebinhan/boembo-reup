@@ -28,7 +28,9 @@ export default function VideoEditorWindow(): ReactElement {
         if (!video) return
         const onMeta = (): void => {
             state.handleSeek(0)
-            setVideoDuration(Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 30)
+            const dur = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 30
+            setVideoDuration(dur)
+            state.setVideoDuration(dur)
         }
         const onTime = (): void => state.handleSeek(video.currentTime)
         video.addEventListener('loadedmetadata', onMeta)
@@ -110,12 +112,25 @@ export default function VideoEditorWindow(): ReactElement {
                                 disabled={state.isRendering || !state.videoPath}
                                 aria-label="Render preview"
                                 aria-busy={state.isRendering}
-                                className="px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
+                                className="relative px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer overflow-hidden"
                                 style={{
                                     background: state.isRendering || !state.videoPath ? V.beige : V.accent,
                                     color: state.isRendering || !state.videoPath ? V.textDim : '#fff',
+                                    minWidth: 180,
                                 }}>
-                                {state.isRendering ? `⏳ ${state.previewStatus || 'Rendering...'}` : '▶️ Preview Result'}
+                                {state.isRendering && state.renderProgress != null && (
+                                    <div className="absolute inset-0 rounded-xl opacity-30"
+                                        style={{
+                                            background: `linear-gradient(90deg, #fff ${state.renderProgress}%, transparent ${state.renderProgress}%)`,
+                                        }} />
+                                )}
+                                <span className="relative z-10">
+                                    {state.isRendering
+                                        ? (state.renderProgress != null && state.renderProgress > 0
+                                            ? `⏳ Rendering ${state.renderProgress}%`
+                                            : `⏳ ${state.previewStatus || 'Rendering...'}`)
+                                        : '▶️ Render & Open Preview'}
+                                </span>
                             </button>
                         </>
                     )}
@@ -129,7 +144,7 @@ export default function VideoEditorWindow(): ReactElement {
             </div>
             <div className="flex flex-1 overflow-hidden min-h-0">
                 {/* Left: Toolbar */}
-                <EditorToolbar plugins={state.plugins} operations={state.operations} onAddOperation={state.handleAddOperation} />
+                <EditorToolbar plugins={state.plugins} onAddOperation={state.handleAddOperation} />
 
                 {/* Center: Video Preview */}
                 <div className="flex-1 min-h-0 relative overflow-hidden" style={{ background: '#1a1917' }}>
@@ -166,6 +181,9 @@ export default function VideoEditorWindow(): ReactElement {
                                         operation={state.selectedOperation}
                                         plugin={state.selectedPlugin}
                                         operations={state.operations}
+                                        plugins={state.plugins}
+                                        selectedOpId={state.selectedOpId}
+                                        onSelectOperation={state.handleSelectOperation}
                                         onUpdateParams={state.handleUpdateParams}
                                     />
                                 </div>

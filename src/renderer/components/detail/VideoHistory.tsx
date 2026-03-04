@@ -60,6 +60,7 @@ const EVENT_CONFIG: Record<string, { icon: string; label: string; color: string 
     // Publish
     'video:active': { icon: '📤', label: 'Đang đăng', color: '#f59e0b' },
     'video:published': { icon: '🎉', label: 'Đã đăng thành công', color: '#059669' },
+    'video:submitted': { icon: '📋', label: 'Đã gửi, chờ duyệt', color: '#d97706' },
     'video:publish-status': { icon: '🔄', label: 'Cập nhật trạng thái', color: '#6366f1' },
     'publish:debug': { icon: '🐛', label: 'Debug upload', color: '#94a3b8' },
     // Errors
@@ -109,85 +110,164 @@ function RichEventData({ event, data }: { event: string; data: any }) {
     if (!data) return null
     const inner = event.startsWith('node:event:') ? event.slice('node:event:'.length) : event
 
-    // Downloaded — file size + download time
-    if (inner === 'video:downloaded' && data.fileSizeMB != null) {
+    // ── Downloaded — file size + download time ──
+    if (inner === 'video:downloaded') {
         return (
             <div className="mt-1 flex flex-wrap gap-2 text-[10px]">
-                <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
-                    📦 {data.fileSizeMB} MB
-                </span>
-                {data.downloadDurationMs != null && (
-                    <span className="px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 border border-slate-100">
-                        ⏱ {formatDuration(data.downloadDurationMs)}
-                    </span>
-                )}
-            </div>
-        )
-    }
-
-    // Caption — before → after
-    if (inner === 'caption:transformed' && (data.original || data.generated)) {
-        return (
-            <div className="mt-1.5 space-y-1 text-[10px]">
-                {data.original && (
-                    <div className="flex gap-1">
-                        <span className="text-slate-400 shrink-0">Gốc:</span>
-                        <span className="text-slate-500 truncate">{data.original}</span>
-                    </div>
-                )}
-                {data.generated && (
-                    <div className="flex gap-1">
-                        <span className="text-emerald-500 shrink-0">Đăng:</span>
-                        <span className="text-emerald-600 truncate font-medium">{data.generated}</span>
-                    </div>
-                )}
-            </div>
-        )
-    }
-
-    // Video edit completed — duration + operation count + file size
-    if (inner === 'video-edit:completed') {
-        return (
-            <div className="mt-1 flex flex-wrap gap-2 text-[10px]">
-                {data.totalDurationMs != null && (
-                    <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">
-                        ⏱ {formatDuration(data.totalDurationMs)}
-                    </span>
-                )}
-                {data.operationCount != null && (
-                    <span className="px-1.5 py-0.5 rounded bg-violet-50 text-violet-600 border border-violet-100">
-                        ⚙️ {data.operationCount} filter
-                    </span>
-                )}
                 {data.fileSizeMB != null && (
                     <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
                         📦 {data.fileSizeMB} MB
                     </span>
                 )}
+                {data.downloadDurationMs != null && (
+                    <span className="px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 border border-slate-100">
+                        ⏱ {formatDuration(data.downloadDurationMs)}
+                    </span>
+                )}
+                {data.localPath && (
+                    <span className="px-1.5 py-0.5 rounded bg-slate-50 text-slate-400 border border-slate-100 truncate max-w-[200px]" title={data.localPath}>
+                        📂 {data.localPath.replace(/\\/g, '/').split('/').pop()}
+                    </span>
+                )}
             </div>
         )
     }
 
-    // Video edit failed — show error
-    if (inner === 'video-edit:failed' && data.error) {
+    // ── Caption — Original vs Posted ──
+    if (inner === 'caption:transformed' && (data.original || data.generated)) {
         return (
-            <p className="mt-1 text-[10px] text-red-500 bg-red-50 rounded px-2 py-1 border border-red-100">
-                {data.error}
-            </p>
+            <div className="mt-1.5 space-y-1.5 text-[10px]">
+                {data.original && (
+                    <div className="bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-200">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">📝 Caption gốc</span>
+                        <p className="text-slate-600 line-clamp-2">{data.original}</p>
+                    </div>
+                )}
+                {data.generated && (
+                    <div className="bg-emerald-50 rounded-lg px-2.5 py-1.5 border border-emerald-200">
+                        <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider block mb-0.5">📢 Caption đăng</span>
+                        <p className="text-emerald-700 font-medium line-clamp-2">{data.generated}</p>
+                    </div>
+                )}
+            </div>
         )
     }
 
-    // Published — show URL + time
-    if (inner === 'video:published' && data.publishedUrl) {
+    // ── Video edit completed — duration + filters applied ──
+    if (inner === 'video-edit:completed') {
+        const ops: string[] = Array.isArray(data.operations)
+            ? data.operations.map((op: any) => typeof op === 'string' ? op : op.name || op.pluginId || '?')
+            : []
         return (
-            <a href={data.publishedUrl} target="_blank" rel="noopener noreferrer"
-                className="mt-1 text-[10px] text-blue-500 underline hover:no-underline block truncate">
-                🔗 {data.publishedUrl}
-            </a>
+            <div className="mt-1 space-y-1.5 text-[10px]">
+                <div className="flex flex-wrap gap-2">
+                    {data.totalDurationMs != null && (
+                        <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 border border-purple-100">
+                            ⏱ {formatDuration(data.totalDurationMs)}
+                        </span>
+                    )}
+                    {data.operationCount != null && (
+                        <span className="px-1.5 py-0.5 rounded bg-violet-50 text-violet-600 border border-violet-100">
+                            ⚙️ {data.operationCount} filter
+                        </span>
+                    )}
+                    {data.fileSizeMB != null && (
+                        <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">
+                            📦 {data.fileSizeMB} MB
+                        </span>
+                    )}
+                </div>
+                {ops.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                        {ops.map((name, i) => (
+                            <span key={i} className="px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 border border-violet-200 text-[9px] font-medium">
+                                {name.replace('builtin.', '')}
+                            </span>
+                        ))}
+                    </div>
+                )}
+            </div>
         )
     }
 
-    // Scheduled — show time
+    // ── Video edit operation applied — individual filter ──
+    if (inner === 'video-edit:operation-applied' && (data.pluginId || data.name)) {
+        return (
+            <span className="mt-0.5 inline-block px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-100 text-[9px] font-medium">
+                ⚙️ {(data.pluginId || data.name || '').replace('builtin.', '')}
+                {data.durationMs != null && ` (${formatDuration(data.durationMs)})`}
+            </span>
+        )
+    }
+
+    // ── Video edit failed — error with step context ──
+    if (inner === 'video-edit:failed') {
+        return (
+            <div className="mt-1 bg-red-50 rounded-lg px-2.5 py-1.5 border border-red-200 text-[10px]">
+                <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider">❌ Lỗi chỉnh sửa video</span>
+                {data.error && <p className="text-red-600 mt-0.5 break-words">{data.error}</p>}
+                {data.pluginId && <p className="text-red-400 mt-0.5 text-[9px]">Plugin: {data.pluginId}</p>}
+            </div>
+        )
+    }
+
+    // ── Published — prominent success box with URL ──
+    if (inner === 'video:published' && (data.videoUrl || data.publishedUrl)) {
+        const url = data.videoUrl || data.publishedUrl
+        return (
+            <div className="mt-1 bg-emerald-50 rounded-lg px-2.5 py-1.5 border border-emerald-200 text-[10px]">
+                <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">🎉 Đã đăng thành công</span>
+                <a href={url} target="_blank" rel="noopener noreferrer"
+                    className="block mt-0.5 text-blue-600 underline hover:no-underline truncate font-medium">
+                    🔗 {url}
+                </a>
+                {data.reviewVerifiedAfterMs != null && (
+                    <p className="text-emerald-500 mt-0.5 text-[9px]">Xác minh sau {Math.round(data.reviewVerifiedAfterMs / 60000)} phút</p>
+                )}
+            </div>
+        )
+    }
+
+    // ── Submitted — pending verification ──
+    if (inner === 'video:submitted') {
+        const url = data.videoUrl || data.publishedUrl
+        return (
+            <div className="mt-1 bg-amber-50 rounded-lg px-2.5 py-1.5 border border-amber-200 text-[10px]">
+                <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">📋 Đã gửi, chờ duyệt</span>
+                {data.status && <p className="text-amber-700 mt-0.5">Trạng thái: {data.status}</p>}
+                {url && (
+                    <a href={url} target="_blank" rel="noopener noreferrer"
+                        className="block mt-0.5 text-blue-500 underline hover:no-underline truncate text-[9px]">
+                        🔗 {url}
+                    </a>
+                )}
+                {data.warning && <p className="text-amber-500 mt-0.5 text-[9px]">⚠️ {data.warning}</p>}
+            </div>
+        )
+    }
+
+    // ── Publish verify status — retry attempt info ──
+    if (inner === 'video:publish-status' && data.attempts != null) {
+        return (
+            <div className="mt-1 flex flex-wrap gap-2 text-[10px]">
+                <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">
+                    🔄 Lần {data.attempts}/{data.maxRetries || '?'}
+                </span>
+                {data.status && (
+                    <span className="px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 border border-slate-100">
+                        📊 {data.status}
+                    </span>
+                )}
+                {data.nextRetryAt && (
+                    <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-100">
+                        ⏰ Thử lại: {new Date(data.nextRetryAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </span>
+                )}
+            </div>
+        )
+    }
+
+    // ── Scheduled ──
     if (inner === 'scheduler:scheduled' && data.scheduledFor) {
         const t = new Date(data.scheduledFor)
         return (
@@ -197,7 +277,7 @@ function RichEventData({ event, data }: { event: string; data: any }) {
         )
     }
 
-    // Rescheduled — show new time + reason
+    // ── Rescheduled ──
     if (inner === 'scheduler:rescheduled' && data.newTime) {
         const t = new Date(data.newTime)
         return (
@@ -208,28 +288,51 @@ function RichEventData({ event, data }: { event: string; data: any }) {
         )
     }
 
-    // Duplicate detected
-    if (inner === 'video:duplicate-detected' && data.reason) {
+    // ── Duplicate detected ──
+    if (inner === 'video:duplicate-detected') {
         return (
-            <p className="mt-1 text-[10px] text-amber-600 bg-amber-50 rounded px-2 py-1 border border-amber-100">
-                {data.reason}
-            </p>
+            <div className="mt-1 bg-amber-50 rounded-lg px-2.5 py-1.5 border border-amber-200 text-[10px]">
+                <span className="text-[9px] font-bold text-amber-600">♻️ Video trùng</span>
+                {data.reason && <p className="text-amber-700 mt-0.5">{data.reason}</p>}
+                {data.matchedBy && <p className="text-amber-500 mt-0.5 text-[9px]">Phát hiện bằng: {data.matchedBy}</p>}
+            </div>
         )
     }
 
-    // Violation
-    if (inner === 'violation:detected' && data.error) {
+    // ── Violation / policy error ──
+    if (inner === 'violation:detected') {
         return (
-            <p className="mt-1 text-[10px] text-red-500 bg-red-50 rounded px-2 py-1 border border-red-100">
-                {typeof data.error === 'string' ? data.error : JSON.stringify(data.error)}
-            </p>
+            <div className="mt-1 bg-red-50 rounded-lg px-2.5 py-1.5 border border-red-200 text-[10px]">
+                <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider">🚫 Vi phạm chính sách</span>
+                {data.error && <p className="text-red-600 mt-0.5 break-words">{typeof data.error === 'string' ? data.error : JSON.stringify(data.error)}</p>}
+            </div>
         )
     }
 
-    // Generic fallback — show status/error/url/operations
+    // ── Captcha detected ──
+    if (inner === 'captcha:detected') {
+        return (
+            <div className="mt-1 bg-orange-50 rounded-lg px-2.5 py-1.5 border border-orange-200 text-[10px]">
+                <span className="text-[9px] font-bold text-orange-600">⚠️ CAPTCHA yêu cầu xác minh</span>
+                {data.message && <p className="text-orange-700 mt-0.5">{data.message}</p>}
+            </div>
+        )
+    }
+
+    // ── Session expired ──
+    if (inner === 'session:expired') {
+        return (
+            <div className="mt-1 bg-red-50 rounded-lg px-2.5 py-1.5 border border-red-200 text-[10px]">
+                <span className="text-[9px] font-bold text-red-500">🔑 Phiên đăng nhập hết hạn</span>
+                {data.message && <p className="text-red-600 mt-0.5">{data.message}</p>}
+            </div>
+        )
+    }
+
+    // ── Generic fallback — show status/error/url/operations ──
     let extra: string | null = null
-    if (data.url) extra = data.url
-    else if (data.publishedUrl) extra = data.publishedUrl
+    if (data.publishedUrl || data.videoUrl) extra = data.publishedUrl || data.videoUrl
+    else if (data.url) extra = data.url
     else if (data.error) extra = typeof data.error === 'string' ? data.error : JSON.stringify(data.error)
     else if (data.operations) extra = `${data.operations.length} thao tác chỉnh sửa`
     else if (data.status) extra = `Trạng thái: ${data.status}`
@@ -252,7 +355,8 @@ export function VideoHistory({ campaignId, videoId, isExpanded }: VideoHistoryPr
     const [events, setEvents] = useState<VideoEvent[]>([])
     const [loading, setLoading] = useState(false)
     const [loaded, setLoaded] = useState(false)
-    const [retryingNode, setRetryingNode] = useState<string | null>(null)
+    const [retrying, setRetrying] = useState<Set<string>>(new Set())
+    const [retried, setRetried] = useState<Set<string>>(new Set())
 
     const api = (window as any).api
 
@@ -302,15 +406,24 @@ export function VideoHistory({ campaignId, videoId, isExpanded }: VideoHistoryPr
     // Area F: Inline retry handler — includes videoId for proper scope
     const handleRetry = useCallback(async (instanceId: string, retryVideoId?: string) => {
         if (!instanceId) return
-        setRetryingNode(instanceId)
+        const key = `${instanceId}::${retryVideoId || videoId}`
+        // Idempotency: ignore if already retried or in-flight
+        if (retrying.has(key) || retried.has(key)) return
+        setRetrying(prev => new Set([...prev, key]))
         try {
-            await api?.invoke?.('pipeline:retry-node', { campaignId, instanceId, videoId: retryVideoId || videoId })
+            const result = await api?.invoke?.('pipeline:retry-node', { campaignId, instanceId, videoId: retryVideoId || videoId })
+            if (result?.success || result?.alreadyPending) {
+                // Only permanently hide when the server confirms the job was queued (or already pending).
+                // If IPC throws or server returns an unexpected error, button stays visible.
+                setRetried(prev => new Set([...prev, key]))
+            }
         } catch (err: any) {
             console.error('[VideoHistory] Retry failed:', err)
+            // Button will reappear (key not added to retried)
         } finally {
-            setRetryingNode(null)
+            setRetrying(prev => { const s = new Set(prev); s.delete(key); return s })
         }
-    }, [campaignId, videoId])
+    }, [campaignId, videoId, retrying, retried])
 
     // Group consecutive node:progress events
     const groupedEvents = useMemo(() => {
@@ -319,6 +432,8 @@ export function VideoHistory({ campaignId, videoId, isExpanded }: VideoHistoryPr
 
         for (const ev of events) {
             const inner = ev.event.startsWith('node:event:') ? ev.event.slice('node:event:'.length) : ev.event
+            // Filter out debug snapshots
+            if (inner === 'node:data' || ev.event === 'node:data') continue
             if (inner === 'node:progress') {
                 lastProgress = ev
             } else {
@@ -410,16 +525,22 @@ export function VideoHistory({ campaignId, videoId, isExpanded }: VideoHistoryPr
                                 {/* Rich data rendering */}
                                 <RichEventData event={ev.event} data={parsedData} />
 
-                                {/* Area F: Inline retry button */}
-                                {showRetry && (
-                                    <button
-                                        onClick={() => handleRetry(ev.instance_id!, parsedData?.videoId)}
-                                        disabled={retryingNode === ev.instance_id}
-                                        className="mt-1.5 text-[10px] px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 transition cursor-pointer font-medium disabled:opacity-50"
-                                    >
-                                        {retryingNode === ev.instance_id ? '⏳ Đang thử lại...' : '🔄 Thử lại'}
-                                    </button>
-                                )}
+                                {/* Area F: Inline retry button — hidden permanently after first click */}
+                                {showRetry && (() => {
+                                    const key = `${ev.instance_id}::${parsedData?.videoId || videoId}`
+                                    const isInFlight = retrying.has(key)
+                                    const isDone = retried.has(key)
+                                    if (isDone) return null
+                                    return (
+                                        <button
+                                            onClick={() => handleRetry(ev.instance_id!, parsedData?.videoId)}
+                                            disabled={isInFlight}
+                                            className="mt-1.5 text-[10px] px-2.5 py-1 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 transition cursor-pointer font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            {isInFlight ? '⏳ Đang thử lại...' : '🔄 Thử lại'}
+                                        </button>
+                                    )
+                                })()}
                             </div>
                         </div>
                     )

@@ -139,16 +139,18 @@ export const publishVerifyHandler: AsyncTaskHandler = {
 
     // ── Branch 1: recheck itself failed ──
     if (!recheck.success) {
+      const nextRetryAt = Date.now() + estimateRetryDelayMs(accountId, task.attempt)
       ExecutionLogger.emitNodeEvent(campaignId, 'publisher_1', 'video:publish-status', {
         videoId,
         status: 'under_review',
         message: `Retry ${task.attempt}/${task.maxAttempts} verify failed: ${recheck.error || 'unknown'}`,
         attempts: task.attempt,
         maxRetries: task.maxAttempts,
+        nextRetryAt,
       })
       return {
         action: 'reschedule',
-        nextRunAt: Date.now() + estimateRetryDelayMs(accountId, task.attempt),
+        nextRunAt: nextRetryAt,
         patchState: { lastError: recheck.error },
       }
     }
@@ -161,6 +163,8 @@ export const publishVerifyHandler: AsyncTaskHandler = {
         publishedVideoId: recheck.videoId || expectedVideoId,
         publishedUrl: recheck.videoUrl || expectedVideoUrl,
       })
+      // Keep retrying — dashboard might load next time
+      const nextRetryAt = Date.now() + estimateRetryDelayMs(accountId, task.attempt)
       ExecutionLogger.emitNodeEvent(campaignId, 'publisher_1', 'video:publish-status', {
         videoId,
         status: 'verification_incomplete',
@@ -168,11 +172,11 @@ export const publishVerifyHandler: AsyncTaskHandler = {
         message: `Retry ${task.attempt}/${task.maxAttempts}: dashboard verification still incomplete.`,
         attempts: task.attempt,
         maxRetries: task.maxAttempts,
+        nextRetryAt,
       })
-      // Keep retrying — dashboard might load next time
       return {
         action: 'reschedule',
-        nextRunAt: Date.now() + estimateRetryDelayMs(accountId, task.attempt),
+        nextRunAt: nextRetryAt,
         patchState: { lastStatus: 'verification_incomplete' },
       }
     }
@@ -180,6 +184,7 @@ export const publishVerifyHandler: AsyncTaskHandler = {
     // ── Branch 3: still under review ──
     if (recheck.isReviewing) {
       patchVideoStatus(campaignId, videoId, 'under_review', recheck.videoUrl || expectedVideoUrl)
+      const nextRetryAt = Date.now() + estimateRetryDelayMs(accountId, task.attempt)
       ExecutionLogger.emitNodeEvent(campaignId, 'publisher_1', 'video:publish-status', {
         videoId,
         status: 'under_review',
@@ -187,10 +192,11 @@ export const publishVerifyHandler: AsyncTaskHandler = {
         message: `Still under review after retry ${task.attempt}/${task.maxAttempts}.`,
         attempts: task.attempt,
         maxRetries: task.maxAttempts,
+        nextRetryAt,
       })
       return {
         action: 'reschedule',
-        nextRunAt: Date.now() + estimateRetryDelayMs(accountId, task.attempt),
+        nextRunAt: nextRetryAt,
         patchState: { lastStatus: 'under_review' },
       }
     }
@@ -221,6 +227,7 @@ export const publishVerifyHandler: AsyncTaskHandler = {
       videoUrl: recheck.videoUrl || expectedVideoUrl,
       isReviewing: false,
       reviewVerifiedAfterMs: reviewMs,
+      message: `Publish verified for ${videoId}${recheck.videoUrl || expectedVideoUrl ? `: ${recheck.videoUrl || expectedVideoUrl}` : ''}`,
     })
 
     return {

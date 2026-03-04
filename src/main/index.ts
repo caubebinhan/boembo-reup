@@ -56,13 +56,27 @@ function createWindow(): void {
     }
   })
 
-  PipelineEventBus.on('pipeline:interaction_waiting', (payload) => {
-    mainWindow.webContents.send('pipeline:interaction_waiting', payload)
-  })
-  
-  PipelineEventBus.on('pipeline:interaction_resolved', (payload) => {
-    mainWindow.webContents.send('pipeline:interaction_resolved', payload)
-  })
+  const safeSend = (channel: string, payload: unknown) => {
+    try {
+      if (mainWindow.isDestroyed()) return
+      const wc = mainWindow.webContents
+      if (!wc || wc.isDestroyed()) return
+      wc.send(channel, payload)
+    } catch {
+      // Window may be closing while background pipeline events are emitted.
+    }
+  }
+
+  const onInteractionWaiting = (payload: unknown) => {
+    safeSend('pipeline:interaction_waiting', payload)
+  }
+
+  const onInteractionResolved = (payload: unknown) => {
+    safeSend('pipeline:interaction_resolved', payload)
+  }
+
+  PipelineEventBus.on('pipeline:interaction_waiting', onInteractionWaiting)
+  PipelineEventBus.on('pipeline:interaction_resolved', onInteractionResolved)
 
   // Area A: Forward recovery/info events to UI + persist to DB
   PipelineEventBus.on('pipeline:info', (payload) => {
@@ -79,6 +93,11 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     if (!isE2EHeadless) mainWindow.show()
+  })
+
+  mainWindow.on('closed', () => {
+    PipelineEventBus.off('pipeline:interaction_waiting', onInteractionWaiting)
+    PipelineEventBus.off('pipeline:interaction_resolved', onInteractionResolved)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {

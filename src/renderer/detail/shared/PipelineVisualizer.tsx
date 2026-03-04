@@ -287,7 +287,7 @@ function LoopBlock({
 }: {
     node: FlowNodeInfo, childNodes: FlowNodeInfo[], campaignId: string, selectedId: string | null, onSelect: (node: FlowNodeInfo) => void, campaignParams?: any, onViewError?: (node: FlowNodeInfo) => void
 }) {
-    const { status, stat } = useNodeStatus(campaignId, node.instance_id)
+    const { status, stat, progressMsg } = useNodeStatus(campaignId, node.instance_id)
     const isRunning = status === 'running'
     const isFailed = status === 'error'
     const isDone = status === 'done'
@@ -318,7 +318,9 @@ function LoopBlock({
                 )}
                 <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white px-4 py-1 rounded-full border border-sky-200 font-bold shadow-sm z-20 whitespace-nowrap">
                     <span className={`text-[10px] ${isRunning ? 'animate-spin' : ''}`}>🔁</span>
-                    <span className="text-sky-600 text-[9px] uppercase tracking-[0.15em]">Loop{stat.total ? `: ${stat.total} videos` : ': Per Video'}</span>
+                    <span className="text-sky-600 text-[9px] uppercase tracking-[0.15em]">
+                        {progressMsg || (stat.total ? `Loop: ${stat.total} videos` : 'Loop: Per Video')}
+                    </span>
                     {stat.total > 0 && (
                         <div className="flex items-center gap-1.5 text-[9px] ml-1.5 border-l border-slate-200 pl-1.5">
                             {stat.completed > 0 && <span className="text-emerald-600">✓{stat.completed}</span>}

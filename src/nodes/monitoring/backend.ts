@@ -5,25 +5,26 @@ import { TikTokScanner, ScanOptions } from '@main/tiktok/TikTokScanner'
  * Monitoring Node
  *
  * Continuous loop: scan sources -> sleep -> scan again.
- * New videos -> return to scheduler. Campaign paused -> exit.
+ * If new videos are found, return to scheduler.
+ * If campaign is paused/stopped, exit gracefully.
  */
 export async function execute(_input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const intervalMinutes = ctx.params.monitorIntervalMinutes ?? 5
   const waitMs = intervalMinutes * 60 * 1000
 
   ctx.logger.info(`[Monitor] Starting continuous monitoring (interval=${intervalMinutes}min)`)
-  ctx.onProgress(`?? Monitoring b?t ??u (m?i ${intervalMinutes} phut)...`)
+  ctx.onProgress(`Monitoring started (interval ${intervalMinutes}min).`)
 
   while (true) {
-    ctx.onProgress(`?? ??i ${intervalMinutes} phut tr??c khi quet...`)
-    await new Promise(resolve => setTimeout(resolve, waitMs))
+    ctx.onProgress(`Waiting ${intervalMinutes}min before next scan...`)
+    await new Promise((resolve) => setTimeout(resolve, waitMs))
 
     // Check campaign status from store (re-read fresh)
     const { campaignRepo } = require('../../main/db/repositories/CampaignRepo')
     const freshStore = campaignRepo.tryOpen(ctx.campaign_id)
     if (!freshStore || !['active', 'running'].includes(freshStore.status)) {
       ctx.logger.info(`[Monitor] Campaign status=${freshStore?.status} - stopping monitor`)
-      ctx.onProgress('? Monitoring d?ng (campaign paused)')
+      ctx.onProgress('Monitoring stopped (campaign paused/stopped).')
       return { data: [], action: 'continue', message: 'Campaign paused/stopped - monitoring ended' }
     }
 
@@ -37,7 +38,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     }
 
     // Known video IDs for dedup
-    const knownIds = new Set(ctx.store.videos.map(v => v.platform_id))
+    const knownIds = new Set(ctx.store.videos.map((v) => v.platform_id))
 
     const scanner = new TikTokScanner()
     const newVideos: any[] = []
@@ -48,9 +49,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
       const sourceKey = `${source.type}_${source.name}`
       const lastScanAt = lastScanTimes[sourceKey] || 0
 
-      // For future_only sources (and all monitoring scans), we use "since last scan" semantics:
-      // pass custom_range with startDate = last scan time.  This avoids the literal
-      // created_at > now filter which always returns 0 results for real TikTok videos.
+      // Use "since last scan" semantics for monitoring.
       const sinceLastScan = lastScanAt
         ? new Date(lastScanAt).toISOString().split('T')[0]
         : source.startDate
@@ -69,7 +68,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
       }
 
       try {
-        ctx.onProgress(`?? ?ang quet ${source.type}: ${source.name}...`)
+        ctx.onProgress(`Scanning ${source.type}: ${source.name}...`)
 
         let result
         if (source.type === 'channel') {
@@ -79,12 +78,12 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
         }
 
         totalScanned += result.videos.length
-        const fresh = result.videos.filter(v => !knownIds.has(v.platform_id))
+        const fresh = result.videos.filter((v) => !knownIds.has(v.platform_id))
 
         if (fresh.length > 0) {
           newVideos.push(...fresh)
           ctx.logger.info(`[Monitor] Source "${source.name}": ${fresh.length} new videos`)
-          const maxCreatedAt = Math.max(...fresh.map(v => v.created_at))
+          const maxCreatedAt = Math.max(...fresh.map((v) => v.created_at))
           lastScanTimes[sourceKey] = maxCreatedAt
           updatedScanTimes = true
         }
@@ -100,12 +99,12 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     }
 
     if (newVideos.length > 0) {
-      ctx.logger.info(`[Monitor] ?? Found ${newVideos.length} new videos - sending to scheduler`)
-      ctx.onProgress(`?? ${newVideos.length} video m?i!`)
+      ctx.logger.info(`[Monitor] Found ${newVideos.length} new videos - sending to scheduler`)
+      ctx.onProgress(`Found ${newVideos.length} new videos.`)
       return { data: newVideos, action: 'continue', message: `${newVideos.length} new videos detected` }
     }
 
     ctx.logger.info(`[Monitor] Scanned ${totalScanned} videos - no new ones.`)
-    ctx.onProgress(`?? Khong co video m?i. Quet l?i sau ${intervalMinutes} phut...`)
+    ctx.onProgress(`No new videos. Next scan in ${intervalMinutes}min.`)
   }
 }

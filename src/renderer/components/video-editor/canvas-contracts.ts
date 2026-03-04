@@ -32,6 +32,7 @@ const OVERLAY_POS_PRESETS: Record<string, { x: number; y: number }> = {
 
 const DEFAULT_REGION_RECT: CanvasRect = { x: 10, y: 10, w: 80, h: 80 }
 const DEFAULT_OVERLAY_RECT: CanvasRect = { x: 40, y: 40, w: 20, h: 20 }
+const DEFAULT_RESIZE_RECT: CanvasRect = { x: 0, y: 0, w: 100, h: 100 }
 
 function asNumber(v: unknown, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback
@@ -61,6 +62,23 @@ export function resolveCanvasRect(
   sourceAspect?: number | null,
 ): CanvasRect | null {
   const hint = plugin.previewHint || 'none'
+
+  if (operation.pluginId === 'builtin.resize') {
+    if (operation.params.canvasRect) {
+      return normalizeObjectRect(operation.params.canvasRect, DEFAULT_RESIZE_RECT)
+    }
+    const widthPercent = Math.max(5, Math.min(100, asNumber(operation.params.widthPercent, 100)))
+    const heightPercent = Math.max(5, Math.min(100, asNumber(operation.params.heightPercent, 100)))
+    const offset = operation.params.offsetPercent as { x?: number; y?: number } | undefined
+    const fallbackX = (100 - widthPercent) / 2
+    const fallbackY = (100 - heightPercent) / 2
+    return clampCanvasRect({
+      x: asNumber(offset?.x, fallbackX),
+      y: asNumber(offset?.y, fallbackY),
+      w: widthPercent,
+      h: heightPercent,
+    })
+  }
 
   // Fix 3: Logo Sequence uses appearances[].position (string presets) for rendering,
   // not the numeric position/overlaySize that the canvas guide writes to. Skip it.
@@ -109,6 +127,13 @@ export function resolveCanvasRect(
         h: asNumber((rawSize as { h?: number })?.h, defaultSize),
       }
       : { w: defaultSize, h: defaultSize }
+
+    if (hint === 'overlay-image' && operation.params.keepAspectRatio !== false) {
+      const imageAspect = Number(operation.params.imageAspect)
+      if (Number.isFinite(imageAspect) && imageAspect > 0) {
+        resolvedSize.h = resolvedSize.w / imageAspect
+      }
+    }
 
     return clampCanvasRect({
       x: resolvedPos.x,
@@ -163,6 +188,25 @@ function resolveCropRect(operation: VideoEditOperation, sourceAspect: number | n
   return clampCanvasRect({ x: 0, y, w: 100, h })
 }
 
+function resolveAppliedCropSpace(
+  operation: VideoEditOperation,
+  operations: VideoEditOperation[],
+  sourceAspect: number | null,
+): CanvasRect | null {
+  const priorCrop = [...operations]
+    .filter((op) =>
+      op.enabled
+      && op.order < operation.order
+      && op.id !== operation.id
+      && op.pluginId === 'builtin.crop'
+      && op.params?.applyToTimeline === true,
+    )
+    .sort((a, b) => b.order - a.order)
+    .map((op) => resolveCropRect(op, sourceAspect))
+    .find(Boolean)
+  return priorCrop || null
+}
+
 export function resolveCanvasSpace(
   operation: VideoEditOperation,
   plugin: PluginMeta,
@@ -170,14 +214,11 @@ export function resolveCanvasSpace(
   sourceAspect?: number | null,
 ): CanvasRect {
   const hint = plugin.previewHint || 'none'
-  if (hint !== 'blur-region') return FULL_CANVAS_RECT
+  if (hint === 'none') return FULL_CANVAS_RECT
+  if (operation.pluginId === 'builtin.crop') return FULL_CANVAS_RECT
   const normalizedAspect = sourceAspect && Number.isFinite(sourceAspect) && sourceAspect > 0 ? sourceAspect : null
-  const priorCrop = [...operations]
-    .filter((op) => op.enabled && op.order < operation.order && op.id !== operation.id && op.pluginId === 'builtin.crop')
-    .sort((a, b) => b.order - a.order)
-    .map((op) => resolveCropRect(op, normalizedAspect))
-    .find(Boolean)
-  return priorCrop || FULL_CANVAS_RECT
+  const appliedCrop = resolveAppliedCropSpace(operation, operations, normalizedAspect)
+  return appliedCrop || FULL_CANVAS_RECT
 }
 
 export function applyCanvasRect(
@@ -222,6 +263,19 @@ export function applyCanvasRect(
       position: { x: rect.x, y: rect.y },
       overlaySize: { w: rect.w, h: rect.h },
       fontSize: Math.max(10, Math.round(rect.h * 1.2)),
+    }
+  }
+
+  if (operation.pluginId === 'builtin.resize') {
+    return {
+      ...operation.params,
+      canvasRect: rect,
+      widthPercent: Math.round(rect.w),
+      heightPercent: Math.round(rect.h),
+      offsetPercent: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+      },
     }
   }
 

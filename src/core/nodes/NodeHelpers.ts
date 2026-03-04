@@ -89,10 +89,17 @@ export function setVideoStatus(
   ctx: NodeExecutionContext,
   platformId: string,
   status: string,
-  publishUrl?: string
+  publishUrl?: string,
+  dataPatch?: Record<string, any>
 ) {
   try {
-    ctx.store.updateVideo(platformId, { status, publish_url: publishUrl || undefined })
+    const video = ctx.store.findVideo(platformId)
+    const mergedData = dataPatch && video ? { ...video.data, ...dataPatch } : undefined
+    ctx.store.updateVideo(platformId, {
+      status,
+      publish_url: publishUrl || undefined,
+      ...(mergedData ? { data: mergedData } : {}),
+    })
     ctx.store.save()
   } catch (err) {
     ctx.logger.error(`Failed to update video status to ${status}`, err)

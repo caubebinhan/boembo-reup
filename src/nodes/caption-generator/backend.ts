@@ -50,6 +50,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       original: original.slice(0, 120),
       generated: caption.slice(0, 120),
       template,
+      message: `Caption transformed for ${video.platform_id || video.id}.`,
     })
 
     ctx.logger.info(`✍️ Caption: "${caption.slice(0, 80)}..."`)

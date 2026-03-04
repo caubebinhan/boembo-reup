@@ -102,6 +102,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:active', {
     videoId: video.platform_id,
     title: video.description?.substring(0, 50) || video.platform_id,
+    message: `Publishing ${video.platform_id} to @${account.username}...`,
   })
 
   // ── Dedup check ──
@@ -121,6 +122,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       videoId: video.platform_id, accountId: account.id, accountUsername: account.username,
       matchedBy, existingStatus: duplicate.status, existingVideoId: duplicate.published_video_id,
       existingVideoUrl: duplicate.published_url, sourcePlatformId, fileFingerprint, captionHash,
+      message: `Duplicate detected on @${account.username} (${matchedBy}).`,
     })
     ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:publish-status', {
       videoId: video.platform_id, status: 'duplicate', videoUrl: duplicate.published_url,
@@ -193,6 +195,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'publish:debug', {
         videoId: video.platform_id, success: false, errorType: result.errorType,
         error: result.error, warning: result.warning, debugArtifacts: result.debugArtifacts,
+        message: `Publish debug collected for ${video.platform_id}.`,
       })
     }
 
@@ -201,6 +204,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       ctx.logger.info(`CAPTCHA detected for video ${video.platform_id} - skipping`)
       ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'captcha:detected', {
         videoId: video.platform_id, debugArtifacts: result.debugArtifacts,
+        message: `CAPTCHA detected while publishing ${video.platform_id}.`,
       })
       setVideoStatus(ctx, video.platform_id, 'captcha')
       return { action: 'continue', data: { ...video, status: 'captcha' } }
@@ -212,6 +216,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'violation:detected', {
         videoId: video.platform_id, error: result.error, debugArtifacts: result.debugArtifacts,
         description: video.description, author: video.author,
+        message: `Policy violation for ${video.platform_id}.`,
       })
       setVideoStatus(ctx, video.platform_id, VIDEO_STATUS.PUBLISH_FAILED)
       return { action: 'continue', data: { ...video, status: VIDEO_STATUS.PUBLISH_FAILED } }
@@ -223,8 +228,9 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'session:expired', {
         videoId: video.platform_id, accountUsername: account.username,
         error: result.error, debugArtifacts: result.debugArtifacts,
+        message: `Session expired for @${account.username} while publishing ${video.platform_id}.`,
       })
-      setVideoStatus(ctx, video.platform_id, 'failed')
+      setVideoStatus(ctx, video.platform_id, 'failed', undefined, { error_type: 'session_expired' })
       // Return continue (don't crash loop) — session errors are per-account, not per-video
       return { action: 'continue', data: { ...video, status: 'session_expired' }, message: `Session expired on @${account.username} — please re-login` }
     }
@@ -350,11 +356,13 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       asyncVerifyTaskId: taskId,
     })
 
-    ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:published', {
+    ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:submitted', {
       videoId: video.platform_id, videoUrl: result.videoUrl,
+      status,
       warning: [result.warning, status === 'verification_incomplete' ? 'dashboard_verification_incomplete' : 'under_content_review'].filter(Boolean).join(' | '),
       isReviewing: result.isReviewing, verificationIncomplete: isVerificationIncomplete,
       asyncVerifyTaskId: taskId, debugArtifacts: result.debugArtifacts,
+      message: statusMessage,
     })
 
     if (result.warning) ctx.logger.info(`Publish warning: ${result.warning}`)
@@ -395,6 +403,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:published', {
     videoId: video.platform_id, videoUrl: result.videoUrl,
     warning: result.warning, isReviewing: false, debugArtifacts: result.debugArtifacts,
+    message: `Published ${video.platform_id}${result.videoUrl ? `: ${result.videoUrl}` : ''}`,
   })
   if (result.warning) ctx.logger.info(`Publish warning: ${result.warning}`)
   ctx.logger.info(`Published: ${result.videoUrl}`)

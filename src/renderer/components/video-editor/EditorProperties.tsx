@@ -28,6 +28,10 @@ export function EditorProperties({
     const isOverlayOperation = plugin?.group === 'overlay'
         || plugin?.previewHint === 'overlay-image'
         || plugin?.previewHint === 'overlay-text'
+    const isCropOperation = operation?.pluginId === 'builtin.crop'
+    const cropApplied = Boolean(operation?.params?.applyToTimeline)
+    const isWatermarkImageOperation = operation?.pluginId === 'builtin.watermark_image'
+    const isWatermarkTextOperation = operation?.pluginId === 'builtin.watermark_text'
     const visibleFields = useMemo(
         () => (operation && plugin)
             ? plugin.configSchema.filter(f => !f.condition || operation.params[f.condition.field] === f.condition.value)
@@ -40,15 +44,28 @@ export function EditorProperties({
             : visibleFields.filter(f => !['position'].includes(f.type)),
         [isOverlayOperation, visibleFields],
     )
+    const effectivePanelFields = useMemo(() => {
+        let fields = panelFields
+        if (isWatermarkImageOperation) {
+            fields = fields.filter(f => !['opacity', 'rotation', 'keepAspectRatio'].includes(f.key))
+        }
+        if (isWatermarkTextOperation) {
+            fields = fields.filter(f => f.key !== 'fontSize')
+        }
+        return fields
+    }, [panelFields, isWatermarkImageOperation, isWatermarkTextOperation])
     const canvasFields = useMemo(
         () => (operation && plugin)
             ? getCanvasNumericFields(operation, plugin, sourceAspect)
             : null,
         [operation, plugin, sourceAspect],
     )
-    const updateParam = (key: string, value: any) => {
+    const updateParams = (patch: Record<string, any>) => {
         if (!operation) return
-        onUpdateParams(operation.id, { ...operation.params, [key]: value })
+        onUpdateParams(operation.id, { ...operation.params, ...patch })
+    }
+    const updateParam = (key: string, value: any) => {
+        updateParams({ [key]: value })
     }
 
     if (!operation || !plugin) {
@@ -109,6 +126,30 @@ export function EditorProperties({
                 </div>
             )}
 
+            {isCropOperation && (
+                <div className="mx-3 mt-3 px-3 py-2.5 rounded-xl flex items-center justify-between gap-2"
+                    style={{ background: V.pastelBlue, border: '1px solid #93b4d466' }}>
+                    <div className="min-w-0">
+                        <p className="text-[11px] font-semibold" style={{ color: '#2e5a88' }}>Apply Crop To Next Layers</p>
+                        <p className="text-[10px] mt-0.5" style={{ color: '#2e5a8899' }}>
+                            Overlay and transform nodes after this crop will use cropped canvas space.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => updateParam('applyToTimeline', !cropApplied)}
+                        aria-pressed={cropApplied}
+                        className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold shrink-0 cursor-pointer transition"
+                        style={{
+                            background: cropApplied ? '#2e5a88' : V.card,
+                            color: cropApplied ? '#fff' : '#2e5a88',
+                            border: `1px solid ${cropApplied ? '#2e5a88' : '#93b4d4'}`,
+                        }}
+                    >
+                        {cropApplied ? 'Applied' : 'Apply Crop'}
+                    </button>
+                </div>
+            )}
+
             <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3">
                 {isOverlayOperation ? (
                     <div className="p-2.5 rounded-xl flex flex-col gap-3"
@@ -118,9 +159,108 @@ export function EditorProperties({
                                 Overlay Controls
                             </p>
                             <span className="text-[9px] font-medium" style={{ color: V.textDim }}>
-                                {panelFields.length} option{panelFields.length !== 1 ? 's' : ''}
+                                {effectivePanelFields.length} option{effectivePanelFields.length !== 1 ? 's' : ''}
                             </span>
                         </div>
+
+                        {isWatermarkImageOperation && (
+                            <div className="p-2 rounded-lg flex flex-col gap-2"
+                                style={{ background: V.card, border: `1px solid ${V.beige}` }}>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[10px] font-bold tracking-wide uppercase" style={{ color: V.textDim }}>Image Inspector</p>
+                                    <button
+                                        onClick={() => updateParams({
+                                            opacity: 0.8,
+                                            rotation: 0,
+                                            keepAspectRatio: true,
+                                        })}
+                                        className="px-2 py-1 rounded-md text-[9px] font-semibold cursor-pointer transition"
+                                        style={{ background: V.cream, color: V.textDim, border: `1px solid ${V.beige}` }}
+                                    >
+                                        Reset
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <QuickSlider
+                                        label="Opacity"
+                                        value={Number(operation.params.opacity ?? 0.8)}
+                                        min={0.1}
+                                        max={1}
+                                        step={0.05}
+                                        onChange={(next) => updateParam('opacity', next)}
+                                    />
+                                    <QuickSlider
+                                        label="Rotation"
+                                        value={Number(operation.params.rotation ?? 0)}
+                                        min={-180}
+                                        max={180}
+                                        step={1}
+                                        suffix="deg"
+                                        onChange={(next) => updateParam('rotation', next)}
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[10px] font-medium" style={{ color: V.textDim }}>Lock aspect ratio</p>
+                                    <button
+                                        onClick={() => updateParam('keepAspectRatio', !(operation.params.keepAspectRatio !== false))}
+                                        aria-pressed={operation.params.keepAspectRatio !== false}
+                                        className="relative shrink-0 cursor-pointer"
+                                        style={{ width: 36, height: 20 }}
+                                    >
+                                        <div
+                                            className="absolute inset-0 rounded-full transition-all"
+                                            style={{ background: operation.params.keepAspectRatio !== false ? V.accent : V.beige }}
+                                        />
+                                        <div
+                                            className="absolute top-1 w-3.5 h-3.5 rounded-full shadow transition-all"
+                                            style={{
+                                                left: operation.params.keepAspectRatio !== false ? 18 : 4,
+                                                background: operation.params.keepAspectRatio !== false ? '#fff' : V.textDim,
+                                            }}
+                                        />
+                                    </button>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                    {[12, 20, 30].map((pct) => (
+                                        <button
+                                            key={pct}
+                                            onClick={() => {
+                                                const imageAspect = Number(operation.params.imageAspect)
+                                                const h = Number.isFinite(imageAspect) && imageAspect > 0
+                                                    ? Math.max(5, Math.min(100, pct / imageAspect))
+                                                    : pct
+                                                updateParams({
+                                                    size: pct,
+                                                    overlaySize: { w: pct, h },
+                                                })
+                                            }}
+                                            className="px-2 py-1 rounded-md text-[9px] font-semibold cursor-pointer transition"
+                                            style={{ background: V.cream, color: V.textDim, border: `1px solid ${V.beige}` }}
+                                        >
+                                            {pct}%
+                                        </button>
+                                    ))}
+                                    <span className="text-[9px] ml-auto" style={{ color: V.textDim }}>Quick size</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {isWatermarkTextOperation && (
+                            <div className="p-2 rounded-lg flex items-center gap-1.5"
+                                style={{ background: V.card, border: `1px solid ${V.beige}` }}>
+                                {[18, 28, 40, 56].map((fontSize) => (
+                                    <button
+                                        key={fontSize}
+                                        onClick={() => updateParam('fontSize', fontSize)}
+                                        className="px-2 py-1 rounded-md text-[9px] font-semibold cursor-pointer transition"
+                                        style={{ background: V.cream, color: V.textDim, border: `1px solid ${V.beige}` }}
+                                    >
+                                        {fontSize}px
+                                    </button>
+                                ))}
+                                <span className="text-[9px] ml-auto" style={{ color: V.textDim }}>Text scale presets</span>
+                            </div>
+                        )}
 
                         {canvasFields && (
                             <div className="p-2 rounded-lg flex flex-col gap-2"
@@ -159,13 +299,13 @@ export function EditorProperties({
                             </div>
                         )}
 
-                        {panelFields.map(field => (
+                        {effectivePanelFields.map(field => (
                             <FieldRenderer key={field.key} field={field}
                                 value={operation.params[field.key] ?? field.default}
                                 onChange={val => updateParam(field.key, val)} />
                         ))}
 
-                        {panelFields.length === 0 && !canvasFields && (
+                        {effectivePanelFields.length === 0 && !canvasFields && (
                             <p className="text-center text-xs py-2" style={{ color: V.textDim }}>No overlay options</p>
                         )}
                     </div>
@@ -207,16 +347,60 @@ export function EditorProperties({
                                 </div>
                             </div>
                         )}
-                        {panelFields.map(field => (
+                        {effectivePanelFields.map(field => (
                             <FieldRenderer key={field.key} field={field}
                                 value={operation.params[field.key] ?? field.default}
                                 onChange={val => updateParam(field.key, val)} />
                         ))}
-                        {panelFields.length === 0 && (
+                        {effectivePanelFields.length === 0 && (
                             <p className="text-center text-xs py-6" style={{ color: V.textDim }}>No additional options</p>
                         )}
                     </>
                 )}
+            </div>
+        </div>
+    )
+}
+
+function QuickSlider({
+    label,
+    value,
+    min,
+    max,
+    step,
+    suffix,
+    onChange,
+}: {
+    label: string
+    value: number
+    min: number
+    max: number
+    step: number
+    suffix?: string
+    onChange: (v: number) => void
+}) {
+    const pct = ((value - min) / Math.max(0.0001, max - min)) * 100
+    return (
+        <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between">
+                <span className="text-[9px] font-bold uppercase tracking-wide" style={{ color: V.textDim }}>{label}</span>
+                <span className="text-[9px] font-mono" style={{ color: V.textDim }}>
+                    {Number(value.toFixed(2))}{suffix ? ` ${suffix}` : ''}
+                </span>
+            </div>
+            <div className="relative h-4 flex items-center">
+                <div className="absolute h-1 rounded-full w-full" style={{ background: V.beige }} />
+                <div className="absolute h-1 rounded-full" style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: V.accent }} />
+                <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={value}
+                    onChange={e => onChange(Number(e.target.value))}
+                    className="absolute w-full opacity-0 cursor-pointer h-full"
+                    aria-label={label}
+                />
             </div>
         </div>
     )
@@ -335,7 +519,7 @@ function FieldRenderer({ field, value, onChange }: { field: PluginConfigField; v
                     <button onClick={async () => {
                         try {
                             // @ts-ignore
-                            const r = await window.api?.invoke?.('dialog:open-file', { filters: [{ name: 'Media', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'mp3', 'wav'] }] })
+                            const r = await window.api?.invoke?.('dialog:open-file', { filters: [{ name: 'Media', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'mp3', 'wav', 'mp4', 'mov', 'avi', 'mkv', 'webm'] }] })
                             if (r) onChange(r)
                         } catch { }
                     }} aria-label={value ? 'Replace selected media file' : 'Choose media file'} className="w-full py-2.5 rounded-lg text-xs font-medium transition cursor-pointer text-center"

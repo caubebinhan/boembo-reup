@@ -36,6 +36,7 @@ interface TikTokVideo {
     scheduledAt?: number
     isActive?: boolean
     queueIndex?: number
+    data?: Record<string, any>
 }
 
 interface TikTokRepostState {
@@ -46,15 +47,18 @@ interface TikTokRepostState {
     queuedCount: number
     downloadedCount: number
     publishedCount: number
+    submittedCount: number
     failedCount: number
+    skippedCount: number
     publishFailedCount: number
     captchaCount: number
     activeVideoId?: string
+    activeInstanceId?: string
 }
 
 const INITIAL: TikTokRepostState = {
     phase: 'idle', videos: [], scannedCount: 0, queuedCount: 0, downloadedCount: 0,
-    publishedCount: 0, failedCount: 0, publishFailedCount: 0, captchaCount: 0,
+    publishedCount: 0, submittedCount: 0, failedCount: 0, skippedCount: 0, publishFailedCount: 0, captchaCount: 0,
 }
 
 // ── State Hook ──────────────────────────────────────
@@ -68,20 +72,30 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
             // @ts-ignore
             const logs: any[] = await window.api.invoke('campaign:get-logs', { id: campaignId, limit: 200 }) || []
 
+            const PHASE_MAP: Record<string, { phase: TikTokRepostState['phase']; msg: string }> = {
+                'start_gate': { phase: 'checking_time', msg: 'Đang chờ lịch khởi chạy...' },
+                'scanner_1': { phase: 'scanning', msg: 'Đang quét nguồn video...' },
+                'scheduler_1': { phase: 'scheduling', msg: 'Đang lên lịch publish...' },
+                'check_time_1': { phase: 'checking_time', msg: 'Đang chờ lịch publish...' },
+                'dedup_1': { phase: 'dedup', msg: 'Đang kiểm tra trùng...' },
+                'downloader_1': { phase: 'downloading', msg: 'Đang tải video...' },
+                'video_edit_1': { phase: 'editing', msg: 'Đang chỉnh sửa video...' },
+                'caption_1': { phase: 'captioning', msg: 'Đang tạo caption...' },
+                'account_dedup_1': { phase: 'dedup', msg: 'Đang kiểm tra tài khoản trùng...' },
+                'publisher_1': { phase: 'publishing', msg: 'Đang đăng video...' },
+                'cond_mode_check_1': { phase: 'monitoring', msg: 'Đang kiểm tra chế độ...' },
+                'monitor_1': { phase: 'monitoring', msg: 'Đang theo dõi video mới...' },
+                'finish_1': { phase: 'finished', msg: 'Hoàn tất' },
+            }
+
             let phase: TikTokRepostState['phase'] = 'idle'
             let phaseMessage = ''
             const sorted = [...logs].reverse()
             for (const log of sorted) {
-                const nodeId = log.node_id || ''
-                if (log.event === 'node:start' && nodeId.includes('scanner')) { phase = 'scanning'; phaseMessage = 'Đang quét nguồn video...' }
-                if (log.event === 'node:start' && nodeId.includes('scheduler')) { phase = 'scheduling'; phaseMessage = 'Đang lên lịch publish...' }
-                if (log.event === 'node:start' && nodeId.includes('downloader')) { phase = 'downloading'; phaseMessage = 'Đang tải video...' }
-                if (log.event === 'node:start' && nodeId.includes('video_edit')) { phase = 'editing'; phaseMessage = 'Đang chỉnh sửa video...' }
-                if (log.event === 'node:start' && nodeId.includes('caption')) { phase = 'captioning'; phaseMessage = 'Đang tạo caption...' }
-                if (log.event === 'node:start' && nodeId.includes('account_dedup')) { phase = 'dedup'; phaseMessage = 'Đang kiểm tra trùng...' }
-                if (log.event === 'node:start' && nodeId.includes('check_in_time')) { phase = 'checking_time'; phaseMessage = 'Đang chờ lịch publish...' }
-                if (log.event === 'node:start' && nodeId.includes('publisher')) { phase = 'publishing'; phaseMessage = 'Đang publish...' }
-                if (log.event === 'node:start' && nodeId.includes('monitor')) { phase = 'monitoring'; phaseMessage = 'Đang theo dõi video mới...' }
+                if (log.event === 'node:start') {
+                    const match = PHASE_MAP[log.instance_id]
+                    if (match) { phase = match.phase; phaseMessage = match.msg }
+                }
                 if (log.event === 'campaign:finished') { phase = 'finished'; phaseMessage = log.message || 'Hoàn tất' }
                 if (log.event === 'campaign:paused') { phase = 'paused'; phaseMessage = log.message || 'Đã tạm dừng' }
                 if (log.event === 'campaign:error') { phase = 'error'; phaseMessage = log.message || '' }
@@ -107,6 +121,7 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                     error: undefined,
                     scheduledAt: v.scheduled_for || undefined,
                     queueIndex: v.queue_index ?? undefined,
+                    data: meta,
                 }
             })
 
@@ -119,11 +134,14 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                 scannedCount: videos.length,
                 queuedCount: videos.filter(v => v.status === 'queued').length,
                 downloadedCount: videos.filter(v => ['downloaded', 'captioned', 'publishing', 'published', 'verification_incomplete'].includes(v.status)).length,
-                publishedCount: videos.filter(v => ['published', 'verification_incomplete'].includes(v.status)).length,
-                failedCount: videos.filter(v => ['failed', 'publish_failed'].includes(v.status)).length,
-                publishFailedCount: videos.filter(v => v.status === 'failed' && v.local_path).length,
+                publishedCount: videos.filter(v => ['published', 'verified'].includes(v.status)).length,
+                submittedCount: videos.filter(v => ['under_review', 'verification_incomplete'].includes(v.status)).length,
+                failedCount: videos.filter(v => ['failed', 'publish_failed', 'captcha'].includes(v.status)).length,
+                skippedCount: videos.filter(v => ['duplicate', 'skipped'].includes(v.status)).length,
+                publishFailedCount: videos.filter(v => v.status === 'publish_failed').length,
                 captchaCount: videos.filter(v => v.status === 'captcha').length,
                 activeVideoId: prev.activeVideoId,
+                activeInstanceId: prev.activeInstanceId,
             }))
         } catch (err) { console.error('[TikTokRepostDetail] Failed to rebuild state:', err) }
     }, [campaignId])
@@ -138,13 +156,16 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
         // @ts-ignore
         const offNodeEvent = window.api?.on('node:event', (ev: any) => {
             if (ev.campaignId !== campaignId) return
-            if (ev.event === 'video:active') {
-                setState(prev => ({ ...prev, activeVideoId: ev.data?.videoId, videos: prev.videos.map(v => ({ ...v, isActive: v.platform_id === ev.data?.videoId })) }))
+            // Set activeVideoId for any processing event that carries a videoId
+            const PROCESSING_EVENTS = ['video:active', 'video:downloading', 'video:editing',
+                'video-edit:started', 'caption:transformed']
+            if (PROCESSING_EVENTS.includes(ev.event) && ev.data?.videoId) {
+                setState(prev => ({ ...prev, activeVideoId: ev.data.videoId, activeInstanceId: ev.instanceId, videos: prev.videos.map(v => ({ ...v, isActive: v.platform_id === ev.data.videoId })) }))
             } else if (ev.event === 'captcha:detected') {
                 setState(prev => ({ ...prev, videos: prev.videos.map(v => v.platform_id === ev.data?.videoId ? { ...v, status: 'captcha' as const } : v), captchaCount: prev.captchaCount + 1 }))
             } else if (ev.event === 'violation:detected') {
                 setState(prev => ({ ...prev, videos: prev.videos.map(v => v.platform_id === ev.data?.videoId ? { ...v, status: 'publish_failed' as const, error: ev.data?.error } : v) }))
-            } else if (ev.event === 'video:published') {
+            } else if (ev.event === 'video:published' || ev.event === 'video:submitted') {
                 rebuild()
             } else if (ev.event === 'video:publish-status') {
                 setState(prev => ({
@@ -169,6 +190,23 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                         } : v
                     ),
                 }))
+            }
+
+            // ── Clear activeVideoId on any terminal video event ──
+            const TERMINAL_STATUSES = new Set(['published', 'verified', 'under_review', 'verification_incomplete', 'failed', 'publish_failed', 'captcha', 'duplicate', 'skipped', 'session_expired'])
+            const clearVid = ev.data?.videoId
+            if (clearVid) {
+                const shouldClear =
+                    ['video:published', 'violation:detected', 'captcha:detected', 'session:expired', 'video:duplicate-detected'].includes(ev.event)
+                    || (ev.event === 'video:publish-status' && TERMINAL_STATUSES.has(ev.data?.status))
+                    || (ev.event === 'node:failed' && !!ev.data?.videoId)
+                if (shouldClear) {
+                    setState(prev => ({
+                        ...prev,
+                        activeVideoId: prev.activeVideoId === clearVid ? undefined : prev.activeVideoId,
+                        videos: prev.videos.map(v => v.platform_id === clearVid ? { ...v, isActive: false } : v),
+                    }))
+                }
             }
         })
         return () => {
@@ -220,24 +258,76 @@ function MiniProgressRing({ percent, color }: { percent: number; color: string }
 }
 
 // ── Video Card ──────────────────────────────────
-function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: number; campaignId: string }) {
+function VideoCard({ video, index, campaignId, phase, activeInstanceId }: { video: TikTokVideo; index: number; campaignId: string; phase: string; activeInstanceId?: string }) {
     const api = (window as any).api
     const sc = getStatusUI(video.status)
     const isActive = video.isActive
     const [historyExpanded, setHistoryExpanded] = useState(false)
+    const [retrying, setRetrying] = useState(false)
     const scheduledTime = video.scheduledAt ? new Date(video.scheduledAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : null
     const tiktokSourceUrl = video.platform_id ? `https://www.tiktok.com/@${video.author || '_'}/video/${video.platform_id}` : null
+
+    // Which node to retry — always show for retryable statuses (server dedup prevents double-queue)
+    const RETRY_STATUS_NODE: Record<string, string> = {
+        'publish_failed': 'publisher_1',
+        'failed': 'publisher_1',
+        'captcha': 'publisher_1',
+    }
+    const retryNodeInstanceId = RETRY_STATUS_NODE[video.status]
+    const canRetry = !!retryNodeInstanceId
+
+    const handleRetry = async () => {
+        if (!retryNodeInstanceId || retrying) return
+        setRetrying(true)
+        try {
+            await api?.invoke?.('pipeline:retry-node', {
+                campaignId,
+                instanceId: retryNodeInstanceId,
+                videoId: video.platform_id,
+            })
+            // Don't permanently hide — if job runs and fails again the button must reappear.
+            // The 3s polling cycle will update video.status away from 'publish_failed' while job runs.
+        } catch (err) {
+            console.error('[VideoCard] Retry failed:', err)
+        } finally {
+            setRetrying(false)
+        }
+    }
 
     return (
         <div className="animate-slide-up" style={{ opacity: video.status === 'skipped' ? 0.5 : 1, animationDelay: `${index * 20}ms` }}>
             <div className={`rounded-xl p-3 transition-all bg-white border hover:shadow-md ${isActive ? 'shadow-md border-2' : 'border-slate-200 shadow-sm'}`}
                 style={{ borderColor: isActive ? sc.color : undefined, boxShadow: isActive ? `0 2px 12px ${sc.color}20` : undefined }}>
 
-                {isActive && (
-                    <div className="flex items-center gap-1.5 mb-1.5 text-[10px] uppercase tracking-wider font-bold" style={{ color: sc.color }}>
-                        <span className="animate-pulse">●</span> Publishing now...
-                    </div>
-                )}
+                {isActive && (() => {
+                    const INSTANCE_LABELS: Record<string, string> = {
+                        'downloader_1': '⬇️ Đang tải...',
+                        'video_edit_1': '🎬 Đang chỉnh sửa...',
+                        'caption_1': '✍️ Đang tạo caption...',
+                        'dedup_1': '🔍 Đang kiểm tra trùng...',
+                        'account_dedup_1': '🔍 Đang kiểm tra tài khoản...',
+                        'publisher_1': '📤 Đang đăng...',
+                        'check_time_1': '⏰ Đang chờ lịch...',
+                    }
+                    const PHASE_LABELS: Record<string, string> = {
+                        downloading: '⬇️ Đang tải...',
+                        editing: '🎬 Đang chỉnh sửa...',
+                        captioning: '✍️ Đang tạo caption...',
+                        dedup: '🔍 Đang kiểm tra trùng...',
+                        publishing: '📤 Đang đăng...',
+                        checking_time: '⏰ Đang chờ lịch...',
+                        scheduling: '📋 Đang lên lịch...',
+                        scanning: '🔎 Đang quét...',
+                        monitoring: '👁 Đang theo dõi...',
+                    }
+                    // Prefer instance-level label, fallback to phase-level
+                    const label = (activeInstanceId && INSTANCE_LABELS[activeInstanceId]) || PHASE_LABELS[phase] || '⚡ Đang xử lý...'
+                    return (
+                        <div className="flex items-center gap-1.5 mb-1.5 text-[10px] uppercase tracking-wider font-bold" style={{ color: sc.color }}>
+                            <span className="animate-pulse">●</span> {label}
+                        </div>
+                    )
+                })()}
 
                 <div className="flex items-start gap-3">
                     {video.thumbnail ? (
@@ -346,6 +436,22 @@ function VideoCard({ video, index, campaignId }: { video: TikTokVideo; index: nu
                                 Resolve CAPTCHA
                             </button>
                         )}
+
+                        {/* Quick Retry button on VideoCard for failed publish statuses */}
+                        {canRetry && video.status !== 'captcha' && (
+                            <button
+                                onClick={handleRetry}
+                                disabled={retrying}
+                                className="mt-1.5 w-full text-[10px] font-bold px-2 py-1.5 rounded-lg border transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                                style={{
+                                    background: retrying ? '#f1f5f9' : '#eff6ff',
+                                    color: retrying ? '#94a3b8' : '#2563eb',
+                                    borderColor: retrying ? '#e2e8f0' : '#bfdbfe',
+                                }}
+                            >
+                                {retrying ? '⏳ Đang thử lại...' : '🔄 Thử lại bước đăng'}
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -443,11 +549,11 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
     const phase = PHASE_UI[state.phase] || PHASE_UI.idle
     const percent = state.scannedCount > 0 ? Math.round((state.publishedCount / state.scannedCount) * 100) : 0
 
-    // Per-source video counts (match by author name = source name)
+    // Per-source video counts (match by source_meta.source_name, fallback to author)
     const videosBySource = state.videos.reduce((acc: Record<string, TikTokVideo[]>, v) => {
-        const author = v.author || 'unknown'
-        if (!acc[author]) acc[author] = []
-        acc[author].push(v)
+        const sourceName = v.data?.source_meta?.source_name?.replace(/^@/, '').trim() || v.author || 'unknown'
+        if (!acc[sourceName]) acc[sourceName] = []
+        acc[sourceName].push(v)
         return acc
     }, {})
 
@@ -470,9 +576,10 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
                     {sources.map((s: any, i: number) => {
                         const sv = videosBySource[s.name] || []
-                        const pub = sv.filter((v: TikTokVideo) => ['published', 'verification_incomplete'].includes(v.status)).length
+                        const pub = sv.filter((v: TikTokVideo) => ['published', 'verified'].includes(v.status)).length
+                        const submitted = sv.filter((v: TikTokVideo) => ['under_review', 'verification_incomplete'].includes(v.status)).length
                         const q = sv.filter((v: TikTokVideo) => v.status === 'queued').length
-                        const fail = sv.filter((v: TikTokVideo) => v.status === 'failed').length
+                        const fail = sv.filter((v: TikTokVideo) => ['failed', 'publish_failed', 'captcha'].includes(v.status)).length
                         const total = sv.length
                         return (
                             <div key={s.name || `src-${i}`} className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm text-xs">
@@ -484,6 +591,7 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                                 <span className="text-slate-300">·</span>
                                 <span className="text-slate-400">{total} video</span>
                                 {pub > 0 && <span className="text-emerald-600 font-bold">✓{pub}</span>}
+                                {submitted > 0 && <span className="text-amber-500 font-bold">⏳{submitted}</span>}
                                 {q > 0 && <span className="text-amber-600 font-bold">⏳{q}</span>}
                                 {fail > 0 && <span className="text-red-500 font-bold">✗{fail}</span>}
                             </div>
@@ -558,7 +666,7 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                                             )
                                             lastDateKey = dateKey
                                         }
-                                        elements.push(<VideoCard key={video.platform_id || i} video={video} index={i} campaignId={campaignId} />)
+                                        elements.push(<VideoCard key={video.platform_id || i} video={video} index={i} campaignId={campaignId} phase={state.phase} activeInstanceId={state.activeInstanceId} />)
                                     }
                                     return elements
                                 })()}
@@ -660,9 +768,11 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                                         <div className="flex flex-col gap-3">
                                             {sources.map((s: any, i: number) => {
                                                 const sourceVideos = videosBySource[s.name] || []
-                                                const pubCount = sourceVideos.filter(v => ['published', 'verification_incomplete'].includes(v.status)).length
+                                                const pubCount = sourceVideos.filter(v => ['published', 'verified'].includes(v.status)).length
+                                                const subCount = sourceVideos.filter(v => ['under_review', 'verification_incomplete'].includes(v.status)).length
                                                 const qCount = sourceVideos.filter(v => v.status === 'queued').length
-                                                const failCount = sourceVideos.filter(v => v.status === 'failed').length
+                                                const failCount = sourceVideos.filter(v => ['failed', 'publish_failed', 'captcha'].includes(v.status)).length
+                                                const skipCount = sourceVideos.filter(v => ['duplicate', 'skipped'].includes(v.status)).length
                                                 const scanLabel = buildScanLabel(s)
 
                                                 return (
@@ -699,9 +809,11 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
                                                         {sourceVideos.length > 0 ? (
                                                             <div className="flex items-center gap-2 flex-wrap text-[10px] pt-0.5">
                                                                 <span className="text-slate-500 font-medium">{sourceVideos.length} video</span>
-                                                                {pubCount > 0 && <span className="text-emerald-600 font-bold">✓ {pubCount} published</span>}
+                                                                {pubCount > 0 && <span className="text-emerald-600 font-bold">✓ {pubCount} đã đăng</span>}
+                                                                {subCount > 0 && <span className="text-amber-500 font-bold">⏳ {subCount} chờ duyệt</span>}
                                                                 {qCount > 0 && <span className="text-amber-600 font-bold">⏳ {qCount} queued</span>}
                                                                 {failCount > 0 && <span className="text-red-600 font-bold">✗ {failCount} failed</span>}
+                                                                {skipCount > 0 && <span className="text-slate-400">⏭ {skipCount} skipped</span>}
                                                             </div>
                                                         ) : (
                                                             <span className="text-[10px] text-slate-300">Chưa có video từ nguồn này</span>

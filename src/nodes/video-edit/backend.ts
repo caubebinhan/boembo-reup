@@ -12,6 +12,15 @@ import type { VideoEditOperation } from '@core/video-edit'
 import { ffmpegProcessor } from '@main/ffmpeg/FFmpegAdapter'
 import { statSync } from 'node:fs'
 
+function normalizeProgressMessage(raw: string): string {
+  return String(raw || '')
+    .replace(/ﾂｷ/g, '|')
+    .replace(/[•·]/g, '|')
+    .replace(/\s+\|\s+/g, ' | ')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 export default async function execute(
   input: Record<string, any>,
   ctx: NodeExecutionContext,
@@ -37,8 +46,9 @@ export default async function execute(
     const defaults = videoEditPluginRegistry.getDefaults()
     const hasEnabledDefaults = defaults.some((d) => d.enabled)
     if (!hasEnabledDefaults) {
-      ctx.logger.info('⏭️ Bỏ qua chỉnh sửa — không có thao tác nào bật')
-      return { data: input, message: 'Bỏ qua chỉnh sửa — không có thao tác nào bật' }
+      const skipMsg = 'Video edit skipped: no enabled operations.'
+      ctx.logger.info(skipMsg)
+      return { data: input, message: skipMsg }
     }
   }
 
@@ -47,6 +57,7 @@ export default async function execute(
   ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'video_edit_1', 'video-edit:started', {
     videoId,
     operations: operations.filter((o) => o.enabled).map((o) => o.pluginId),
+    message: `Video edit started for ${videoId}.`,
   })
 
   try {
@@ -59,10 +70,14 @@ export default async function execute(
         const assets = ctx.params?.videoEditAssets || {}
         return assets[assetId]?.path || assetId
       },
-      onProgress: (msg) => ctx.onProgress(msg),
+      onProgress: (msg) => ctx.onProgress(normalizeProgressMessage(msg)),
       onOperationApplied: (opId, pluginId, durationMs) => {
         ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'video_edit_1', 'video-edit:operation-applied', {
-          videoId, operationId: opId, pluginId, durationMs,
+          videoId,
+          operationId: opId,
+          pluginId,
+          durationMs,
+          message: `Applied ${pluginId} on ${videoId}.`,
         })
       },
     })
@@ -87,9 +102,10 @@ export default async function execute(
       totalDurationMs: result.totalDurationMs,
       operationCount: result.appliedOperations.length,
       fileSizeMB,
+      message: `Video edit completed for ${videoId} (${result.appliedOperations.length} operations).`,
     })
 
-    ctx.logger.info(`VideoEdit: done in ${result.totalDurationMs}ms — ${result.appliedOperations.length} operation(s)`)
+    ctx.logger.info(`VideoEdit complete: ${result.appliedOperations.length} operation(s) in ${result.totalDurationMs}ms`)
 
     return {
       data: {
@@ -108,14 +124,16 @@ export default async function execute(
     const msg = error.message || String(error)
     ctx.logger.error(`VideoEdit failed: ${msg}`)
     ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'video_edit_1', 'video-edit:failed', {
-      videoId, error: msg,
+      videoId,
+      error: msg,
+      message: `Video edit failed for ${videoId}: ${msg}`,
     })
 
     // Mark the video as failed so the UI shows the edit failure reason
     if (ctx.store?.updateVideo && video.platform_id) {
       ctx.store.updateVideo(video.platform_id, {
         status: 'failed',
-        data: { ...video, error: `Edit failed: ${msg}` },
+        data: { ...video, error: `Video edit failed: ${msg}` },
       })
       ctx.store.save()
     }
@@ -123,8 +141,8 @@ export default async function execute(
     // Hard fail — stop the pipeline for this video.
     // Common cause: FFmpeg not installed → "ffmpeg_or_ffprobe_not_available"
     const userMessage = msg.includes('ffmpeg_or_ffprobe_not_available')
-      ? '🎬 Thiếu FFmpeg — cần cài đặt lại'
-      : `❌ Lỗi chỉnh sửa video: ${msg}`
+      ? 'FFmpeg is missing. Please install FFmpeg/FFprobe.'
+      : `Video edit failed: ${msg}`
 
     ctx.alert('error', userMessage)
     throw new Error(userMessage)

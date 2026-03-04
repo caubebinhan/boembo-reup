@@ -4,6 +4,8 @@
  * Multi-instance: user can add multiple text overlays.
  */
 import type { VideoEditPlugin, VideoFilter } from '../../types'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 
 const watermarkText: VideoEditPlugin = {
   id: 'builtin.watermark_text',
@@ -33,6 +35,19 @@ const watermarkText: VideoEditPlugin = {
       max: 120,
       step: 2,
       unit: 'px',
+    },
+    {
+      key: 'fontFamily',
+      type: 'select',
+      label: 'Font family',
+      default: 'Arial',
+      options: [
+        { value: 'Arial', label: 'Arial' },
+        { value: 'Verdana', label: 'Verdana' },
+        { value: 'Tahoma', label: 'Tahoma' },
+        { value: 'Georgia', label: 'Georgia' },
+        { value: 'Courier New', label: 'Courier New' },
+      ],
     },
     {
       key: 'fontColor',
@@ -74,6 +89,17 @@ const watermarkText: VideoEditPlugin = {
       label: 'Visible during',
       description: 'Leave empty for entire video',
     },
+    {
+      key: 'timeJitterSec',
+      type: 'slider',
+      label: 'Random time jitter',
+      default: 0,
+      min: 0,
+      max: 10,
+      step: 0.1,
+      unit: 's',
+      description: 'Randomly shifts start/end time on each render',
+    },
   ],
 
   buildFilters(params, ctx) {
@@ -81,8 +107,10 @@ const watermarkText: VideoEditPlugin = {
     if (!text) return []
 
     const fontSize = params.fontSize ?? 24
-    const fontColor = (params.fontColor || '#ffffff').replace('#', '')
-    const bgColor = (params.bgColor || '#000000').replace('#', '')
+    const fontFamily = String(params.fontFamily || 'Arial')
+    const fontfile = resolveFontFile(fontFamily)
+    const fontColor = normalizeDrawtextColor(params.fontColor || '#ffffff')
+    const bgColor = normalizeDrawtextColor(params.bgColor || '#000000')
     const bgOpacity = params.bgOpacity ?? 0.5
     const outline = params.outline ?? true
     const padding = 20
@@ -93,10 +121,12 @@ const watermarkText: VideoEditPlugin = {
     const drawtextOpts: Record<string, any> = {
       text: escapeDrawtext(text),
       fontsize: fontSize,
+      font: fontFamily,
       fontcolor: fontColor,
       x: pos.x,
       y: pos.y,
     }
+    if (fontfile) drawtextOpts.fontfile = fontfile
 
     // Background box
     if (bgOpacity > 0) {
@@ -115,9 +145,10 @@ const watermarkText: VideoEditPlugin = {
     // Time range enable
     const start = params.timeRange?.start
     const end = params.timeRange?.end
-    if (start != null || end != null) {
-      const s = start ?? 0
-      const e = end ?? ctx.inputDurationSec
+    const jitter = Math.max(0, Number(params.timeJitterSec ?? 0))
+    if (start != null || end != null || jitter > 0) {
+      const s = clampTime((start ?? 0) + randomJitter(jitter), 0, ctx.inputDurationSec)
+      const e = clampTime((end ?? ctx.inputDurationSec) + randomJitter(jitter), s + 0.05, ctx.inputDurationSec)
       drawtextOpts.enable = `between(t,${s},${e})`
     }
 
@@ -147,6 +178,34 @@ function escapeDrawtext(text: string): string {
     .replace(/%/g, '%%')
 }
 
+function normalizeDrawtextColor(value: string): string {
+  const raw = String(value || '').trim()
+  if (!raw) return '0xffffff'
+  if (raw.startsWith('#') && /^#[0-9a-fA-F]{6}$/.test(raw)) return `0x${raw.slice(1)}`
+  return raw
+}
+
+const FONT_FILE_CANDIDATES: Record<string, string[]> = {
+  Arial: ['arial.ttf'],
+  Verdana: ['verdana.ttf'],
+  Tahoma: ['tahoma.ttf'],
+  Georgia: ['georgia.ttf'],
+  'Courier New': ['cour.ttf', 'courbd.ttf'],
+}
+
+function resolveFontFile(fontFamily: string): string | null {
+  const candidates = FONT_FILE_CANDIDATES[fontFamily] || []
+  if (candidates.length === 0) return null
+
+  const winDir = process.env.WINDIR || 'C:/Windows'
+  for (const file of candidates) {
+    const fullPath = join(winDir, 'Fonts', file)
+    if (!existsSync(fullPath)) continue
+    return fullPath.replace(/\\/g, '/')
+  }
+  return null
+}
+
 function resolveTextPosition(
   position: string | { x: number; y: number },
   padding: number,
@@ -173,6 +232,17 @@ function resolveTextPosition(
   }
 
   return POSITIONS[p] || POSITIONS['bottom-center']
+}
+
+function randomJitter(maxSeconds: number): number {
+  if (maxSeconds <= 0) return 0
+  return (Math.random() * 2 - 1) * maxSeconds
+}
+
+function clampTime(value: number, min: number, max: number): number {
+  const v = Number.isFinite(value) ? value : min
+  if (max <= min) return max
+  return Math.max(min, Math.min(max, v))
 }
 
 export default watermarkText

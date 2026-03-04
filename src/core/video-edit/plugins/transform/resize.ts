@@ -5,12 +5,20 @@
  */
 import type { VideoEditPlugin, VideoFilter } from '../../types'
 
+function normalizePadColor(value: unknown): string {
+  const raw = String(value || '').trim()
+  if (/^#[0-9a-fA-F]{6}$/.test(raw)) return `0x${raw.slice(1)}`
+  if (/^0x[0-9a-fA-F]{6}$/.test(raw)) return raw
+  return 'black'
+}
+
 const resize: VideoEditPlugin = {
   id: 'builtin.resize',
   name: 'Resize / Scale',
   group: 'transform',
   icon: 'scale',
   description: 'Resize video to target dimensions',
+  previewHint: 'transform',
 
   configSchema: [
     {
@@ -47,6 +55,13 @@ const resize: VideoEditPlugin = {
       default: false,
       description: 'Allow making the video larger than original',
     },
+    {
+      key: 'padColor',
+      type: 'color',
+      label: 'Padding color',
+      default: '#000000',
+      description: 'Used when fitting/scaling smaller than the canvas',
+    },
   ],
 
   buildFilters(params, ctx) {
@@ -55,6 +70,42 @@ const resize: VideoEditPlugin = {
     let h = params.height ?? -1
     const mode = params.scaleMode || 'fit'
     const upscale = params.upscaleAllowed ?? false
+    const padColor = normalizePadColor(params.padColor)
+    const widthPercent = params.widthPercent
+    const heightPercent = params.heightPercent
+    const offset = params.offsetPercent || params.canvasRect || null
+
+    // Canvas interactive mode: scale relative to input size and place inside original frame.
+    if (widthPercent != null || heightPercent != null || offset) {
+      const wp = Math.max(5, Math.min(100, Number(widthPercent ?? 100)))
+      const hp = Math.max(5, Math.min(100, Number(heightPercent ?? 100)))
+      const targetW = Math.max(16, Math.round((ctx.inputWidth * wp) / 100) & ~1)
+      const targetH = Math.max(16, Math.round((ctx.inputHeight * hp) / 100) & ~1)
+      const xPercent = Math.max(0, Math.min(100 - wp, Number(offset?.x ?? ((100 - wp) / 2))))
+      const yPercent = Math.max(0, Math.min(100 - hp, Number(offset?.y ?? ((100 - hp) / 2))))
+      const xPad = Math.round((ctx.inputWidth * xPercent) / 100)
+      const yPad = Math.round((ctx.inputHeight * yPercent) / 100)
+
+      filters.push({
+        filter: 'scale',
+        options: {
+          w: targetW,
+          h: targetH,
+          force_original_aspect_ratio: mode === 'stretch' ? undefined : 'decrease',
+        },
+      })
+      filters.push({
+        filter: 'pad',
+        options: {
+          w: ctx.inputWidth,
+          h: ctx.inputHeight,
+          x: Math.max(0, Math.min(ctx.inputWidth - targetW, xPad)),
+          y: Math.max(0, Math.min(ctx.inputHeight - targetH, yPad)),
+          color: padColor,
+        },
+      })
+      return filters
+    }
 
     // If both are -1, nothing to do
     if (w === -1 && h === -1) return filters
@@ -75,15 +126,15 @@ const resize: VideoEditPlugin = {
         filters.push({
           filter: 'scale',
           options: {
-            w: w === -1 ? '-1' : w,
-            h: h === -1 ? '-1' : h,
+            w: w === -1 ? '-2' : w,
+            h: h === -1 ? '-2' : h,
             force_original_aspect_ratio: 'decrease',
           },
         })
         if (w !== -1 && h !== -1) {
           filters.push({
             filter: 'pad',
-            options: { w, h, x: '(ow-iw)/2', y: '(oh-ih)/2', color: 'black' },
+            options: { w, h, x: '(ow-iw)/2', y: '(oh-ih)/2', color: padColor },
           })
         }
         break
@@ -93,8 +144,8 @@ const resize: VideoEditPlugin = {
         filters.push({
           filter: 'scale',
           options: {
-            w: w === -1 ? '-1' : w,
-            h: h === -1 ? '-1' : h,
+            w: w === -1 ? '-2' : w,
+            h: h === -1 ? '-2' : h,
             force_original_aspect_ratio: 'increase',
           },
         })

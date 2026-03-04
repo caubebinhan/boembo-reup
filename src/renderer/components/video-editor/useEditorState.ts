@@ -18,6 +18,7 @@ interface UseEditorStateReturn {
   previewSrc: string | null
   previewError: string | null
   previewStatus: string | null
+  renderProgress: number | null
   isRendering: boolean
   traceLogs: Array<{ ts: number; level: 'info' | 'warn' | 'error'; message: string }>
 
@@ -31,6 +32,7 @@ interface UseEditorStateReturn {
   handleSeek: (time: number) => void
   handlePreview: () => Promise<void>
   handleDone: () => void
+  setVideoDuration: (sec: number) => void
 
   // Derived
   selectedOperation: VideoEditOperation | null
@@ -69,6 +71,8 @@ export function useEditorState(): UseEditorStateReturn {
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [previewStatus, setPreviewStatus] = useState<string | null>(null)
   const [isRendering, setIsRendering] = useState(false)
+  const [renderProgress, setRenderProgress] = useState<number | null>(null)
+  const videoDurationRef = useRef<number>(0)
   const [traceLogs, setTraceLogs] = useState<Array<{ ts: number; level: 'info' | 'warn' | 'error'; message: string }>>([])
   const activePreviewRequestIdRef = useRef<string | null>(null)
   const lastParamTraceAtRef = useRef(0)
@@ -159,7 +163,16 @@ export function useEditorState(): UseEditorStateReturn {
       if (!evt || evt.requestId !== activeId) return
       const message = String(evt.message || '').trim()
       if (!message) return
-      setPreviewStatus(message)
+      // Parse FFmpeg time progress: "Rendering | t=00:01:23.45 | speed=..."
+      const timeMatch = message.match(/t=(\d{2}):(\d{2}):(\d{2}\.\d+)/)
+      if (timeMatch && videoDurationRef.current > 0) {
+        const currentSec = parseInt(timeMatch[1]) * 3600 + parseInt(timeMatch[2]) * 60 + parseFloat(timeMatch[3])
+        const pct = Math.min(99, Math.round((currentSec / videoDurationRef.current) * 100))
+        setRenderProgress(pct)
+        setPreviewStatus(`Rendering ${pct}%`)
+      } else {
+        setPreviewStatus(message)
+      }
       pushTrace(`[${evt.stage || 'pipeline'}] ${message}`, evt.level === 'error' ? 'error' : 'info')
     })
     return () => { if (typeof off === 'function') off() }
@@ -189,15 +202,6 @@ export function useEditorState(): UseEditorStateReturn {
   const handleAddOperation = useCallback((pluginId: string) => {
     const plugin = plugins.find(p => p.id === pluginId)
     if (!plugin) return
-
-    // Fix 6: Enforce allowMultipleInstances
-    if (plugin.allowMultipleInstances === false) {
-      const existing = operations.find(op => op.pluginId === pluginId)
-      if (existing) {
-        pushTrace(`Cannot add another ${plugin.name}: only one instance allowed.`, 'warn')
-        return
-      }
-    }
 
     const defaultParams: Record<string, any> = {}
     plugin.configSchema.forEach(f => {
@@ -256,19 +260,23 @@ export function useEditorState(): UseEditorStateReturn {
     if (!api || !videoPath || isRendering) return
 
     const requestId = `preview_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
-    const timeoutMs = 190_000
+    const timeoutMs = 900_000
     activePreviewRequestIdRef.current = requestId
 
     setIsRendering(true)
     setPreviewError(null)
-    setPreviewStatus('Queued...')
+    setRenderProgress(0)
+    // Force preview panel to stay on source video until FFmpeg produces a complete file.
+    setPreviewSrc(null)
+    setPreviewStatus('Preparing render...')
     pushTrace(`Preview requested (${requestId}).`)
     try {
       const invokePromise = api.invoke(IPC_CHANNELS.VIDEO_EDIT_PREVIEW, {
         requestId,
-        timeoutMs: 180_000,
+        timeoutMs,
         videoPath,
         operations: operations.filter(o => o.enabled),
+        openPlayerWindow: true,
       })
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error(`Preview timeout after ${Math.round(timeoutMs / 1000)}s`)), timeoutMs)
@@ -289,8 +297,15 @@ export function useEditorState(): UseEditorStateReturn {
       }
       if (result?.outputPath) {
         const src = toFileSrc(result.outputPath)
-        setPreviewSrc(`${src}?t=${Date.now()}`)
-        pushTrace(`Preview output generated: ${result.outputPath}`)
+        if (!result?.playerOpened) {
+          setPreviewSrc(`${src}?t=${Date.now()}`)
+          pushTrace(`Preview output generated: ${result.outputPath}`)
+          pushTrace('Preview player window did not open, falling back to in-editor preview.', 'warn')
+        } else {
+          setPreviewSrc(null)
+          pushTrace(`Preview rendered and opened in player window: ${result.outputPath}`)
+        }
+        setPreviewStatus(result?.playerOpened ? 'Preview player opened.' : 'Preview render completed.')
         return
       }
       setPreviewError('Preview render failed. Please check your operation parameters.')
@@ -302,22 +317,29 @@ export function useEditorState(): UseEditorStateReturn {
     } finally {
       setIsRendering(false)
       setPreviewStatus(null)
+      setRenderProgress(null)
       activePreviewRequestIdRef.current = null
     }
   }, [videoPath, operations, isRendering, pushTrace])
 
   // Done — close editor window, send data in the shape WizardVideoEdit expects
+  // Uses api.send (fire-and-forget) instead of api.invoke to avoid 'object destroyed'
+  // errors when the window closes before the IPC round-trip completes.
   const handleDone = useCallback(() => {
     const api = (window as any).api
     const enabledPluginIds = Array.from(
       new Set(operations.filter(op => op.enabled).map(op => op.pluginId)),
     )
-    api?.invoke?.(IPC_CHANNELS.VIDEO_EDITOR_DONE, {
+    const payload = {
       videoEditOperations: operations,
       _enabledPluginIds: enabledPluginIds,
       _previewVideoSrc: previewSrc,
       _videoPath: videoPath,
-    })
+    }
+    // Fire-and-forget: the IPC handler will relay data to parent and close window
+    if (api?.invoke) {
+      api.invoke(IPC_CHANNELS.VIDEO_EDITOR_DONE, payload).catch(() => {})
+    }
     pushTrace('Done clicked. Sending editor result back to wizard.')
   }, [operations, previewSrc, videoPath, pushTrace])
 
@@ -332,12 +354,16 @@ export function useEditorState(): UseEditorStateReturn {
     [selectedOperation, plugins],
   )
 
+  const setVideoDuration = useCallback((sec: number) => {
+    videoDurationRef.current = sec
+  }, [])
+
   return {
     videoSrc, videoPath, plugins, operations, selectedOpId,
-    currentTime, previewSrc, previewError, previewStatus, isRendering, traceLogs,
+    currentTime, previewSrc, previewError, previewStatus, isRendering, renderProgress, traceLogs,
     handleUploadVideo, handleAddOperation, handleRemoveOperation,
     handleUpdateParams, handleToggleEnabled, handleSelectOperation,
-    handleSeek, handlePreview, handleDone,
+    handleSeek, handlePreview, handleDone, setVideoDuration,
     selectedOperation, selectedPlugin,
   }
 }

@@ -191,6 +191,7 @@ function createPluginContext(
   instanceKey: string,
   opts: PipelineOptions,
   inputIndexRef: { value: number },
+  additionalInputStartIndex?: number,
 ): PluginContext {
   return {
     inputWidth: metadata.width,
@@ -200,6 +201,7 @@ function createPluginContext(
     tempDir,
     assetResolver: opts.assetResolver || ((id) => id),
     nextInputIndex: () => inputIndexRef.value++,
+    additionalInputStartIndex,
     instanceKey,
   }
 }
@@ -219,11 +221,29 @@ async function executeSinglePass(
   const additionalInputPaths: string[] = []
 
   for (const { operation, plugin } of resolved) {
-    const ctx = createPluginContext(metadata, tempDir, operation.id, opts, inputIndexRef)
+    const reservationStart = inputIndexRef.value
+    const inputCtx = createPluginContext(
+      metadata,
+      tempDir,
+      operation.id,
+      opts,
+      inputIndexRef,
+      reservationStart,
+    )
 
     // Register additional inputs
-    const additionalInputs = plugin.getAdditionalInputs?.(operation.params, ctx) || []
+    const additionalInputs = plugin.getAdditionalInputs?.(operation.params, inputCtx) || []
+    inputIndexRef.value = reservationStart + additionalInputs.length
     additionalInputPaths.push(...additionalInputs)
+
+    const ctx = createPluginContext(
+      metadata,
+      tempDir,
+      operation.id,
+      opts,
+      inputIndexRef,
+      reservationStart,
+    )
 
     // Collect filters
     const filters = plugin.buildFilters(operation.params, ctx)
@@ -267,7 +287,8 @@ async function executeSinglePass(
   if (!allFilters.length || !lastAudioOutput) {
     args.push('-c:a', 'aac')
   }
-  args.push(...allOutputOptions, outputPath)
+  const normalizedOutputOptions = normalizeOutputOptions(allOutputOptions, metadata.duration)
+  args.push(...normalizedOutputOptions, outputPath)
 
   // Debug
   console.log(`[VideoEdit] FFmpeg single-pass command:\n  ffmpeg ${args.join(' ')}`)
@@ -399,6 +420,10 @@ function autoWireFilters(filters: VideoFilter[]): VideoFilter[] {
   for (let i = 0; i < filters.length; i++) {
     const f = { ...filters[i] }
     const mediaType = inferFilterMediaType(f)
+    const originalInputs = f.inputs ? [...f.inputs] : []
+    const hadNoInputs = originalInputs.length === 0
+    const hadMainVideoPlaceholder = originalInputs.includes('0:v')
+    const hadMainAudioPlaceholder = originalInputs.includes('0:a') || originalInputs.includes('0:a?')
 
     if (!f.inputs?.length) {
       if (NO_INPUT_SOURCE_FILTERS.has(baseFilterName(f.filter))) {
@@ -421,8 +446,13 @@ function autoWireFilters(filters: VideoFilter[]): VideoFilter[] {
     }
 
     const lastOut = f.outputs[f.outputs.length - 1]
-    if (mediaType === 'audio') currentAudioStream = lastOut
-    else currentVideoStream = lastOut
+    if (mediaType === 'audio') {
+      const usesMainAudio = hadNoInputs || hadMainAudioPlaceholder || (f.inputs || []).includes(currentAudioStream)
+      if (usesMainAudio) currentAudioStream = lastOut
+    } else {
+      const usesMainVideo = hadNoInputs || hadMainVideoPlaceholder || (f.inputs || []).includes(currentVideoStream)
+      if (usesMainVideo) currentVideoStream = lastOut
+    }
 
     wired.push(f)
   }
@@ -486,13 +516,56 @@ function buildFilterComplexString(filters: VideoFilter[]): string {
     if (entries.length > 0) {
       const parts = entries.map(([k, v]) => {
         if (typeof v === 'boolean') return `${k}=${v ? '1' : '0'}`
-        if (typeof v === 'string' && v.includes(':')) return `${k}='${v}'`
-        return `${k}=${v}`
+        return `${k}=${formatFilterOptionValue(v)}`
       })
       optStr = `=${parts.join(':')}`
     }
     return `${inputPads}${f.filter}${optStr}${outputPads}`
   }).join(';')
+}
+
+function formatFilterOptionValue(value: unknown): string {
+  if (typeof value === 'string') {
+    const needsQuotes = /[:,]/.test(value)
+    if (!needsQuotes) return value
+    return `'${value.replace(/'/g, "\\'")}'`
+  }
+  return String(value)
+}
+
+function normalizeOutputOptions(outputOptions: string[], inputDurationSec: number): string[] {
+  const normalized: string[] = []
+  let trimEndSec = 0
+  let trimStartSec = 0
+  let hasExplicitDuration = false
+
+  for (let i = 0; i < outputOptions.length; i++) {
+    const token = outputOptions[i]
+    if (token === '-t_trim_end') {
+      const raw = outputOptions[i + 1]
+      const parsed = Number(raw)
+      if (Number.isFinite(parsed) && parsed > 0) trimEndSec = Math.max(trimEndSec, parsed)
+      i += 1
+      continue
+    }
+
+    if (token === '-ss') {
+      const raw = outputOptions[i + 1]
+      const parsed = Number(raw)
+      if (Number.isFinite(parsed) && parsed > 0) trimStartSec = Math.max(trimStartSec, parsed)
+    }
+
+    if (token === '-t' || token === '-to') hasExplicitDuration = true
+
+    normalized.push(token)
+  }
+
+  if (trimEndSec > 0 && !hasExplicitDuration) {
+    const duration = Math.max(0.05, inputDurationSec - trimStartSec - trimEndSec)
+    normalized.push('-t', duration.toFixed(3))
+  }
+
+  return normalized
 }
 
 function getExtension(filePath: string): string {

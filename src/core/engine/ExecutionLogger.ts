@@ -185,7 +185,7 @@ export class ExecutionLogger {
     this.log({
       campaign_id: campaignId, instance_id: instanceId,
       level: 'info', event: `node:event:${event}`,
-      message: event, data
+      message: data?.message || event, data
     })
   }
 

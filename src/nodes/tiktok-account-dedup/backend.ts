@@ -58,6 +58,7 @@ function markDuplicateAndSkip(
     existingVideoId: duplicate?.published_video_id,
     existingVideoUrl: duplicate?.published_url,
     sourcePlatformId: String(video.platform_id || '').trim() || undefined,
+    message: duplicateMessage,
     ...extra,
   })
   const existingUrlSuffix = duplicate?.published_url ? `. Existing URL: ${duplicate.published_url}` : ''

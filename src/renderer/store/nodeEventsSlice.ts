@@ -129,6 +129,10 @@ export const nodeEventsSlice = createSlice({
         retryable,
         updatedAt: Date.now()
       }
+      // Auto-clear stale progress when node reaches terminal status
+      if ((status === 'completed' || status === 'failed') && state.nodeProgress[campaignId]) {
+        delete state.nodeProgress[campaignId][instanceId]
+      }
     },
 
     updateNodeProgress(state, action: PayloadAction<{

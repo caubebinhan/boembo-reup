@@ -275,7 +275,7 @@ export function setupCampaignIPC() {
     return { success: false, error: `Unknown event: ${event}` }
   })
 
-  // ── Pipeline: Retry node (user-initiated from Visualizer) ──
+  // ── Pipeline: Retry node (user-initiated from Visualizer / VideoHistory / VideoCard) ──
   safeHandle('pipeline:retry-node', async (_event, { campaignId, instanceId, videoId }: { campaignId: string; instanceId: string; videoId?: string }) => {
     const store = campaignRepo.tryOpen(campaignId)
     if (!store) return { success: false, error: 'Campaign not found' }
@@ -285,6 +285,32 @@ export function setupCampaignIPC() {
 
     const nodeDef = flow.nodes.find(n => n.instance_id === instanceId)
     if (!nodeDef) return { success: false, error: `Node ${instanceId} not found in flow` }
+
+    // ── Deduplication guard: prevent race condition from rapid clicks or multiple retries ──
+    // Check if there is already a pending/running job for this exact (instance_id, video_id) pair.
+    // Multiple simultaneous retries cause the duplicate-detection storm observed in logs.
+    const existingJob = videoId
+      ? db.prepare(`
+          SELECT id FROM jobs
+          WHERE campaign_id = ? AND instance_id = ?
+            AND status IN ('pending', 'running')
+            AND (
+              json_extract(data_json, '$.platform_id') = ?
+              OR json_extract(data_json, '$.videoId') = ?
+            )
+          LIMIT 1
+        `).get(campaignId, instanceId, videoId, videoId) as { id: string } | undefined
+      : db.prepare(`
+          SELECT id FROM jobs
+          WHERE campaign_id = ? AND instance_id = ?
+            AND status IN ('pending', 'running')
+          LIMIT 1
+        `).get(campaignId, instanceId) as { id: string } | undefined
+
+    if (existingJob) {
+      console.log(`[IPC:pipeline:retry-node] Dedup: job ${existingJob.id} already pending/running for ${instanceId}${videoId ? `+${videoId}` : ''} — skipping`)
+      return { success: false, alreadyPending: true, existingJobId: existingJob.id, error: 'A retry job is already pending or running for this node' }
+    }
 
     // Ensure campaign is active
     if (store.status !== 'active' && store.status !== 'paused') {

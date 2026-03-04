@@ -1,11 +1,32 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron'
 import { videoEditPluginRegistry } from '../../core/video-edit/VideoEditPluginRegistry'
 import { IPC_CHANNELS } from '@shared/ipc-types'
+import { pathToFileURL } from 'node:url'
 
 export function setupVideoEditorIPC() {
   const safeHandle = (channel: string, handler: Parameters<typeof ipcMain.handle>[1]) => {
     ipcMain.removeHandler(channel)
     ipcMain.handle(channel, handler)
+  }
+
+  const safeSendToWindow = (win: BrowserWindow | null, channel: string, payload: unknown) => {
+    try {
+      if (!win || win.isDestroyed()) return
+      const wc = win.webContents
+      if (!wc || wc.isDestroyed()) return
+      wc.send(channel, payload)
+    } catch {
+      // Window may already be closed while async work is finishing.
+    }
+  }
+
+  const normalizePreviewMessage = (raw: string): string => {
+    return String(raw || '')
+      .replace(/ﾂｷ/g, '|')
+      .replace(/[•·]/g, '|')
+      .replace(/\s+\|\s+/g, ' | ')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
   }
 
   // Video edit plugin metadata
@@ -45,6 +66,41 @@ export function setupVideoEditorIPC() {
   let _editorParentWin: BrowserWindow | null = null
   const _intentionalCloseSet = new Set<number>() // webContents IDs for editors that clicked "Done"
   const _editorInitDataByContentsId = new Map<number, any>()
+  let _previewPlayerWin: BrowserWindow | null = null
+
+  const openPreviewPlayerWindow = async (outputPath: string): Promise<boolean> => {
+    const safePath = String(outputPath || '').trim()
+    if (!safePath) return false
+
+    const src = pathToFileURL(safePath).toString()
+
+    if (_previewPlayerWin && !_previewPlayerWin.isDestroyed()) {
+      _previewPlayerWin.close()
+      _previewPlayerWin = null
+    }
+
+    const previewWin = new BrowserWindow({
+      width: 960,
+      height: 640,
+      minWidth: 640,
+      minHeight: 420,
+      title: 'BOEMBO - Preview Player',
+      autoHideMenuBar: true,
+      backgroundColor: '#000000',
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    })
+
+    _previewPlayerWin = previewWin
+    previewWin.on('closed', () => {
+      if (_previewPlayerWin === previewWin) _previewPlayerWin = null
+    })
+    await previewWin.loadURL(src)
+    return true
+  }
 
   safeHandle(IPC_CHANNELS.VIDEO_EDITOR_OPEN, async (event, payload?: { data?: any }) => {
     const { join } = require('node:path')
@@ -89,10 +145,8 @@ export function setupVideoEditorIPC() {
     editorWin.on('closed', () => {
       _intentionalCloseSet.delete(editorWin.webContents.id)
       _editorInitDataByContentsId.delete(editorWin.webContents.id)
-      if (_editorParentWin && !_editorParentWin.isDestroyed()) {
-        // Keep wizard state in sync when user closes editor with window controls.
-        _editorParentWin.webContents.send(IPC_CHANNELS.VIDEO_EDITOR_DONE, null)
-      }
+      // Keep wizard state in sync when user closes editor with window controls.
+      safeSendToWindow(_editorParentWin, IPC_CHANNELS.VIDEO_EDITOR_DONE, null)
       _editorParentWin = null
     })
 
@@ -116,9 +170,7 @@ export function setupVideoEditorIPC() {
 
   // Editor window calls this when user clicks "Done Editing"
   safeHandle(IPC_CHANNELS.VIDEO_EDITOR_DONE, async (event, result: any) => {
-    if (_editorParentWin && !_editorParentWin.isDestroyed()) {
-      _editorParentWin.webContents.send(IPC_CHANNELS.VIDEO_EDITOR_DONE, result)
-    }
+    safeSendToWindow(_editorParentWin, IPC_CHANNELS.VIDEO_EDITOR_DONE, result)
     const editorWin = BrowserWindow.fromWebContents(event.sender)
     if (editorWin && !editorWin.isDestroyed()) {
       _intentionalCloseSet.add(event.sender.id) // skip unsaved-changes dialog
@@ -131,15 +183,27 @@ export function setupVideoEditorIPC() {
   // Preview: run FFmpeg pipeline and return rendered output path
   safeHandle(IPC_CHANNELS.VIDEO_EDIT_PREVIEW, async (
     event,
-    payload: { videoPath: string; operations: any[]; requestId?: string; timeoutMs?: number },
+    payload: { videoPath: string; operations: any[]; requestId?: string; timeoutMs?: number; openPlayerWindow?: boolean },
   ) => {
+    const sender = event.sender
     const requestId = payload?.requestId || `preview_${Date.now().toString(36)}`
+    const startedAt = Date.now()
     const trace: Array<{ ts: number; level: 'info' | 'error'; stage: string; message: string }> = []
+
+    const safeSendProgress = (row: { ts: number; level: 'info' | 'error'; stage: string; message: string }) => {
+      try {
+        if (!sender) return
+        if (typeof (sender as any).isDestroyed === 'function' && (sender as any).isDestroyed()) return
+        sender.send(IPC_CHANNELS.VIDEO_EDIT_PREVIEW_PROGRESS, { ...row, requestId })
+      } catch {
+        // Renderer may close while preview is still rendering; keep pipeline alive.
+      }
+    }
 
     const emit = (level: 'info' | 'error', message: string, stage = 'runtime') => {
       const row = { ts: Date.now(), level, stage, message }
       trace.push(row)
-      event.sender.send(IPC_CHANNELS.VIDEO_EDIT_PREVIEW_PROGRESS, { ...row, requestId })
+      safeSendProgress(row)
       if (level === 'error') console.error(`[VideoEdit:Preview:${requestId}] ${message}`)
       else console.log(`[VideoEdit:Preview:${requestId}] ${message}`)
     }
@@ -153,7 +217,7 @@ export function setupVideoEditorIPC() {
         processor: ffmpegProcessor,
         operations: payload.operations,
         timeoutMs: payload?.timeoutMs || 180_000,
-        onProgress: (msg) => emit('info', msg, 'pipeline'),
+        onProgress: (msg) => emit('info', normalizePreviewMessage(msg), 'pipeline'),
       })
       let previewOutputPath = result.outputPath
       try {
@@ -174,10 +238,24 @@ export function setupVideoEditorIPC() {
       } catch (copyErr: any) {
         emit('info', `Preview temp copy skipped: ${copyErr?.message || 'copy failed'}`, 'preview')
       }
-      emit('info', `Preview done (${result.totalDurationMs}ms)`)
+
+      let playerOpened = false
+      if (payload?.openPlayerWindow !== false && previewOutputPath) {
+        try {
+          playerOpened = await openPreviewPlayerWindow(previewOutputPath)
+          if (playerOpened) emit('info', 'Preview player opened.', 'preview-player')
+        } catch (openErr: any) {
+          emit('error', `Failed to open preview player: ${openErr?.message || openErr}`, 'preview-player')
+        }
+      }
+
+      const renderDurationMs = Math.max(0, Date.now() - startedAt)
+      emit('info', `Preview render completed in ${renderDurationMs}ms.`, 'done')
       return {
         outputPath: previewOutputPath,
         wasModified: result.wasModified,
+        playerOpened,
+        renderDurationMs,
         requestId,
         trace,
       }

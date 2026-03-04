@@ -13,10 +13,13 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       'No download URL available')
   }
 
-  ctx.onProgress(`⬇️ Đang tải: ${video.description?.slice(0, 40) || video.platform_id}`)
+  ctx.onProgress(`Downloading: ${video.description?.slice(0, 40) || video.platform_id}`)
   const downloadStartMs = Date.now()
+  const videoLabel = video.description?.slice(0, 40) || video.platform_id || 'video'
   ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'video:downloading', {
-    videoId: video.platform_id, url: video.download_url || video.url,
+    videoId: video.platform_id,
+    url: video.download_url || video.url,
+    message: `Downloading ${videoLabel}...`,
   })
 
   let result: any
@@ -53,10 +56,13 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   const downloadDurationMs = Date.now() - downloadStartMs
 
   ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'video:downloaded', {
-    videoId: video.platform_id, fileSizeMB, downloadDurationMs,
+    videoId: video.platform_id,
+    fileSizeMB,
+    downloadDurationMs,
     localPath: result.filePath,
+    message: `Downloaded ${video.platform_id} (${fileSizeMB}MB in ${Math.round(downloadDurationMs / 1000)}s).`,
   })
 
-  ctx.logger.info(`✅ Tải xong: ${result.filePath} (${fileSizeMB}MB, ${Math.round(downloadDurationMs/1000)}s)`)
+  ctx.logger.info(`Download complete: ${result.filePath} (${fileSizeMB}MB, ${Math.round(downloadDurationMs / 1000)}s)`)
   return { data: { ...video, local_path: result.filePath, description: realDescription } }
 }

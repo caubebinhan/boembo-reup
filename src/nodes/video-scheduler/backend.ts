@@ -5,6 +5,27 @@ import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 
 const INSTANCE_ID = 'scheduler_1'
 
+function formatTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatDateTime(ts: number): string {
+  return new Date(ts).toLocaleString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function formatRange(startTs: number, endTs: number): string {
+  const start = new Date(startTs)
+  const end = new Date(endTs)
+  const sameDay = start.toDateString() === end.toDateString()
+  if (sameDay) return `${formatTime(startTs)} -> ${formatTime(endTs)}`
+  return `${formatDateTime(startTs)} -> ${formatDateTime(endTs)}`
+}
+
 /**
  * VideoScheduler Node
  *
@@ -20,7 +41,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       return { data: videos, action: 'continue', message: 'No videos to schedule' }
     }
 
-    // ── Deduplicate by platform_id (safety net) ──
+    // Deduplicate by platform_id (safety net)
     {
       const seen = new Set<string>()
       const before = videos.length
@@ -31,7 +52,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
         return true
       })
       if (videos.length < before) {
-        ctx.logger.info(`[VideoScheduler] Deduped: ${before} → ${videos.length} unique videos`)
+        ctx.logger.info(`[VideoScheduler] Deduped: ${before} -> ${videos.length} unique videos`)
       }
     }
 
@@ -40,7 +61,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
     const ranges = normalizeTimeRanges(ctx.params)
     const rangeDesc = ranges.length === 1
-      ? `${ranges[0].start}?${ranges[0].end}`
+      ? `${ranges[0].start}-${ranges[0].end}`
       : `${ranges.length} ranges`
 
     ctx.logger.info(`[VideoScheduler] Scheduling ${videos.length} videos (interval=${intervalMinutes}min, jitter=${enableJitter}, window=${rangeDesc})`)
@@ -86,9 +107,9 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     })
 
     // Count pending_approval for logging
-    const pendingCount = scheduledVideos.filter(v => v.status === 'pending_approval').length
+    const pendingCount = scheduledVideos.filter((v) => v.status === 'pending_approval').length
 
-    // Save to campaign document (merge — preserves status of already-processed videos)
+    // Save to campaign document (merge preserves status of already-processed videos)
     ctx.store.upsertVideos(scheduledVideos)
     ctx.store.save()
 
@@ -98,6 +119,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
         videoId: sv.platform_id,
         scheduledFor: sv.scheduled_for,
         queueIndex: sv.queue_index,
+        message: `Scheduled ${sv.platform_id} at ${formatDateTime(sv.scheduled_for)}.`,
       })
     }
 
@@ -107,7 +129,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
     // Detect missed jobs: videos whose scheduled_for is already in the past
     const now = Date.now()
-    const missedVideos = scheduledVideos.filter(v => v.scheduled_for < now && v.status === 'queued')
+    const missedVideos = scheduledVideos.filter((v) => v.scheduled_for < now && v.status === 'queued')
 
     if (missedVideos.length > 0) {
       // Reschedule using shared function (respects time slots + jitter)
@@ -119,19 +141,27 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       for (const r of rescheduled) {
         ctx.store.updateVideo(r.platform_id, { scheduled_for: r.scheduled_for })
         ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'scheduler:rescheduled', {
-          videoId: r.platform_id, newTime: r.scheduled_for, reason: 'missed',
+          videoId: r.platform_id,
+          newTime: r.scheduled_for,
+          reason: 'missed',
+          message: `Rescheduled ${r.platform_id} to ${formatDateTime(r.scheduled_for)} (missed schedule).`,
         })
       }
       ctx.store.save()
 
       ctx.logger.info(`[VideoScheduler] Rescheduled ${rescheduled.length} missed videos`)
-      ctx.alert('warn', `⏰ Phát hiện ${missedVideos.length} video bị lỡ lịch`, `Đã reschedule ${rescheduled.length} video từ bây giờ (interval=${intervalMinutes}min, jitter=${enableJitter ? 'on' : 'off'})`)
+      ctx.alert(
+        'warn',
+        `Missed schedule detected (${missedVideos.length} video(s))`,
+        `Rescheduled ${rescheduled.length} video(s) from current time (interval=${intervalMinutes}min, jitter=${enableJitter ? 'on' : 'off'}).`,
+      )
     }
 
-    const firstTime = new Date(videos[0].scheduled_for).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-    const lastTime = new Date(videos[videos.length - 1].scheduled_for).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-    ctx.logger.info(`[VideoScheduler] ${videos.length} videos scheduled: ${firstTime} -> ${lastTime}`)
-    ctx.onProgress(`${videos.length} videos queued (${firstTime} -> ${lastTime})`)
+    const firstTs = videos[0].scheduled_for
+    const lastTs = videos[videos.length - 1].scheduled_for
+    const rangeLabel = formatRange(firstTs, lastTs)
+    ctx.logger.info(`[VideoScheduler] ${videos.length} videos scheduled: ${rangeLabel}`)
+    ctx.onProgress(`${videos.length} videos queued (${rangeLabel})`)
 
     return { data: videos, action: 'continue', message: `${videos.length} videos scheduled` }
   } catch (err: any) {

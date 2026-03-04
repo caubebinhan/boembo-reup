@@ -34,7 +34,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
   const branch = result ? 'true' : 'false'
   ctx.logger.info(`[Condition] "${expression}" -> ${branch}`)
-  ctx.onProgress(`?? Branch: ${branch}`)
+  ctx.onProgress(`Branch: ${branch}`)
 
   return {
     data: { ...input, branch },

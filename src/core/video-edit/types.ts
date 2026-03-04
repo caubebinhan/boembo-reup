@@ -74,6 +74,8 @@ export interface PluginContext {
   assetResolver: (assetId: string) => string
   /** Get the next available input index for multi-input plugins */
   nextInputIndex: () => number
+  /** Reserved starting index for this operation's additional inputs (if any) */
+  additionalInputStartIndex?: number
   /** Unique instance key (for multi-instance filter naming) */
   instanceKey: string
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 
 // Per-workflow campaign card for TikTok Repost (Vintage Pastel)
 // Auto-discovered by CampaignCard via import.meta.glob
@@ -36,7 +36,9 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
     }, [campaign.params])
 
     // ── Live state from IPC events ──
-    const [liveMsg, setLiveMsg] = useState<string | null>(null)
+    const [liveMsg, setLiveMsg] = useState<{ msg: string; instanceId: string } | null>(null)
+    const liveMsgRef = useRef(liveMsg)
+    liveMsgRef.current = liveMsg
     const [alerts, setAlerts] = useState<{ type: string; message: string }[]>([])
 
     useEffect(() => {
@@ -45,7 +47,16 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
 
         const offProgress = api.on?.('node:progress', (ev: any) => {
             if (ev.campaignId === campaign.id) {
-                setLiveMsg(ev.message || null)
+                setLiveMsg(ev.message ? { msg: ev.message, instanceId: ev.instanceId } : null)
+            }
+        })
+
+        // Clear liveMsg when the node that owns it completes/fails
+        const offNodeStatus = api.on?.('node:status', (ev: any) => {
+            if (ev.campaignId !== campaign.id) return
+            if ((ev.status === 'completed' || ev.status === 'failed')
+                && liveMsgRef.current?.instanceId === ev.instanceId) {
+                setLiveMsg(null)
             }
         })
 
@@ -85,12 +96,12 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
             }
         })
         const offNetworkError = api.on?.('campaign:network-error', (ev: any) => {
-            if (ev.campaign_id === campaign.id) {
+            if ((ev.campaignId || ev.campaign_id) === campaign.id) {
                 setAlerts(prev => [...prev, { type: 'network', message: ev.message || 'Network error detected' }])
             }
         })
         const offDiskError = api.on?.('campaign:disk-error', (ev: any) => {
-            if (ev.campaign_id === campaign.id) {
+            if ((ev.campaignId || ev.campaign_id) === campaign.id) {
                 setAlerts(prev => [...prev, { type: 'disk', message: ev.message || 'Disk error detected' }])
             }
         })
@@ -99,6 +110,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
 
         return () => {
             if (typeof offProgress === 'function') offProgress()
+            if (typeof offNodeStatus === 'function') offNodeStatus()
             if (typeof offNodeEvent === 'function') offNodeEvent()
             if (typeof offHealthCheck === 'function') offHealthCheck()
             if (typeof offPipelineInfo === 'function') offPipelineInfo()
@@ -157,12 +169,16 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
         underReview + verificationIncomplete + failed + publishFailed + duplicate + captcha +
         sessionExpired + skipped
 
-    // Terminal success = published + verified + under_review + verification_incomplete
-    const successCount = published + verified + underReview + verificationIncomplete
-    // Terminal fail = failed + publish_failed
+    // Terminal — Public success = published + verified
+    const publicCount = published + verified
+    // Terminal — Submitted = under_review + verification_incomplete
+    const submittedCount = underReview + verificationIncomplete
+    // Terminal fail = failed + publish_failed (real errors)
     const failCount = failed + publishFailed
+    // Terminal skip = duplicate + skipped (not errors)
+    const skipCount = duplicate + skipped
     // Progress = terminal states / total
-    const terminalCount = successCount + failCount + duplicate + skipped
+    const terminalCount = publicCount + submittedCount + failCount + skipCount + captcha + sessionExpired
     const progressPct = total > 0 ? Math.round((terminalCount / total) * 100) : 0
 
     // Target account info
@@ -286,7 +302,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                     <div className="flex items-center gap-1.5 mb-2.5 px-2.5 py-1.5 rounded-lg"
                         style={{ background: P.pastelMint + '60', border: `1px solid ${P.pastelMint}` }}>
                         <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ background: '#2e7d32' }} />
-                        <span className="text-[11px] truncate" style={{ color: '#2e7d32' }}>{liveMsg}</span>
+                        <span className="text-[11px] truncate" style={{ color: '#2e7d32' }}>{liveMsg.msg}</span>
                     </div>
                 )}
             </div>
@@ -300,13 +316,11 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                     {pendingApproval > 0 && <StatPill emoji="⏳" value={pendingApproval} label="Pending Approval" bg={P.pastelYellow} />}
                     <StatPill emoji="💾" value={downloaded} label="Downloaded" bg={P.pastelPeach} />
                     {captioned > 0 && <StatPill emoji="✍️" value={captioned} label="Captioned" bg={P.pastelLavender} />}
-                    <StatPill emoji="🌸" value={successCount} label="Published" bg={P.pastelMint}
-                        valueColor={successCount > 0 ? '#2e7d32' : P.textDim} bold={successCount > 0} />
-                    {underReview > 0 && <StatPill emoji="👁️" value={underReview} label="Under Review" bg={P.pastelYellow} valueColor="#92400e" />}
-                    {verificationIncomplete > 0 && <StatPill emoji="⏱️" value={verificationIncomplete} label="Verifying" bg={P.pastelPeach} valueColor="#8e5a2b" />}
+                    <StatPill emoji="🌸" value={publicCount} label="Đã đăng" bg={P.pastelMint}
+                        valueColor={publicCount > 0 ? '#2e7d32' : P.textDim} bold={publicCount > 0} />
+                    {submittedCount > 0 && <StatPill emoji="⏳" value={submittedCount} label="Đã gửi, chờ duyệt" bg={P.pastelYellow} valueColor="#92400e" />}
                     {captcha > 0 && <StatPill emoji="🧩" value={captcha} label="Captcha" bg={P.pastelPeach} valueColor="#8e5a2b" bold />}
                     {duplicate > 0 && <StatPill emoji="🔄" value={duplicate} label="Duplicate" bg={P.cream} />}
-                    {sessionExpired > 0 && <StatPill emoji="🔑" value={sessionExpired} label="Session Expired" bg={P.pastelPink} valueColor="#9e3d4d" bold />}
                     {failCount > 0 && (
                         <StatPill emoji="🥀" value={failCount} label="Failed" bg={P.pastelPink} valueColor="#9e3d4d" bold />
                     )}
