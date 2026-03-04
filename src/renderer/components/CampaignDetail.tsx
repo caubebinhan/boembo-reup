@@ -51,6 +51,7 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
     const [campaign, setCampaign] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [statusMessage, setStatusMessage] = useState<string>('')
+    const [actionInFlight, setActionInFlight] = useState<string | null>(null)
 
     const workflowId = campaign?.workflow_id || 'tiktok-repost'
     const { descriptor } = useFlowUIDescriptor(workflowId)
@@ -130,11 +131,15 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
 
     const handleAction = async (event: string, payload: any) => {
         console.log(`[CampaignDetail] Action: ${event}`, payload)
+        // Set in-flight for campaign control actions — disables buttons with loading spinner
+        const isControlAction = ['campaign:trigger', 'campaign:pause', 'campaign:resume'].includes(event)
+        if (isControlAction) setActionInFlight(event)
         try {
             // @ts-ignore
             await window.api.invoke(event, payload)
             setTimeout(() => { fetchCampaign(); fetchJobs() }, 500)
         } catch (err) { console.error('[CampaignDetail] Action failed:', err) }
+        finally { if (isControlAction) setActionInFlight(null) }
     }
 
     // ── Per-workflow detail component (cached lazy, version-aware) ──
@@ -211,23 +216,26 @@ export function CampaignDetail({ campaignId, onBack }: CampaignDetailProps) {
                         {['idle', 'finished', 'error'].includes(campaign.status) && (
                             <button
                                 onClick={() => handleAction('campaign:trigger', { id: campaign.id })}
-                                className="px-4 py-2 text-sm rounded-full font-medium transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                disabled={!!actionInFlight}
+                                className="px-4 py-2 text-sm rounded-full font-medium transition flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{ background: '#d4e8d8', color: '#2e7d32', border: '1px solid #94c8a0' }}
-                            >🌿 Run</button>
+                            >{actionInFlight === 'campaign:trigger' ? '⏳ Starting...' : '🌿 Run'}</button>
                         )}
                         {campaign.status === 'active' && (
                             <button
                                 onClick={() => handleAction('campaign:pause', { id: campaign.id })}
-                                className="px-4 py-2 text-sm rounded-full font-medium transition flex items-center gap-1.5 cursor-pointer"
+                                disabled={!!actionInFlight}
+                                className="px-4 py-2 text-sm rounded-full font-medium transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{ background: '#f9e3d3', color: '#8e5a2b', border: '1px solid #e0b896' }}
-                            >☕ Pause</button>
+                            >{actionInFlight === 'campaign:pause' ? '⏳ Pausing...' : '☕ Pause'}</button>
                         )}
                         {campaign.status === 'paused' && (
                             <button
                                 onClick={() => handleAction('campaign:resume', { id: campaign.id })}
-                                className="px-4 py-2 text-sm rounded-full font-medium transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                disabled={!!actionInFlight}
+                                className="px-4 py-2 text-sm rounded-full font-medium transition flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                 style={{ background: '#d6e4f0', color: '#2e5a88', border: '1px solid #93b4d4' }}
-                            >🌿 Resume</button>
+                            >{actionInFlight === 'campaign:resume' ? '⏳ Resuming...' : '🌿 Resume'}</button>
                         )}
                     </div>
                 </div>

@@ -11,6 +11,7 @@ import { AppSettingsService } from '@main/services/AppSettingsService'
 import { isNetworkError, isDiskError } from '../nodes/NodeHelpers'
 import { getFreeDiskSpaceMB } from '@main/utils/diskSpace'
 import { CodedError } from '@core/errors/CodedError'
+import { VideoProcessingLock, CampaignPipelineLock } from './VideoProcessingLock'
 import type { NodeRetryPolicy } from '../nodes/NodeDefinition'
 
 // ── Error handling helpers ────────────────────────────────────────────
@@ -313,6 +314,10 @@ export class FlowEngine {
 
   public pauseCampaign(campaignId: string) {
     campaignRepo.updateStatus(campaignId, 'paused')
+    // Note: we do NOT force-release CampaignPipelineLock or VideoProcessingLock here.
+    // The running job will detect isCampaignActive() === false on the next loop iteration
+    // and exit naturally, releasing its own locks via try/finally.
+    // Force-releasing here would create a race window where a new job starts before the old one exits.
     ExecutionLogger.campaignEvent(campaignId, 'campaign:paused', 'Campaign paused')
   }
 
@@ -375,6 +380,14 @@ export class FlowEngine {
 
   // ── Execute Job ───────────────────────────────────────────────────────
   private async executeJob(job: JobDocument) {
+    // ── Per-campaign pipeline lock: only one job executes at a time ──
+    if (!CampaignPipelineLock.acquire(job.campaign_id, job.id)) {
+      console.log(`[FlowEngine] Campaign ${job.campaign_id} already has an active job — deferring job ${job.id}`)
+      // Return job to pending so it gets re-picked in the next tick
+      jobRepo.updateStatus(job.id, 'pending')
+      return
+    }
+
     try {
       jobRepo.updateStatus(job.id, 'running')
 
@@ -475,6 +488,9 @@ export class FlowEngine {
 
       handleNetworkError(errorMsg, job.campaign_id, job.instance_id)
       handleDiskError(errorMsg, job.campaign_id, job.instance_id)
+    } finally {
+      // Always release the per-campaign pipeline lock when job finishes
+      CampaignPipelineLock.release(job.campaign_id, job.id)
     }
   }
 
@@ -517,6 +533,8 @@ export class FlowEngine {
           doc._loopNodeId = loopDef.node_id
           store.save()
         } catch { /* best-effort */ }
+        // Release all video locks for this campaign on pause
+        VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
         ExecutionLogger.log({
           campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
           level: 'info', event: 'loop:paused',
@@ -528,12 +546,35 @@ export class FlowEngine {
       let currentData = items[i]
       let skipToNextItem = false
 
+      // ── Per-video singleton guard: acquire lock for the entire child chain ──
+      // Normalize videoId to String to avoid number/string Map key mismatch
+      const videoId = currentData?.platform_id != null ? String(currentData.platform_id)
+                    : currentData?.videoId != null ? String(currentData.videoId)
+                    : undefined
+      let lockAcquired = false
+      if (videoId) {
+        lockAcquired = VideoProcessingLock.acquire(videoId, loopDef.instance_id, job.id, job.campaign_id)
+        if (!lockAcquired) {
+          const holder = VideoProcessingLock.isLocked(videoId)
+          ExecutionLogger.log({
+            campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
+            level: 'warn', event: 'video:lock-rejected',
+            message: `Video ${videoId} is locked by ${holder?.instanceId}/${holder?.jobId} — will retry on next run`,
+          })
+          // Do NOT advance lastProcessedIndex — this video should be retried on the next loop run
+          continue
+        }
+      }
+
       ExecutionLogger.log({
         campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
         level: 'info', event: 'loop:iteration',
         message: `Item ${i + 1}/${items.length}`,
       })
       ExecutionLogger.nodeProgress(job.campaign_id, job.id, loopDef.instance_id, loopDef.node_id, `Loop ${i + 1}/${items.length}`)
+
+      // Wrap all child execution in try/finally to guarantee lock release
+      try {
 
       for (const childInstanceId of children) {
         const childDef = findNode(flow, childInstanceId)
@@ -584,6 +625,7 @@ export class FlowEngine {
           if (result.action === 'finish') {
             store.status = 'finished'
             store.save()
+            VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
             ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Finished by child node')
             return
           }
@@ -621,12 +663,14 @@ export class FlowEngine {
             if (handler.action === 'pause_campaign') {
               store.status = 'paused'
               store.save()
+              VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
               ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:paused', `Paused by event "${eventKey}"`)
               return
             }
             if (handler.action === 'stop_campaign') {
               store.status = 'error'
               store.save()
+              VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
               ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:error', `Stopped by event "${eventKey}": ${err.message}`)
               return
             }
@@ -637,6 +681,7 @@ export class FlowEngine {
           if (onError === 'stop_campaign') {
             store.status = 'error'
             store.save()
+            VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
             ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:error',
               `Campaign stopped: node "${childDef.instance_id}" failed: ${err.message}`)
             return
@@ -644,8 +689,22 @@ export class FlowEngine {
           skipToNextItem = true
 
           // Auto-pause on network or auto-fail on disk errors
-          if (handleNetworkError(err.message, job.campaign_id, childDef.instance_id, store)) return
-          if (handleDiskError(err.message, job.campaign_id, childDef.instance_id, store)) return
+          // Note: these functions change campaign status — releaseAllForCampaign is called in finally
+          if (handleNetworkError(err.message, job.campaign_id, childDef.instance_id, store)) {
+            VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
+            return
+          }
+          if (handleDiskError(err.message, job.campaign_id, childDef.instance_id, store)) {
+            VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
+            return
+          }
+        }
+      }
+
+      } finally {
+        // ALWAYS release video lock — even on early return from errors
+        if (videoId && lockAcquired) {
+          VideoProcessingLock.release(videoId, job.id)
         }
       }
 

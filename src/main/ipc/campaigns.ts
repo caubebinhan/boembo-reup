@@ -10,6 +10,7 @@ import { campaignRepo } from '../db/repositories/CampaignRepo'
 import { jobRepo } from '../db/repositories/JobRepo'
 import { createCampaignDocument } from '../db/models/Campaign'
 import { db } from '../db/Database'
+import { VideoProcessingLock } from '@core/engine/VideoProcessingLock'
 
 /**
  * Safe IPC wrapper — catches all errors and returns structured { success, error } responses
@@ -287,29 +288,41 @@ export function setupCampaignIPC() {
     if (!nodeDef) return { success: false, error: `Node ${instanceId} not found in flow` }
 
     // ── Deduplication guard: prevent race condition from rapid clicks or multiple retries ──
-    // Check if there is already a pending/running job for this exact (instance_id, video_id) pair.
-    // Multiple simultaneous retries cause the duplicate-detection storm observed in logs.
-    const existingJob = videoId
+    // Note: instance_id is stored inside data_json, not as a SQL column.
+    // Normalize videoId to string to prevent type mismatch (number vs string).
+    const vid = videoId ? String(videoId) : undefined
+    const existingJob = vid
       ? db.prepare(`
           SELECT id FROM jobs
-          WHERE campaign_id = ? AND instance_id = ?
+          WHERE campaign_id = ?
+            AND json_extract(data_json, '$.instance_id') = ?
             AND status IN ('pending', 'running')
             AND (
               json_extract(data_json, '$.platform_id') = ?
               OR json_extract(data_json, '$.videoId') = ?
             )
           LIMIT 1
-        `).get(campaignId, instanceId, videoId, videoId) as { id: string } | undefined
+        `).get(campaignId, instanceId, vid, vid) as { id: string } | undefined
       : db.prepare(`
           SELECT id FROM jobs
-          WHERE campaign_id = ? AND instance_id = ?
+          WHERE campaign_id = ?
+            AND json_extract(data_json, '$.instance_id') = ?
             AND status IN ('pending', 'running')
           LIMIT 1
         `).get(campaignId, instanceId) as { id: string } | undefined
 
     if (existingJob) {
-      console.log(`[IPC:pipeline:retry-node] Dedup: job ${existingJob.id} already pending/running for ${instanceId}${videoId ? `+${videoId}` : ''} — skipping`)
+      console.log(`[IPC:pipeline:retry-node] Dedup: job ${existingJob.id} already pending/running for ${instanceId}${vid ? `+${vid}` : ''} — skipping`)
       return { success: false, alreadyPending: true, existingJobId: existingJob.id, error: 'A retry job is already pending or running for this node' }
+    }
+
+    // ── Video processing lock: reject if this video is actively being processed ──
+    if (vid) {
+      const holder = VideoProcessingLock.isLocked(vid)
+      if (holder) {
+        console.log(`[IPC:pipeline:retry-node] Video ${vid} locked by ${holder.instanceId}/${holder.jobId} — skipping retry`)
+        return { success: false, videoLocked: true, error: `Video is currently being processed by ${holder.instanceId}` }
+      }
     }
 
     // Ensure campaign is active

@@ -40,6 +40,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
     const liveMsgRef = useRef(liveMsg)
     liveMsgRef.current = liveMsg
     const [alerts, setAlerts] = useState<{ type: string; message: string }[]>([])
+    const [actionInFlight, setActionInFlight] = useState<string | null>(null)
 
     useEffect(() => {
         const api = (window as any).api
@@ -332,24 +333,39 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                     )}
                 </div>
 
-                {/* Action buttons */}
+                {/* Action buttons — with loading state */}
                 <div className="flex items-center gap-1.5 shrink-0">
                     {(campaign.status === 'idle' || campaign.status === 'error') && (
-                        <ActionBtn onClick={e => { e.stopPropagation(); onAction('campaign:trigger', { id: campaign.id }) }}
+                        <ActionBtn onClick={async e => {
+                            e.stopPropagation()
+                            setActionInFlight('trigger')
+                            try { await Promise.resolve(onAction('campaign:trigger', { id: campaign.id })) } finally { setActionInFlight(null) }
+                        }}
+                            disabled={!!actionInFlight}
                             bg={P.pastelMint} color="#2e7d32" hoverBg="#c3dac6" borderColor="#94c8a0">
-                            🌿 Run
+                            {actionInFlight === 'trigger' ? '⏳ Starting...' : '🌿 Run'}
                         </ActionBtn>
                     )}
                     {(campaign.status === 'active' || campaign.status === 'running') && (
-                        <ActionBtn onClick={e => { e.stopPropagation(); onAction('campaign:pause', { id: campaign.id }) }}
+                        <ActionBtn onClick={async e => {
+                            e.stopPropagation()
+                            setActionInFlight('pause')
+                            try { await Promise.resolve(onAction('campaign:pause', { id: campaign.id })) } finally { setActionInFlight(null) }
+                        }}
+                            disabled={!!actionInFlight}
                             bg={P.pastelPeach} color="#8e5a2b" hoverBg="#ebd5c5" borderColor="#e0b896">
-                            ☕ Pause
+                            {actionInFlight === 'pause' ? '⏳ Pausing...' : '☕ Pause'}
                         </ActionBtn>
                     )}
                     {campaign.status === 'paused' && (
-                        <ActionBtn onClick={e => { e.stopPropagation(); onAction('campaign:resume', { id: campaign.id }) }}
+                        <ActionBtn onClick={async e => {
+                            e.stopPropagation()
+                            setActionInFlight('resume')
+                            try { await Promise.resolve(onAction('campaign:resume', { id: campaign.id })) } finally { setActionInFlight(null) }
+                        }}
+                            disabled={!!actionInFlight}
                             bg={P.pastelMint} color="#2e7d32" hoverBg="#c3dac6" borderColor="#94c8a0">
-                            🌿 Resume
+                            {actionInFlight === 'resume' ? '⏳ Resuming...' : '🌿 Resume'}
                         </ActionBtn>
                     )}
                     <button
@@ -431,15 +447,16 @@ function StatPill({ emoji, value, label, bg, valueColor, bold }: {
     )
 }
 
-function ActionBtn({ onClick, bg, color, hoverBg, borderColor, children }: {
-    onClick: (e: React.MouseEvent) => void; bg: string; color: string; hoverBg: string; borderColor: string; children: React.ReactNode
+function ActionBtn({ onClick, bg, color, hoverBg, borderColor, children, disabled }: {
+    onClick: (e: React.MouseEvent) => void; bg: string; color: string; hoverBg: string; borderColor: string; children: React.ReactNode; disabled?: boolean
 }) {
     return (
         <button onClick={onClick}
-            className="px-3 py-1.5 text-xs rounded-full font-bold transition shadow-sm cursor-pointer active:scale-95"
+            disabled={disabled}
+            className="px-3 py-1.5 text-xs rounded-full font-bold transition shadow-sm cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: bg, color, border: `1px solid ${borderColor}` }}
-            onMouseEnter={e => (e.currentTarget.style.background = hoverBg)}
-            onMouseLeave={e => (e.currentTarget.style.background = bg)}>
+            onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = hoverBg }}
+            onMouseLeave={e => { if (!disabled) e.currentTarget.style.background = bg }}>
             {children}
         </button>
     )
