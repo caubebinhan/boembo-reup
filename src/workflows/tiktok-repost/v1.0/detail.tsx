@@ -39,7 +39,7 @@ interface TikTokVideo {
 }
 
 interface TikTokRepostState {
-    phase: 'idle' | 'scanning' | 'scheduling' | 'downloading' | 'publishing' | 'monitoring' | 'paused' | 'finished' | 'error'
+    phase: 'idle' | 'scanning' | 'scheduling' | 'downloading' | 'editing' | 'captioning' | 'dedup' | 'checking_time' | 'publishing' | 'monitoring' | 'paused' | 'finished' | 'error'
     phaseMessage?: string
     videos: TikTokVideo[]
     scannedCount: number
@@ -76,6 +76,10 @@ function useTikTokRepostState(campaignId: string): TikTokRepostState {
                 if (log.event === 'node:start' && nodeId.includes('scanner')) { phase = 'scanning'; phaseMessage = 'Đang quét nguồn video...' }
                 if (log.event === 'node:start' && nodeId.includes('scheduler')) { phase = 'scheduling'; phaseMessage = 'Đang lên lịch publish...' }
                 if (log.event === 'node:start' && nodeId.includes('downloader')) { phase = 'downloading'; phaseMessage = 'Đang tải video...' }
+                if (log.event === 'node:start' && nodeId.includes('video_edit')) { phase = 'editing'; phaseMessage = 'Đang chỉnh sửa video...' }
+                if (log.event === 'node:start' && nodeId.includes('caption')) { phase = 'captioning'; phaseMessage = 'Đang tạo caption...' }
+                if (log.event === 'node:start' && nodeId.includes('account_dedup')) { phase = 'dedup'; phaseMessage = 'Đang kiểm tra trùng...' }
+                if (log.event === 'node:start' && nodeId.includes('check_in_time')) { phase = 'checking_time'; phaseMessage = 'Đang chờ lịch publish...' }
                 if (log.event === 'node:start' && nodeId.includes('publisher')) { phase = 'publishing'; phaseMessage = 'Đang publish...' }
                 if (log.event === 'node:start' && nodeId.includes('monitor')) { phase = 'monitoring'; phaseMessage = 'Đang theo dõi video mới...' }
                 if (log.event === 'campaign:finished') { phase = 'finished'; phaseMessage = log.message || 'Hoàn tất' }
@@ -191,6 +195,10 @@ const PHASE_UI: Record<string, { label: string; icon: string; color: string }> =
     scanning: { label: 'Đang quét...', icon: '🔍', color: '#7c3aed' },
     scheduling: { label: 'Lên lịch...', icon: '📋', color: '#ca8a04' },
     downloading: { label: 'Tải video...', icon: '⬇️', color: '#2563eb' },
+    editing: { label: 'Chỉnh sửa video...', icon: '🎬', color: '#7c3aed' },
+    captioning: { label: 'Tạo caption...', icon: '✍️', color: '#0891b2' },
+    dedup: { label: 'Kiểm tra trùng...', icon: '🔍', color: '#6366f1' },
+    checking_time: { label: 'Chờ lịch publish...', icon: '⏰', color: '#d97706' },
     publishing: { label: 'Publishing...', icon: '📤', color: '#059669' },
     monitoring: { label: 'Monitoring...', icon: '👁', color: '#0891b2' },
     paused: { label: 'Tạm dừng', icon: '⏸', color: '#d97706' },

@@ -43,6 +43,8 @@ export function setupVideoEditorIPC() {
 
   // ── Video Editor Window ─────────────────────────────
   let _editorParentWin: BrowserWindow | null = null
+  const _intentionalCloseSet = new Set<number>() // webContents IDs for editors that clicked "Done"
+  const _editorInitDataByContentsId = new Map<number, any>()
 
   safeHandle(IPC_CHANNELS.VIDEO_EDITOR_OPEN, async (event, payload?: { data?: any }) => {
     const { join } = require('node:path')
@@ -62,8 +64,31 @@ export function setupVideoEditorIPC() {
         webSecurity: false, // Allow file:// video URLs
       }
     })
+    _editorInitDataByContentsId.set(editorWin.webContents.id, payload?.data || {})
+
+    // Fix 7: Warn user about unsaved changes when closing via window controls
+    editorWin.on('close', (e) => {
+      // Skip dialog if this close was triggered by Done button
+      if (_intentionalCloseSet.has(editorWin.webContents.id)) {
+        _intentionalCloseSet.delete(editorWin.webContents.id)
+        return
+      }
+      const choice = dialog.showMessageBoxSync(editorWin, {
+        type: 'question',
+        buttons: ['Discard changes', 'Cancel'],
+        defaultId: 1,
+        title: 'Unsaved changes',
+        message: 'You have unsaved video editor changes. Discard and close?',
+      })
+      if (choice === 1) {
+        e.preventDefault()
+        return
+      }
+    })
 
     editorWin.on('closed', () => {
+      _intentionalCloseSet.delete(editorWin.webContents.id)
+      _editorInitDataByContentsId.delete(editorWin.webContents.id)
       if (_editorParentWin && !_editorParentWin.isDestroyed()) {
         // Keep wizard state in sync when user closes editor with window controls.
         _editorParentWin.webContents.send(IPC_CHANNELS.VIDEO_EDITOR_DONE, null)
@@ -72,7 +97,10 @@ export function setupVideoEditorIPC() {
     })
 
     editorWin.webContents.on('did-finish-load', () => {
-      editorWin.webContents.send(IPC_CHANNELS.VIDEO_EDITOR_INIT_DATA, payload?.data || {})
+      editorWin.webContents.send(
+        IPC_CHANNELS.VIDEO_EDITOR_INIT_DATA,
+        _editorInitDataByContentsId.get(editorWin.webContents.id) || {},
+      )
     })
 
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -82,6 +110,10 @@ export function setupVideoEditorIPC() {
     }
   })
 
+  safeHandle(IPC_CHANNELS.VIDEO_EDITOR_GET_INIT_DATA, async (event) => {
+    return _editorInitDataByContentsId.get(event.sender.id) || {}
+  })
+
   // Editor window calls this when user clicks "Done Editing"
   safeHandle(IPC_CHANNELS.VIDEO_EDITOR_DONE, async (event, result: any) => {
     if (_editorParentWin && !_editorParentWin.isDestroyed()) {
@@ -89,6 +121,7 @@ export function setupVideoEditorIPC() {
     }
     const editorWin = BrowserWindow.fromWebContents(event.sender)
     if (editorWin && !editorWin.isDestroyed()) {
+      _intentionalCloseSet.add(event.sender.id) // skip unsaved-changes dialog
       editorWin.close()
     }
     _editorParentWin = null
@@ -122,9 +155,28 @@ export function setupVideoEditorIPC() {
         timeoutMs: payload?.timeoutMs || 180_000,
         onProgress: (msg) => emit('info', msg, 'pipeline'),
       })
+      let previewOutputPath = result.outputPath
+      try {
+        const { mkdir, copyFile, rm } = await import('node:fs/promises')
+        const { extname, join } = await import('node:path')
+        const { tmpdir } = await import('node:os')
+        const previewDir = join(tmpdir(), 'boembo-video-preview')
+        await mkdir(previewDir, { recursive: true })
+        const ext = extname(result.outputPath || payload.videoPath) || '.mp4'
+        const tempPath = join(previewDir, `${requestId}${ext}`)
+        await copyFile(result.outputPath, tempPath)
+        previewOutputPath = tempPath
+
+        if (result.wasModified && result.outputPath && result.outputPath !== payload.videoPath) {
+          rm(result.outputPath, { force: true }).catch(() => {})
+        }
+        emit('info', `Preview temp file ready: ${tempPath}`, 'preview')
+      } catch (copyErr: any) {
+        emit('info', `Preview temp copy skipped: ${copyErr?.message || 'copy failed'}`, 'preview')
+      }
       emit('info', `Preview done (${result.totalDurationMs}ms)`)
       return {
-        outputPath: result.outputPath,
+        outputPath: previewOutputPath,
         wasModified: result.wasModified,
         requestId,
         trace,

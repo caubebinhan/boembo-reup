@@ -55,10 +55,26 @@ function normalizeObjectRect(value: unknown, fallback: CanvasRect): CanvasRect {
   })
 }
 
-export function resolveCanvasRect(operation: VideoEditOperation, plugin: PluginMeta): CanvasRect | null {
+export function resolveCanvasRect(
+  operation: VideoEditOperation,
+  plugin: PluginMeta,
+  sourceAspect?: number | null,
+): CanvasRect | null {
   const hint = plugin.previewHint || 'none'
 
+  // Fix 3: Logo Sequence uses appearances[].position (string presets) for rendering,
+  // not the numeric position/overlaySize that the canvas guide writes to. Skip it.
+  if (operation.pluginId === 'builtin.logo_sequence') return null
+
   if (hint === 'crop-guide') {
+    // Fix 2: In aspect mode, delegate to resolveCropRect which mirrors actual render logic.
+    const mode = String(operation.params.mode || 'aspect')
+    if (mode === 'aspect') {
+      const aspect = sourceAspect && Number.isFinite(sourceAspect) && sourceAspect > 0
+        ? sourceAspect
+        : null
+      return resolveCropRect(operation, aspect)
+    }
     const region = operation.params.cropRegion
     if (region) return normalizeObjectRect(region, DEFAULT_REGION_RECT)
     const fallback = {
@@ -212,8 +228,12 @@ export function applyCanvasRect(
   return operation.params
 }
 
-export function getCanvasNumericFields(operation: VideoEditOperation, plugin: PluginMeta): CanvasNumericField[] | null {
-  const rect = resolveCanvasRect(operation, plugin)
+export function getCanvasNumericFields(
+  operation: VideoEditOperation,
+  plugin: PluginMeta,
+  sourceAspect?: number | null,
+): CanvasNumericField[] | null {
+  const rect = resolveCanvasRect(operation, plugin, sourceAspect)
   if (!rect) return null
   return [
     { key: 'x', label: 'X', value: rect.x, min: 0, max: 100, step: 1 },
@@ -228,8 +248,9 @@ export function updateCanvasNumericField(
   plugin: PluginMeta,
   field: keyof CanvasRect,
   value: number,
+  sourceAspect?: number | null,
 ): Record<string, unknown> | null {
-  const rect = resolveCanvasRect(operation, plugin)
+  const rect = resolveCanvasRect(operation, plugin, sourceAspect)
   if (!rect) return null
   const next = { ...rect, [field]: value }
   return applyCanvasRect(operation, plugin, next)

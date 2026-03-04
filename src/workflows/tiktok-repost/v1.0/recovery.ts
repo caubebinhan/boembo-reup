@@ -40,6 +40,7 @@ export function recover(campaignId: string): void {
         })
 
         PipelineEventBus.emit('pipeline:info', {
+          campaignId,
           message: `[Manual] Paused campaign ${campaignId}: ${missedVideos.length} missed videos`,
         })
 
@@ -60,6 +61,7 @@ export function recover(campaignId: string): void {
 
       console.log(`${tag} Rescheduled ${rescheduled.length} missed videos`)
       PipelineEventBus.emit('pipeline:info', {
+        campaignId,
         message: `Rescheduled ${rescheduled.length} missed videos for campaign ${campaignId}`,
       })
 
@@ -85,11 +87,11 @@ export function recover(campaignId: string): void {
 
     store.save()
 
-    // 3. Re-trigger if no pending/running jobs
+    // 3. Re-trigger if no pending/running jobs (loop-state-aware via resumeCampaign)
     const pendingCount = jobRepo.countPendingForCampaign(campaignId)
     if (pendingCount === 0) {
-      console.log(`${tag} No pending jobs - re-triggering campaign`)
-      flowEngine.triggerCampaign(campaignId)
+      console.log(`${tag} No pending jobs - resuming campaign (loop-state-aware)`)
+      flowEngine.resumeCampaign(campaignId)
     }
   } catch (err) {
     console.error(`${tag} Recovery failed:`, err)

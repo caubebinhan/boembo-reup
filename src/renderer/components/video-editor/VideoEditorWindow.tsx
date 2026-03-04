@@ -99,17 +99,25 @@ export default function VideoEditorWindow(): ReactElement {
                 </div>
                 <div className="flex items-center gap-2">
                     {displaySrc && (
-                        <button onClick={() => state.handlePreview()}
-                            disabled={state.isRendering}
-                            aria-label="Render preview"
-                            aria-busy={state.isRendering}
-                            className="px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                            style={{
-                                background: state.isRendering ? V.beige : V.accent,
-                                color: state.isRendering ? V.textDim : '#fff',
-                            }}>
-                            {state.isRendering ? `⏳ ${state.previewStatus || 'Rendering...'}` : '▶️ Preview Result'}
-                        </button>
+                        <>
+                            <button onClick={state.handleUploadVideo}
+                                aria-label="Replace source video"
+                                className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer"
+                                style={{ background: V.cream, color: V.textMuted, border: `1px solid ${V.beige}` }}>
+                                🔄 Replace Source
+                            </button>
+                            <button onClick={() => state.handlePreview()}
+                                disabled={state.isRendering || !state.videoPath}
+                                aria-label="Render preview"
+                                aria-busy={state.isRendering}
+                                className="px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
+                                style={{
+                                    background: state.isRendering || !state.videoPath ? V.beige : V.accent,
+                                    color: state.isRendering || !state.videoPath ? V.textDim : '#fff',
+                                }}>
+                                {state.isRendering ? `⏳ ${state.previewStatus || 'Rendering...'}` : '▶️ Preview Result'}
+                            </button>
+                        </>
                     )}
                     <button onClick={state.handleDone}
                         aria-label="Apply edits and close editor"
@@ -119,11 +127,9 @@ export default function VideoEditorWindow(): ReactElement {
                     </button>
                 </div>
             </div>
-
-            {/* Main content */}
             <div className="flex flex-1 overflow-hidden min-h-0">
                 {/* Left: Toolbar */}
-                <EditorToolbar plugins={state.plugins} onAddOperation={state.handleAddOperation} />
+                <EditorToolbar plugins={state.plugins} operations={state.operations} onAddOperation={state.handleAddOperation} />
 
                 {/* Center: Video Preview */}
                 <div className="flex-1 min-h-0 relative overflow-hidden" style={{ background: '#1a1917' }}>
@@ -187,6 +193,7 @@ export default function VideoEditorWindow(): ReactElement {
                         <EditorProperties
                             operation={state.selectedOperation}
                             plugin={state.selectedPlugin}
+                            sourceAspect={videoDims.w > 0 && videoDims.h > 0 ? (videoDims.w / videoDims.h) : null}
                             onUpdateParams={state.handleUpdateParams}
                             onToggleEnabled={state.handleToggleEnabled}
                             onRemoveOperation={state.handleRemoveOperation}

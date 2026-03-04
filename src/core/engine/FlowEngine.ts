@@ -334,11 +334,27 @@ export class FlowEngine {
     ExecutionLogger.campaignEvent(campaignId, 'campaign:resumed', 'Campaign resumed')
 
     const pendingCount = jobRepo.countPendingForCampaign(campaignId)
-    if (pendingCount === 0) {
-      ExecutionLogger.campaignEvent(campaignId, 'campaign:retriggered',
-        'No pending jobs - re-triggering')
-      await this.triggerCampaign(campaignId)
+    if (pendingCount > 0) return // Jobs already queued, engine will pick them up
+
+    // Check if we were mid-loop (paused inside executeLoop)
+    const store = campaignRepo.tryOpen(campaignId)
+    if (store) {
+      const doc = store.doc as any
+      const loopData = doc._loopData
+      const loopInstanceId = doc._loopInstanceId || 'video_loop'
+      const loopNodeId = doc._loopNodeId || 'core.loop'
+      if (loopData) {
+        ExecutionLogger.campaignEvent(campaignId, 'campaign:loop-resumed',
+          `Resuming loop from item ${store.lastProcessedIndex + 1}`)
+        this.createJob(campaignId, store.doc.workflow_id, loopInstanceId, loopNodeId, loopData)
+        return
+      }
     }
+
+    // Truly no pending work - re-trigger from start
+    ExecutionLogger.campaignEvent(campaignId, 'campaign:retriggered',
+      'No pending jobs - re-triggering')
+    await this.triggerCampaign(campaignId)
   }
 
   // ── Tick ──────────────────────────────────────────────────────────────
@@ -493,10 +509,18 @@ export class FlowEngine {
     for (let i = startIndex; i < items.length; i++) {
       // Check campaign still active
       if (!isCampaignActive(job.campaign_id)) {
+        // Save loop state so resume can re-create this job
+        try {
+          const doc = store.doc as any
+          doc._loopData = items
+          doc._loopInstanceId = loopDef.instance_id
+          doc._loopNodeId = loopDef.node_id
+          store.save()
+        } catch { /* best-effort */ }
         ExecutionLogger.log({
           campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
           level: 'info', event: 'loop:paused',
-          message: `Loop paused at item ${i + 1}/${items.length}`,
+          message: `Loop paused at item ${i + 1}/${items.length} — state saved for resume`,
         })
         return
       }

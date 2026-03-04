@@ -71,23 +71,11 @@ function WorkflowPicker({ onSelect, onClose }: { onSelect: (id: string) => void,
   )
 }
 
-// ── Main App ───────────────────────────────────────
-function AppContent() {
-  const [showWizard, setShowWizard] = useState(false)
-  const [showFlowPicker, setShowFlowPicker] = useState(false)
-  const [selectedFlowId, setSelectedFlowId] = useState<string>('tiktok-repost')
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null)
-  const [homeTab, setHomeTab] = useState<'campaigns' | 'settings' | 'troubleshooting'>('campaigns')
+// ── Shared IPC listeners — used by both AppContent and detail-only window ──
+function useGlobalIPCListeners() {
   const dispatch = useDispatch()
 
   useEffect(() => {
-    // @ts-ignore
-    window.api.invoke('campaign:list').then((campaigns: any) => {
-      import('./store/campaignsSlice').then(({ setCampaigns }) => {
-        dispatch(setCampaigns(campaigns))
-      })
-    })
-
     // @ts-ignore
     const offUpdate = window.api.on('pipeline:update', (payload: any) => {
       dispatch(upsertTask({
@@ -108,14 +96,7 @@ function AppContent() {
       dispatch(clearInteraction(payload))
     })
 
-    // @ts-ignore
-    const offCampaignCreated = window.api.on('campaign:created', (payload: any) => {
-      import('./store/campaignsSlice').then(({ addCampaign }) => {
-        dispatch(addCampaign(payload))
-      })
-    })
-
-    // FlowEngine real-time events
+    // FlowEngine real-time events — forward errorCode for rich error actions
     // @ts-ignore
     const offNodeStatus = window.api.on('node:status', (payload: any) => {
       dispatch(updateNodeStatus({
@@ -123,7 +104,8 @@ function AppContent() {
         instanceId: payload.instanceId,
         status: payload.status,
         jobId: payload.jobId,
-        error: payload.error
+        error: payload.error,
+        errorCode: payload.errorCode,
       }))
     })
 
@@ -155,8 +137,41 @@ function AppContent() {
 
     return () => {
       offUpdate(); offWaiting(); offResolved()
-      offCampaignCreated(); offNodeStatus(); offNodeProgress()
+      offNodeStatus(); offNodeProgress()
       offCampaignFinished(); offToast()
+    }
+  }, [dispatch])
+}
+
+// ── Main App ───────────────────────────────────────
+function AppContent() {
+  const [showWizard, setShowWizard] = useState(false)
+  const [showFlowPicker, setShowFlowPicker] = useState(false)
+  const [selectedFlowId, setSelectedFlowId] = useState<string>('tiktok-repost')
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null)
+  const [homeTab, setHomeTab] = useState<'campaigns' | 'settings' | 'troubleshooting'>('campaigns')
+  const dispatch = useDispatch()
+
+  // Gap #1: shared IPC listeners — active in both main and detail-only windows
+  useGlobalIPCListeners()
+
+  useEffect(() => {
+    // @ts-ignore
+    window.api.invoke('campaign:list').then((campaigns: any) => {
+      import('./store/campaignsSlice').then(({ setCampaigns }) => {
+        dispatch(setCampaigns(campaigns))
+      })
+    })
+
+    // @ts-ignore
+    const offCampaignCreated = window.api.on('campaign:created', (payload: any) => {
+      import('./store/campaignsSlice').then(({ addCampaign }) => {
+        dispatch(addCampaign(payload))
+      })
+    })
+
+    return () => {
+      offCampaignCreated()
     }
   }, [dispatch])
 
@@ -258,6 +273,31 @@ function AppContent() {
   )
 }
 
+// Gap #1: Standalone detail window that includes global IPC listeners
+function DetailWindowWrapper({ campaignId }: { campaignId: string }) {
+  useGlobalIPCListeners()
+  return (
+    <>
+      <Toaster
+        theme="light"
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: 'var(--ev-c-white-soft)',
+            border: '1px solid var(--ev-c-gray-3)',
+            color: 'var(--ev-c-black)',
+            fontSize: '14px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+          },
+        }}
+        richColors
+        closeButton
+      />
+      <CampaignDetail campaignId={campaignId} onBack={() => window.close()} />
+    </>
+  )
+}
+
 export default function App() {
   // If this window was opened via #/video-editor hash, render the editor
   if (window.location.hash === '#/video-editor') {
@@ -269,7 +309,7 @@ export default function App() {
   if (detailMatch) {
     return (
       <Provider store={store}>
-        <CampaignDetail campaignId={detailMatch[1]} onBack={() => window.close()} />
+        <DetailWindowWrapper campaignId={detailMatch[1]} />
       </Provider>
     )
   }

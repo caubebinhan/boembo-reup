@@ -75,12 +75,35 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
             }
         })
 
+        // Fix #3: Listen to pipeline:info, network-error, disk-error
+        const offPipelineInfo = api.on?.('pipeline:info', (ev: any) => {
+            if (ev.campaignId === campaign.id) {
+                setAlerts(prev => {
+                    if (prev.some(a => a.message === ev.message)) return prev
+                    return [...prev, { type: 'info', message: ev.message || 'System event' }]
+                })
+            }
+        })
+        const offNetworkError = api.on?.('campaign:network-error', (ev: any) => {
+            if (ev.campaign_id === campaign.id) {
+                setAlerts(prev => [...prev, { type: 'network', message: ev.message || 'Network error detected' }])
+            }
+        })
+        const offDiskError = api.on?.('campaign:disk-error', (ev: any) => {
+            if (ev.campaign_id === campaign.id) {
+                setAlerts(prev => [...prev, { type: 'disk', message: ev.message || 'Disk error detected' }])
+            }
+        })
+
         const offStatus = api.on?.('campaigns-updated', () => setLiveMsg(null))
 
         return () => {
             if (typeof offProgress === 'function') offProgress()
             if (typeof offNodeEvent === 'function') offNodeEvent()
             if (typeof offHealthCheck === 'function') offHealthCheck()
+            if (typeof offPipelineInfo === 'function') offPipelineInfo()
+            if (typeof offNetworkError === 'function') offNetworkError()
+            if (typeof offDiskError === 'function') offDiskError()
             if (typeof offStatus === 'function') offStatus()
         }
     }, [campaign.id])
@@ -104,6 +127,9 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
         cancelled: { label: 'Cancelled', emoji: '🚫', color: '#6b6b6b', bg: '#f0f0f0', border: '#d0d0d0' },
         needs_captcha: { label: 'Captcha', emoji: '🧩', color: '#8e5a2b', bg: P.pastelPeach, border: '#e0b896' },
         scheduling: { label: 'Scheduling', emoji: '📋', color: '#7c3aed', bg: P.pastelLavender, border: '#c09ee0', blink: true },
+        session_expired: { label: 'Re-login', emoji: '🔑', color: '#92400e', bg: P.pastelYellow, border: '#fcd34d' },
+        recovering: { label: 'Recovering', emoji: '🔄', color: '#2563eb', bg: P.pastelBlue, border: '#93b4d4', blink: true },
+        degraded: { label: 'Degraded', emoji: '⚠️', color: '#d97706', bg: P.pastelPeach, border: '#e0b896' },
     }
 
     const badge = statusConfig[campaign.status] || statusConfig.idle!
@@ -338,6 +364,9 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                             session_expired: { bg: P.pastelYellow, color: '#92400e', border: '#fcd34d', emoji: '🔑' },
                             publish_failed: { bg: P.pastelPink, color: '#9e3d4d', border: '#e0a8b0', emoji: '🥀' },
                             error: { bg: P.pastelPink, color: '#9e3d4d', border: '#e0a8b0', emoji: '⚠️' },
+                            info: { bg: P.pastelBlue, color: '#2e5a88', border: '#93b4d4', emoji: '📢' },
+                            network: { bg: P.pastelYellow, color: '#92400e', border: '#fcd34d', emoji: '🌐' },
+                            disk: { bg: P.pastelPink, color: '#9e3d4d', border: '#e0a8b0', emoji: '💾' },
                         }
                         const s = alertStyles[alert.type] || alertStyles.error!
                         return (

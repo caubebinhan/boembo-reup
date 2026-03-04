@@ -107,21 +107,44 @@ export class ExecutionLogger {
     })
   }
 
-  /** Emit structured node result data for live detail views */
+  /** Emit structured node result data for live detail views — also persist to DB */
   static nodeData(campaignId: string, instanceId: string, nodeId: string, data: any) {
     this.emitToUI('execution:node-data', {
       campaignId, instanceId, nodeId, data, timestamp: Date.now()
     })
+    // Area C: Persist to execution_logs — compact large snapshots to prevent DB bloat
+    let compactData = data
+    try {
+      const raw = JSON.stringify(data)
+      if (raw.length > 1000) {
+        // Keep only top-level keys with truncated values
+        compactData = Object.fromEntries(
+          Object.entries(data).map(([k, v]) => {
+            const s = typeof v === 'string' ? v : JSON.stringify(v)
+            return [k, s.length > 200 ? s.slice(0, 200) + '…' : v]
+          })
+        )
+      }
+    } catch { /* keep original */ }
+    this.log({
+      campaign_id: campaignId,
+      instance_id: instanceId,
+      node_id: nodeId,
+      level: 'debug',
+      event: 'node:data',
+      message: `Node data snapshot: ${instanceId}`,
+      data: compactData,
+    })
   }
 
-  static nodeError(campaignId: string, jobId: string, instanceId: string, nodeId: string, error: string) {
+  static nodeError(campaignId: string, jobId: string, instanceId: string, nodeId: string, error: string, errorCode?: string) {
     this.log({
       campaign_id: campaignId, job_id: jobId, instance_id: instanceId, node_id: nodeId,
       level: 'error', event: 'node:error',
       message: error
     })
     this.emitToUI('node:status', {
-      campaignId, instanceId, nodeId, status: 'failed', jobId, error
+      campaignId, instanceId, nodeId, status: 'failed', jobId, error, errorCode
     })
     // Push error toast to UI
     this.sendToast('error', `${instanceId}`, error)
@@ -149,7 +172,7 @@ export class ExecutionLogger {
       level: 'info', event,
       message, data
     })
-    const payload = { campaignId, ...data }
+    const payload = { campaignId, campaign_id: campaignId, ...data }
     this.emitToUI(event, payload)
     _bus.emit(event, payload)
   }

@@ -1,6 +1,8 @@
 import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { failGracefully } from '@core/nodes/NodeHelpers'
 import { TikTokScanner } from '@main/tiktok/TikTokScanner'
+import { ExecutionLogger } from '@core/engine/ExecutionLogger'
+import { statSync } from 'node:fs'
 
 const INSTANCE_ID = 'downloader_1'
 
@@ -11,7 +13,11 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       'No download URL available')
   }
 
-  ctx.onProgress(`Downloading: ${video.description?.slice(0, 40) || video.platform_id}`)
+  ctx.onProgress(`⬇️ Đang tải: ${video.description?.slice(0, 40) || video.platform_id}`)
+  const downloadStartMs = Date.now()
+  ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'video:downloading', {
+    videoId: video.platform_id, url: video.download_url || video.url,
+  })
 
   let result: any
   try {
@@ -41,6 +47,16 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   })
   ctx.store.save()
 
-  ctx.logger.info(`Downloaded: ${result.filePath}${result.description ? ' (caption updated)' : ''}`)
+  // Compute file size
+  let fileSizeMB = 0
+  try { fileSizeMB = Math.round(statSync(result.filePath).size / 1024 / 1024 * 10) / 10 } catch {}
+  const downloadDurationMs = Date.now() - downloadStartMs
+
+  ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'video:downloaded', {
+    videoId: video.platform_id, fileSizeMB, downloadDurationMs,
+    localPath: result.filePath,
+  })
+
+  ctx.logger.info(`✅ Tải xong: ${result.filePath} (${fileSizeMB}MB, ${Math.round(downloadDurationMs/1000)}s)`)
   return { data: { ...video, local_path: result.filePath, description: realDescription } }
 }

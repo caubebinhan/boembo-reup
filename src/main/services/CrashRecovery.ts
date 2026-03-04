@@ -27,6 +27,7 @@ export class CrashRecoveryService {
         console.log(`[CrashRecovery] Reset ${resetJobs.length} stuck running jobs -> pending`)
         for (const job of resetJobs) {
           PipelineEventBus.emit('pipeline:info', {
+            campaignId: job.campaign_id,
             message: `Recovered job ${job.id} to "pending" status after crash`,
           })
         }

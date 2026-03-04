@@ -1,6 +1,9 @@
 import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { normalizeTimeRanges } from '../_shared/timeWindow'
 import { computeScheduleSlots, scheduleVideos } from '@shared/scheduling'
+import { ExecutionLogger } from '@core/engine/ExecutionLogger'
+
+const INSTANCE_ID = 'scheduler_1'
 
 /**
  * VideoScheduler Node
@@ -89,6 +92,15 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     ctx.store.upsertVideos(scheduledVideos)
     ctx.store.save()
 
+    // Emit structured event per video
+    for (const sv of scheduledVideos) {
+      ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'scheduler:scheduled', {
+        videoId: sv.platform_id,
+        scheduledFor: sv.scheduled_for,
+        queueIndex: sv.queue_index,
+      })
+    }
+
     if (pendingCount > 0) {
       ctx.logger.info(`[VideoScheduler] ${pendingCount} videos set to pending_approval (autoSchedule=false)`)
     }
@@ -106,11 +118,14 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       })
       for (const r of rescheduled) {
         ctx.store.updateVideo(r.platform_id, { scheduled_for: r.scheduled_for })
+        ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'scheduler:rescheduled', {
+          videoId: r.platform_id, newTime: r.scheduled_for, reason: 'missed',
+        })
       }
       ctx.store.save()
 
       ctx.logger.info(`[VideoScheduler] Rescheduled ${rescheduled.length} missed videos`)
-      ctx.alert('warn', `Detected ${missedVideos.length} missed job${missedVideos.length > 1 ? 's' : ''}`, `Rescheduled ${rescheduled.length} video${rescheduled.length > 1 ? 's' : ''} starting from now`)
+      ctx.alert('warn', `⏰ Phát hiện ${missedVideos.length} video bị lỡ lịch`, `Đã reschedule ${rescheduled.length} video từ bây giờ (interval=${intervalMinutes}min, jitter=${enableJitter ? 'on' : 'off'})`)
     }
 
     const firstTime = new Date(videos[0].scheduled_for).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })

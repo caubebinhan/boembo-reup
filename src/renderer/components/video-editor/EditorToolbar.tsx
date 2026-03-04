@@ -3,15 +3,16 @@
  * Uses shared types from ./types
  */
 import { useState, useRef, useEffect } from 'react'
-import type { PluginMeta } from './types'
+import type { PluginMeta, VideoEditOperation } from './types'
 import { PLUGIN_GROUPS, V } from './types'
 
 interface EditorToolbarProps {
     plugins: PluginMeta[]
+    operations: VideoEditOperation[]
     onAddOperation: (pluginId: string) => void
 }
 
-export function EditorToolbar({ plugins, onAddOperation }: EditorToolbarProps) {
+export function EditorToolbar({ plugins, operations, onAddOperation }: EditorToolbarProps) {
     const [openGroup, setOpenGroup] = useState<string | null>(null)
     const ref = useRef<HTMLDivElement>(null)
 
@@ -56,27 +57,35 @@ export function EditorToolbar({ plugins, onAddOperation }: EditorToolbarProps) {
                                             style={{ background: V.accentSoft, color: V.accent }}>{gp.length}</span>
                                     </div>
                                     <div className="py-1">
-                                        {gp.map(plugin => (
-                                            <button key={plugin.id}
-                                                onClick={() => { onAddOperation(plugin.id); setOpenGroup(null) }}
-                                                aria-label={`Add ${plugin.name}`}
-                                                className="w-full px-3 py-2 flex items-center gap-2.5 transition-all text-left cursor-pointer"
-                                                onMouseEnter={e => (e.currentTarget.style.background = V.accentSoft)}
-                                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                                                <span className="text-lg shrink-0">{plugin.icon}</span>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="text-xs font-semibold truncate" style={{ color: V.charcoal }}>{plugin.name}</div>
-                                                    <div className="text-[10px] truncate mt-0.5" style={{ color: V.textDim }}>{plugin.description}</div>
-                                                </div>
-                                                {plugin.previewHint !== 'none' ? (
-                                                    <span className="text-[9px] px-1 py-0.5 rounded-full shrink-0 font-bold"
-                                                        style={{ background: V.pastelMint, color: '#2e7d32' }}>LIVE</span>
-                                                ) : (
-                                                    <span className="text-[9px] px-1 py-0.5 rounded-full shrink-0 font-bold"
-                                                        style={{ background: '#fef3c7', color: '#92400e' }}>AUTO</span>
-                                                )}
-                                            </button>
-                                        ))}
+                                        {gp.map(plugin => {
+                                            const atLimit = plugin.allowMultipleInstances === false && operations.some(op => op.pluginId === plugin.id)
+                                            return (
+                                                <button key={plugin.id}
+                                                    onClick={() => { if (!atLimit) { onAddOperation(plugin.id); setOpenGroup(null) } }}
+                                                    aria-label={atLimit ? `${plugin.name} (already added)` : `Add ${plugin.name}`}
+                                                    aria-disabled={atLimit}
+                                                    className="w-full px-3 py-2 flex items-center gap-2.5 transition-all text-left cursor-pointer"
+                                                    style={{ opacity: atLimit ? 0.45 : 1, cursor: atLimit ? 'not-allowed' : 'pointer' }}
+                                                    onMouseEnter={e => { if (!atLimit) e.currentTarget.style.background = V.accentSoft }}
+                                                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                                                    <span className="text-lg shrink-0">{plugin.icon}</span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-xs font-semibold truncate" style={{ color: V.charcoal }}>{plugin.name}</div>
+                                                        <div className="text-[10px] truncate mt-0.5" style={{ color: V.textDim }}>{plugin.description}</div>
+                                                    </div>
+                                                    {atLimit ? (
+                                                        <span className="text-[9px] px-1 py-0.5 rounded-full shrink-0 font-bold"
+                                                            style={{ background: V.beige, color: V.textDim }}>ADDED</span>
+                                                    ) : plugin.previewHint !== 'none' ? (
+                                                        <span className="text-[9px] px-1 py-0.5 rounded-full shrink-0 font-bold"
+                                                            style={{ background: V.pastelMint, color: '#2e7d32' }}>LIVE</span>
+                                                    ) : (
+                                                        <span className="text-[9px] px-1 py-0.5 rounded-full shrink-0 font-bold"
+                                                            style={{ background: '#fef3c7', color: '#92400e' }}>AUTO</span>
+                                                    )}
+                                                </button>
+                                            )
+                                        })}
                                     </div>
                                 </div>
                             )}

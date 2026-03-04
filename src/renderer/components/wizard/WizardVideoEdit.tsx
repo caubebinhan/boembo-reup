@@ -83,6 +83,7 @@ export function WizardVideoEdit({ data, updateData }: WizardStepProps) {
                         videoEditOperations: result.videoEditOperations || [],
                         _enabledPluginIds: result._enabledPluginIds || [],
                         _previewVideoSrc: result._previewVideoSrc || null,
+                        _videoPath: result._videoPath || null,
                     })
                 }
             } catch (err: any) {
@@ -103,6 +104,7 @@ export function WizardVideoEdit({ data, updateData }: WizardStepProps) {
                     videoEditOperations: data.videoEditOperations || [],
                     _enabledPluginIds: data._enabledPluginIds || [],
                     _previewVideoSrc: data._previewVideoSrc || null,
+                    _videoPath: data._videoPath || null,
                 }
             })
         } catch (e) {

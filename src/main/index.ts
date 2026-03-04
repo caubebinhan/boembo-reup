@@ -64,6 +64,19 @@ function createWindow(): void {
     mainWindow.webContents.send('pipeline:interaction_resolved', payload)
   })
 
+  // Area A: Forward recovery/info events to UI + persist to DB
+  PipelineEventBus.on('pipeline:info', (payload) => {
+    const { ExecutionLogger } = require('../core/engine/ExecutionLogger')
+    ExecutionLogger.emitToRenderer('pipeline:info', payload)
+    ExecutionLogger.log({
+      campaign_id: payload.campaignId || '_system',
+      level: 'info',
+      event: 'pipeline:info',
+      message: payload.message || '',
+      data: payload,
+    })
+  })
+
   mainWindow.on('ready-to-show', () => {
     if (!isE2EHeadless) mainWindow.show()
   })

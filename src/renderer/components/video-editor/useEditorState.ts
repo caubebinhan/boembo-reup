@@ -37,6 +37,27 @@ interface UseEditorStateReturn {
   selectedPlugin: PluginMeta | null
 }
 
+function toFileSrc(path: string): string {
+  const raw = String(path || '').trim()
+  if (!raw) return ''
+  if (/^(file|https?|data):/i.test(raw)) return raw
+
+  const normalized = raw.replace(/\\/g, '/')
+  if (/^[a-zA-Z]:\//.test(normalized)) return `file:///${normalized}`
+  if (normalized.startsWith('/')) return `file://${normalized}`
+  return `file://${normalized}`
+}
+
+function hasInitPayloadShape(initData: any): boolean {
+  if (!initData || typeof initData !== 'object') return false
+  return (
+    Object.prototype.hasOwnProperty.call(initData, 'videoEditOperations')
+    || Object.prototype.hasOwnProperty.call(initData, '_videoPath')
+    || Object.prototype.hasOwnProperty.call(initData, '_previewVideoSrc')
+    || Object.prototype.hasOwnProperty.call(initData, '_enabledPluginIds')
+  )
+}
+
 export function useEditorState(): UseEditorStateReturn {
   const [videoSrc, setVideoSrc] = useState<string | null>(null)
   const [videoPath, setVideoPath] = useState<string | null>(null)
@@ -51,6 +72,7 @@ export function useEditorState(): UseEditorStateReturn {
   const [traceLogs, setTraceLogs] = useState<Array<{ ts: number; level: 'info' | 'warn' | 'error'; message: string }>>([])
   const activePreviewRequestIdRef = useRef<string | null>(null)
   const lastParamTraceAtRef = useRef(0)
+  const hasAppliedInitPayloadRef = useRef(false)
 
   const pushTrace = useCallback((message: string, level: 'info' | 'warn' | 'error' = 'info') => {
     const row = { ts: Date.now(), level, message }
@@ -58,6 +80,43 @@ export function useEditorState(): UseEditorStateReturn {
     if (level === 'error') console.error('[VideoEditor:Trace]', message)
     else console.log('[VideoEditor:Trace]', message)
   }, [])
+
+  const applyInitData = useCallback((initData: any, source: 'event' | 'pull'): void => {
+    if (!hasInitPayloadShape(initData)) return
+    if (hasAppliedInitPayloadRef.current) return
+    hasAppliedInitPayloadRef.current = true
+
+    if (Object.prototype.hasOwnProperty.call(initData, 'videoEditOperations')) {
+      const restoredOps = Array.isArray(initData.videoEditOperations)
+        ? (initData.videoEditOperations as VideoEditOperation[])
+        : []
+      setOperations(restoredOps)
+      setSelectedOpId(restoredOps[0]?.id || null)
+      pushTrace(`Restored ${restoredOps.length} operation(s) from wizard state (${source}).`)
+    }
+
+    if (Object.prototype.hasOwnProperty.call(initData, '_videoPath')) {
+      const restoredPath = typeof initData._videoPath === 'string'
+        ? initData._videoPath.trim()
+        : ''
+      if (restoredPath) {
+        setVideoPath(restoredPath)
+        setVideoSrc(toFileSrc(restoredPath))
+        pushTrace(`Restored source video path: ${restoredPath}`)
+      } else {
+        setVideoPath(null)
+        setVideoSrc(null)
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(initData, '_previewVideoSrc')) {
+      const restoredPreview = typeof initData._previewVideoSrc === 'string'
+        ? initData._previewVideoSrc.trim()
+        : ''
+      setPreviewSrc(restoredPreview || null)
+      if (restoredPreview) pushTrace('Restored previous preview source.')
+    }
+  }, [pushTrace])
 
   // Load plugins and defaults from main process
   useEffect(() => {
@@ -70,8 +129,9 @@ export function useEditorState(): UseEditorStateReturn {
     }).catch(() => {})
 
     api.invoke?.(IPC_CHANNELS.VIDEO_EDIT_GET_DEFAULTS).then((ops: VideoEditOperation[]) => {
-      if (ops?.length) {
+      if (ops?.length && !hasAppliedInitPayloadRef.current) {
         setOperations(ops)
+        setSelectedOpId(prev => prev || ops[0]?.id || null)
         pushTrace(`Initialized ${ops.length} default operations.`)
       }
     }).catch(() => {})
@@ -82,18 +142,13 @@ export function useEditorState(): UseEditorStateReturn {
     const api = (window as any).api
     if (!api) return
     const off = api.on?.(IPC_CHANNELS.VIDEO_EDITOR_INIT_DATA, (initData: any) => {
-      if (!initData) return
-      if (initData.videoEditOperations?.length) {
-        setOperations(initData.videoEditOperations)
-        pushTrace(`Restored ${initData.videoEditOperations.length} operation(s) from wizard state.`)
-      }
-      if (initData._previewVideoSrc) {
-        setPreviewSrc(initData._previewVideoSrc)
-        pushTrace('Restored previous preview source.')
-      }
+      applyInitData(initData, 'event')
     })
+    api.invoke?.(IPC_CHANNELS.VIDEO_EDITOR_GET_INIT_DATA)
+      .then((initData: any) => applyInitData(initData, 'pull'))
+      .catch(() => {})
     return () => { if (typeof off === 'function') off() }
-  }, [pushTrace])
+  }, [applyInitData])
 
   useEffect(() => {
     const api = (window as any).api
@@ -120,7 +175,7 @@ export function useEditorState(): UseEditorStateReturn {
       })
       if (path) {
         setVideoPath(path)
-        setVideoSrc(`file://${path}`)
+        setVideoSrc(toFileSrc(path))
         setPreviewSrc(null)
         setPreviewError(null)
         pushTrace(`Selected source video: ${path}`)
@@ -134,6 +189,15 @@ export function useEditorState(): UseEditorStateReturn {
   const handleAddOperation = useCallback((pluginId: string) => {
     const plugin = plugins.find(p => p.id === pluginId)
     if (!plugin) return
+
+    // Fix 6: Enforce allowMultipleInstances
+    if (plugin.allowMultipleInstances === false) {
+      const existing = operations.find(op => op.pluginId === pluginId)
+      if (existing) {
+        pushTrace(`Cannot add another ${plugin.name}: only one instance allowed.`, 'warn')
+        return
+      }
+    }
 
     const defaultParams: Record<string, any> = {}
     plugin.configSchema.forEach(f => {
@@ -151,7 +215,7 @@ export function useEditorState(): UseEditorStateReturn {
     setOperations(prev => [...prev, newOp])
     setSelectedOpId(newOp.id)
     pushTrace(`Added operation: ${plugin.name}`)
-  }, [plugins, operations.length, pushTrace])
+  }, [plugins, operations, pushTrace])
 
   // Remove operation
   const handleRemoveOperation = useCallback((opId: string) => {
@@ -224,7 +288,8 @@ export function useEditorState(): UseEditorStateReturn {
         return
       }
       if (result?.outputPath) {
-        setPreviewSrc(`file://${result.outputPath}?t=${Date.now()}`)
+        const src = toFileSrc(result.outputPath)
+        setPreviewSrc(`${src}?t=${Date.now()}`)
         pushTrace(`Preview output generated: ${result.outputPath}`)
         return
       }
@@ -251,9 +316,10 @@ export function useEditorState(): UseEditorStateReturn {
       videoEditOperations: operations,
       _enabledPluginIds: enabledPluginIds,
       _previewVideoSrc: previewSrc,
+      _videoPath: videoPath,
     })
     pushTrace('Done clicked. Sending editor result back to wizard.')
-  }, [operations, previewSrc, pushTrace])
+  }, [operations, previewSrc, videoPath, pushTrace])
 
   // Derived
   const selectedOperation = useMemo(

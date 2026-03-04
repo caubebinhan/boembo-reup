@@ -10,21 +10,42 @@ import { getCanvasNumericFields, updateCanvasNumericField } from './canvas-contr
 interface EditorPropertiesProps {
     operation: VideoEditOperation | null
     plugin: PluginMeta | null
+    sourceAspect?: number | null
     onUpdateParams: (opId: string, params: Record<string, any>) => void
     onToggleEnabled: (opId: string) => void
     onRemoveOperation: (opId: string) => void
 }
 
-export function EditorProperties({ operation, plugin, onUpdateParams, onToggleEnabled, onRemoveOperation }: EditorPropertiesProps) {
+export function EditorProperties({
+    operation,
+    plugin,
+    sourceAspect,
+    onUpdateParams,
+    onToggleEnabled,
+    onRemoveOperation,
+}: EditorPropertiesProps) {
     const isVisual = plugin?.previewHint !== 'none'
+    const isOverlayOperation = plugin?.group === 'overlay'
+        || plugin?.previewHint === 'overlay-image'
+        || plugin?.previewHint === 'overlay-text'
     const visibleFields = useMemo(
         () => (operation && plugin)
             ? plugin.configSchema.filter(f => !f.condition || operation.params[f.condition.field] === f.condition.value)
             : [],
         [plugin, operation],
     )
-    const panelFields = useMemo(() => visibleFields.filter(f => !['position'].includes(f.type)), [visibleFields])
-    const canvasFields = useMemo(() => (operation && plugin) ? getCanvasNumericFields(operation, plugin) : null, [operation, plugin])
+    const panelFields = useMemo(
+        () => isOverlayOperation
+            ? visibleFields
+            : visibleFields.filter(f => !['position'].includes(f.type)),
+        [isOverlayOperation, visibleFields],
+    )
+    const canvasFields = useMemo(
+        () => (operation && plugin)
+            ? getCanvasNumericFields(operation, plugin, sourceAspect)
+            : null,
+        [operation, plugin, sourceAspect],
+    )
     const updateParam = (key: string, value: any) => {
         if (!operation) return
         onUpdateParams(operation.id, { ...operation.params, [key]: value })
@@ -89,48 +110,112 @@ export function EditorProperties({ operation, plugin, onUpdateParams, onToggleEn
             )}
 
             <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3">
-                {canvasFields && (
-                    <div className="p-2.5 rounded-xl flex flex-col gap-2"
+                {isOverlayOperation ? (
+                    <div className="p-2.5 rounded-xl flex flex-col gap-3"
                         style={{ background: V.cream, border: `1px solid ${V.beige}` }}>
                         <div className="flex items-center justify-between">
-                            <p className="text-[10px] font-bold tracking-wide uppercase" style={{ color: V.textDim }}>Canvas Values (%)</p>
-                            <span className="text-[9px] font-medium" style={{ color: V.textDim }}>live sync</span>
+                            <p className="text-[10px] font-bold tracking-wide uppercase" style={{ color: V.textDim }}>
+                                Overlay Controls
+                            </p>
+                            <span className="text-[9px] font-medium" style={{ color: V.textDim }}>
+                                {panelFields.length} option{panelFields.length !== 1 ? 's' : ''}
+                            </span>
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            {canvasFields.map(field => (
-                                <label key={field.key} className="flex items-center gap-1.5">
-                                    <span className="text-[10px] font-bold w-4 text-right" style={{ color: V.textDim }}>{field.label}</span>
-                                    <input
-                                        type="number"
-                                        value={Math.round(field.value)}
-                                        min={field.min}
-                                        max={field.max}
-                                        step={field.step}
-                                        aria-label={`Canvas ${field.label}`}
-                                        onChange={e => {
-                                            const next = updateCanvasNumericField(
-                                                operation,
-                                                plugin,
-                                                field.key,
-                                                Number(e.target.value),
-                                            )
-                                            if (next) onUpdateParams(operation.id, next as Record<string, any>)
-                                        }}
-                                        className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
-                                        style={{ background: V.card, border: `1px solid ${V.beige}`, color: V.charcoal }}
-                                    />
-                                </label>
-                            ))}
-                        </div>
+
+                        {canvasFields && (
+                            <div className="p-2 rounded-lg flex flex-col gap-2"
+                                style={{ background: V.card, border: `1px solid ${V.beige}` }}>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[10px] font-bold tracking-wide uppercase" style={{ color: V.textDim }}>Canvas Values (%)</p>
+                                    <span className="text-[9px] font-medium" style={{ color: V.textDim }}>live sync</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {canvasFields.map(field => (
+                                        <label key={field.key} className="flex items-center gap-1.5">
+                                            <span className="text-[10px] font-bold w-4 text-right" style={{ color: V.textDim }}>{field.label}</span>
+                                            <input
+                                                type="number"
+                                                value={Math.round(field.value)}
+                                                min={field.min}
+                                                max={field.max}
+                                                step={field.step}
+                                                aria-label={`Canvas ${field.label}`}
+                                                onChange={e => {
+                                                    const next = updateCanvasNumericField(
+                                                        operation,
+                                                        plugin,
+                                                        field.key,
+                                                        Number(e.target.value),
+                                                        sourceAspect,
+                                                    )
+                                                    if (next) onUpdateParams(operation.id, next as Record<string, any>)
+                                                }}
+                                                className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
+                                                style={{ background: V.card, border: `1px solid ${V.beige}`, color: V.charcoal }}
+                                            />
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {panelFields.map(field => (
+                            <FieldRenderer key={field.key} field={field}
+                                value={operation.params[field.key] ?? field.default}
+                                onChange={val => updateParam(field.key, val)} />
+                        ))}
+
+                        {panelFields.length === 0 && !canvasFields && (
+                            <p className="text-center text-xs py-2" style={{ color: V.textDim }}>No overlay options</p>
+                        )}
                     </div>
-                )}
-                {panelFields.map(field => (
-                    <FieldRenderer key={field.key} field={field}
-                        value={operation.params[field.key] ?? field.default}
-                        onChange={val => updateParam(field.key, val)} />
-                ))}
-                {panelFields.length === 0 && (
-                    <p className="text-center text-xs py-6" style={{ color: V.textDim }}>No additional options</p>
+                ) : (
+                    <>
+                        {canvasFields && (
+                            <div className="p-2.5 rounded-xl flex flex-col gap-2"
+                                style={{ background: V.cream, border: `1px solid ${V.beige}` }}>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[10px] font-bold tracking-wide uppercase" style={{ color: V.textDim }}>Canvas Values (%)</p>
+                                    <span className="text-[9px] font-medium" style={{ color: V.textDim }}>live sync</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {canvasFields.map(field => (
+                                        <label key={field.key} className="flex items-center gap-1.5">
+                                            <span className="text-[10px] font-bold w-4 text-right" style={{ color: V.textDim }}>{field.label}</span>
+                                            <input
+                                                type="number"
+                                                value={Math.round(field.value)}
+                                                min={field.min}
+                                                max={field.max}
+                                                step={field.step}
+                                                aria-label={`Canvas ${field.label}`}
+                                                onChange={e => {
+                                                    const next = updateCanvasNumericField(
+                                                        operation,
+                                                        plugin,
+                                                        field.key,
+                                                        Number(e.target.value),
+                                                        sourceAspect,
+                                                    )
+                                                    if (next) onUpdateParams(operation.id, next as Record<string, any>)
+                                                }}
+                                                className="flex-1 px-2 py-1 rounded-lg text-xs outline-none"
+                                                style={{ background: V.card, border: `1px solid ${V.beige}`, color: V.charcoal }}
+                                            />
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {panelFields.map(field => (
+                            <FieldRenderer key={field.key} field={field}
+                                value={operation.params[field.key] ?? field.default}
+                                onChange={val => updateParam(field.key, val)} />
+                        ))}
+                        {panelFields.length === 0 && (
+                            <p className="text-center text-xs py-6" style={{ color: V.textDim }}>No additional options</p>
+                        )}
+                    </>
                 )}
             </div>
         </div>

@@ -1,4 +1,7 @@
 ﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { ExecutionLogger } from '@core/engine/ExecutionLogger'
+
+const INSTANCE_ID = 'caption_1'
 
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   try {
@@ -42,7 +45,14 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       ctx.store.save()
     }
 
-    ctx.logger.info(`Caption: "${caption.slice(0, 80)}..."`)
+    ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'caption:transformed', {
+      videoId: video.platform_id || video.id,
+      original: original.slice(0, 120),
+      generated: caption.slice(0, 120),
+      template,
+    })
+
+    ctx.logger.info(`✍️ Caption: "${caption.slice(0, 80)}..."`)
     return { data: { ...video, generated_caption: caption } }
   } catch (err: any) {
     ctx.logger.error(`[CaptionGenerator] Unexpected error: ${err?.message || err}`)

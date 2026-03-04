@@ -108,7 +108,7 @@ export function setupCampaignIPC() {
   })
 
   safeHandle(IPC_CHANNELS.CAMPAIGN_RESUME, async (_event, { id }) => {
-    flowEngine.resumeCampaign(id)
+    await flowEngine.resumeCampaign(id)
     return true
   })
 
@@ -118,7 +118,7 @@ export function setupCampaignIPC() {
       if (doc.status === 'active' || doc.status === 'running') {
         flowEngine.pauseCampaign(id)
       } else {
-        flowEngine.resumeCampaign(id)
+        await flowEngine.resumeCampaign(id)
       }
     }
     return true
@@ -208,17 +208,17 @@ export function setupCampaignIPC() {
   //  Per-Video Event History 
   safeHandle('campaign:get-video-events', async (_event, { campaignId, videoId, limit }) => {
     return db.prepare(`
-      SELECT event, message, data_json as data, created_at
+      SELECT event, message, data_json as data, created_at, node_id, instance_id
       FROM execution_logs
       WHERE campaign_id = ?
         AND (
           json_extract(data_json, '$.videoId') = ?
           OR json_extract(data_json, '$.platform_id') = ?
-          OR message LIKE ?
+          OR json_extract(data_json, '$.video_id') = ?
         )
       ORDER BY created_at ASC
       LIMIT ?
-    `).all(campaignId, videoId, videoId, `%${videoId}%`, limit || 100)
+    `).all(campaignId, videoId, videoId, videoId, limit || 100)
   })
 
   //  Update campaign params (merge) 
@@ -276,7 +276,7 @@ export function setupCampaignIPC() {
   })
 
   // ── Pipeline: Retry node (user-initiated from Visualizer) ──
-  safeHandle('pipeline:retry-node', async (_event, { campaignId, instanceId }: { campaignId: string; instanceId: string }) => {
+  safeHandle('pipeline:retry-node', async (_event, { campaignId, instanceId, videoId }: { campaignId: string; instanceId: string; videoId?: string }) => {
     const store = campaignRepo.tryOpen(campaignId)
     if (!store) return { success: false, error: 'Campaign not found' }
 
@@ -292,14 +292,28 @@ export function setupCampaignIPC() {
       store.save()
     }
 
-    // Create a new job for this node (manual retry, _retryCount = 0)
+    // Create a new job for this node (manual retry)
+    // Hydrate full video payload from store so the node has local_path etc.
+    let jobData: any = { _retryCount: 0, _manualRetry: true }
+    if (videoId) {
+      const videos = store.doc.videos || []
+      const videoRecord = videos.find((v: any) => String(v.platform_id) === String(videoId))
+      if (videoRecord) {
+        // Full hydration: node receives complete video payload
+        jobData = { ...videoRecord, _retryCount: 0, _manualRetry: true }
+      } else {
+        jobData.platform_id = videoId
+        jobData.videoId = videoId
+      }
+    }
+
     const jobId = jobRepo.createJob({
       campaign_id: campaignId,
       workflow_id: store.doc.workflow_id,
       node_id: nodeDef.node_id,
       instance_id: instanceId,
       type: 'FLOW_STEP',
-      data: { _retryCount: 0, _manualRetry: true },
+      data: jobData,
       scheduled_at: Date.now(),
     })
 

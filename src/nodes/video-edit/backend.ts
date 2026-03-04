@@ -10,6 +10,7 @@ import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 import { executeVideoEditPipeline, videoEditPluginRegistry } from '@core/video-edit'
 import type { VideoEditOperation } from '@core/video-edit'
 import { ffmpegProcessor } from '@main/ffmpeg/FFmpegAdapter'
+import { statSync } from 'node:fs'
 
 export default async function execute(
   input: Record<string, any>,
@@ -36,8 +37,8 @@ export default async function execute(
     const defaults = videoEditPluginRegistry.getDefaults()
     const hasEnabledDefaults = defaults.some((d) => d.enabled)
     if (!hasEnabledDefaults) {
-      ctx.logger.info('VideoEdit: no operations configured — passthrough')
-      return { data: input, message: 'No video edit operations' }
+      ctx.logger.info('⏭️ Bỏ qua chỉnh sửa — không có thao tác nào bật')
+      return { data: input, message: 'Bỏ qua chỉnh sửa — không có thao tác nào bật' }
     }
   }
 
@@ -75,11 +76,17 @@ export default async function execute(
       await Promise.resolve(ctx.store.updateVideo(video.platform_id, { local_path: result.outputPath }))
     }
 
+    // Compute output file size
+    let fileSizeMB = 0
+    try { fileSizeMB = Math.round(statSync(result.outputPath).size / 1024 / 1024 * 10) / 10 } catch {}
+
     ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'video_edit_1', 'video-edit:completed', {
       videoId,
       outputPath: result.outputPath,
       appliedOperations: result.appliedOperations,
       totalDurationMs: result.totalDurationMs,
+      operationCount: result.appliedOperations.length,
+      fileSizeMB,
     })
 
     ctx.logger.info(`VideoEdit: done in ${result.totalDurationMs}ms — ${result.appliedOperations.length} operation(s)`)
@@ -116,8 +123,8 @@ export default async function execute(
     // Hard fail — stop the pipeline for this video.
     // Common cause: FFmpeg not installed → "ffmpeg_or_ffprobe_not_available"
     const userMessage = msg.includes('ffmpeg_or_ffprobe_not_available')
-      ? 'FFmpeg is not installed. Please install FFmpeg and restart the app.'
-      : `Video edit failed: ${msg}`
+      ? '🎬 Thiếu FFmpeg — cần cài đặt lại'
+      : `❌ Lỗi chỉnh sửa video: ${msg}`
 
     ctx.alert('error', userMessage)
     throw new Error(userMessage)

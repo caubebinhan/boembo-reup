@@ -180,7 +180,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     if (claimId) removePublishClaim(claimId)
     return failGracefully(ctx, INSTANCE_ID, video.platform_id, 'publish_crash',
       `Publisher crashed unexpectedly: ${err?.message || err}`, {
-        description: video.description, author: video.author,
+        extra: { description: video.description, author: video.author },
       })
   }
 
@@ -233,14 +233,14 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     if (result.errorType === 'upload_failed') {
       return failGracefully(ctx, INSTANCE_ID, video.platform_id, 'upload_failed',
         `Upload failed for video ${video.platform_id}: ${result.error}`, {
-          description: video.description, author: video.author, debugArtifacts: result.debugArtifacts,
+          extra: { description: video.description, author: video.author, debugArtifacts: result.debugArtifacts },
         })
     }
 
     // ── Generic / unknown failure ──
     return failGracefully(ctx, INSTANCE_ID, video.platform_id, result.errorType || 'unknown',
       `Publish failed: ${result.error}`, {
-        description: video.description, author: video.author, debugArtifacts: result.debugArtifacts,
+        extra: { description: video.description, author: video.author, debugArtifacts: result.debugArtifacts },
       })
   }
 
