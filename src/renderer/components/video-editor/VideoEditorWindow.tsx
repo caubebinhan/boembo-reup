@@ -87,16 +87,31 @@ export default function VideoEditorWindow(): ReactElement {
     const timelineDuration = displaySrc ? videoDuration : 30
 
     return (
-        <div className="video-editor-shell flex flex-col h-screen w-screen overflow-hidden" style={{ background: V.bg }}>
+        <div className="video-editor-shell flex flex-col h-screen w-screen overflow-hidden"
+            style={{ background: `radial-gradient(1200px 500px at 20% -20%, ${V.accentSoft}, ${V.bg} 55%)` }}>
             {/* Top bar */}
             <div className="flex items-center justify-between px-4 shrink-0"
-                style={{ height: 44, background: V.card, borderBottom: `1px solid ${V.beige}` }}>
-                <div className="flex items-center gap-2.5">
-                    <span className="text-lg">🎬</span>
-                    <h1 className="text-sm font-bold" style={{ color: V.charcoal }}>Video Editor</h1>
+                style={{ height: 58, background: `${V.card}f2`, borderBottom: `1px solid ${V.beige}`, backdropFilter: 'blur(8px)' }}>
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-lg shrink-0"
+                        style={{ background: V.charcoal, color: '#fff' }}>🎬</div>
+                    <div className="min-w-0">
+                        <h1 className="editor-heading text-sm font-extrabold truncate" style={{ color: V.charcoal }}>Video Editor</h1>
+                        <p className="text-[10px] tracking-wide uppercase font-semibold" style={{ color: V.textDim }}>
+                            Canvas-driven edits • Timeline-aware transforms
+                        </p>
+                    </div>
+                    {state.videoPath && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0"
+                            style={{ background: V.pastelBlue, color: '#075985', border: '1px solid #9dc5da' }}>
+                            SOURCE
+                        </span>
+                    )}
                     {state.previewSrc && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold"
-                            style={{ background: V.pastelMint, color: '#2e7d32' }}>RENDERED</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0"
+                            style={{ background: V.pastelMint, color: '#166534', border: '1px solid #9fc78f' }}>
+                            RENDERED
+                        </span>
                     )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -104,50 +119,51 @@ export default function VideoEditorWindow(): ReactElement {
                         <>
                             <button onClick={state.handleUploadVideo}
                                 aria-label="Replace source video"
-                                className="px-2.5 py-1.5 rounded-xl text-xs font-medium transition cursor-pointer"
+                                className="px-3 py-2 rounded-xl text-xs font-semibold transition cursor-pointer"
                                 style={{ background: V.cream, color: V.textMuted, border: `1px solid ${V.beige}` }}>
-                                🔄 Replace Source
+                                Replace Source
                             </button>
                             <button onClick={() => state.handlePreview()}
                                 disabled={state.isRendering || !state.videoPath}
                                 aria-label="Render preview"
                                 aria-busy={state.isRendering}
-                                className="relative px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer overflow-hidden"
+                                className="relative px-3.5 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer overflow-hidden"
                                 style={{
                                     background: state.isRendering || !state.videoPath ? V.beige : V.accent,
-                                    color: state.isRendering || !state.videoPath ? V.textDim : '#fff',
-                                    minWidth: 180,
+                                    color: state.isRendering || !state.videoPath ? V.textDim : '#f8fafc',
+                                    minWidth: 200,
                                 }}>
                                 {state.isRendering && state.renderProgress != null && (
-                                    <div className="absolute inset-0 rounded-xl opacity-30"
+                                    <div className="absolute inset-0 rounded-xl opacity-25"
                                         style={{
-                                            background: `linear-gradient(90deg, #fff ${state.renderProgress}%, transparent ${state.renderProgress}%)`,
+                                            background: `linear-gradient(90deg, #ffffff ${state.renderProgress}%, transparent ${state.renderProgress}%)`,
                                         }} />
                                 )}
                                 <span className="relative z-10">
                                     {state.isRendering
                                         ? (state.renderProgress != null && state.renderProgress > 0
-                                            ? `⏳ Rendering ${state.renderProgress}%`
-                                            : `⏳ ${state.previewStatus || 'Rendering...'}`)
-                                        : '▶️ Render & Open Preview'}
+                                            ? `Rendering ${state.renderProgress}%`
+                                            : `${state.previewStatus || 'Rendering...'}`)
+                                        : 'Render Preview'}
                                 </span>
                             </button>
                         </>
                     )}
                     <button onClick={state.handleDone}
                         aria-label="Apply edits and close editor"
-                        className="px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer"
-                        style={{ background: V.pastelMint, color: '#2e7d32', border: '1px solid #94c8a0' }}>
-                        ✅ Done
+                        className="px-3.5 py-2 rounded-xl text-xs font-extrabold transition cursor-pointer"
+                        style={{ background: V.charcoal, color: '#fff', border: `1px solid ${V.charcoal}` }}>
+                        Apply & Close
                     </button>
                 </div>
             </div>
-            <div className="flex flex-1 overflow-hidden min-h-0">
+            <div className="flex flex-1 overflow-hidden min-h-0 pt-2 px-2 pb-0 gap-2">
                 {/* Left: Toolbar */}
                 <EditorToolbar plugins={state.plugins} onAddOperation={state.handleAddOperation} />
 
                 {/* Center: Video Preview */}
-                <div className="flex-1 min-h-0 relative overflow-hidden" style={{ background: '#1a1917' }}>
+                <div className="flex-1 min-h-0 relative overflow-hidden rounded-2xl"
+                    style={{ background: 'linear-gradient(160deg, #121826, #1f2937 45%, #111827)', border: '1px solid #111827' }}>
                     {state.previewError && (
                         <div
                             role="alert"
@@ -159,7 +175,8 @@ export default function VideoEditorWindow(): ReactElement {
                     )}
                     {displaySrc ? (
                         <div className="absolute inset-0 p-3">
-                            <div ref={previewViewportRef} className="relative w-full h-full">
+                            <div ref={previewViewportRef} className="relative w-full h-full rounded-xl overflow-hidden"
+                                style={{ border: '1px solid #374151', boxShadow: 'inset 0 0 0 1px #0f172a' }}>
                                 <video
                                     ref={videoRef}
                                     src={displaySrc}
@@ -167,6 +184,10 @@ export default function VideoEditorWindow(): ReactElement {
                                     className="absolute inset-0 w-full h-full"
                                     style={{ objectFit: 'contain', display: 'block' }}
                                 />
+                                <div className="absolute left-3 top-3 z-10 px-2 py-1 rounded-lg text-[10px] font-semibold"
+                                    style={{ background: '#0b1220d9', color: '#dbeafe', border: '1px solid #334155' }}>
+                                    {Math.round(videoDims.w)} × {Math.round(videoDims.h)}
+                                </div>
                                 <div
                                     className="absolute"
                                     style={{
@@ -194,19 +215,19 @@ export default function VideoEditorWindow(): ReactElement {
                             <button onClick={state.handleUploadVideo}
                                 aria-label="Choose a source video file"
                                 className="flex flex-col items-center gap-3 px-8 py-6 rounded-2xl cursor-pointer transition-all"
-                                style={{ background: `${V.card}cc`, border: `2px dashed ${V.beige}` }}
-                                onMouseEnter={e => (e.currentTarget.style.borderColor = V.accent)}
-                                onMouseLeave={e => (e.currentTarget.style.borderColor = V.beige)}>
+                                style={{ background: '#fff8', border: `2px dashed #7f8ea3` }}
+                                onMouseEnter={e => (e.currentTarget.style.borderColor = '#c7d2fe')}
+                                onMouseLeave={e => (e.currentTarget.style.borderColor = '#7f8ea3')}>
                                 <span className="text-4xl">🎥</span>
-                                <span className="text-sm font-bold" style={{ color: V.charcoal }}>Choose a video file</span>
-                                <span className="text-xs" style={{ color: V.textDim }}>MP4, MOV, AVI, MKV, WebM</span>
+                                <span className="text-sm font-extrabold" style={{ color: '#f8fafc' }}>Choose a video file</span>
+                                <span className="text-xs" style={{ color: '#cbd5e1' }}>MP4, MOV, AVI, MKV, WebM</span>
                             </button>
                         </div>
                     )}
                 </div>
 
                 {/* Right: Properties */}
-                <div className="shrink-0 flex flex-col min-h-0" style={{ width: 320 }}>
+                <div className="shrink-0 flex flex-col min-h-0 rounded-2xl overflow-hidden" style={{ width: 340, border: `1px solid ${V.beige}`, background: V.card }}>
                     <div className="flex-1 min-h-0">
                         <EditorProperties
                             operation={state.selectedOperation}

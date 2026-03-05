@@ -75,7 +75,7 @@ const resize: VideoEditPlugin = {
     const heightPercent = params.heightPercent
     const offset = params.offsetPercent || params.canvasRect || null
 
-    // Canvas interactive mode: scale relative to input size and place inside original frame.
+    // Canvas interactive mode: scale relative to the current stream size and place inside that frame.
     if (widthPercent != null || heightPercent != null || offset) {
       const wp = Math.max(5, Math.min(100, Number(widthPercent ?? 100)))
       const hp = Math.max(5, Math.min(100, Number(heightPercent ?? 100)))
@@ -172,6 +172,8 @@ const resize: VideoEditPlugin = {
   },
 
   validate(params) {
+    const interactive = params.widthPercent != null || params.heightPercent != null || params.offsetPercent || params.canvasRect
+    if (interactive) return null
     const w = params.width ?? -1
     const h = params.height ?? -1
     if (w === -1 && h === -1) return 'At least one dimension (width or height) is required'

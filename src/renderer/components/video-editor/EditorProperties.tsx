@@ -47,7 +47,7 @@ export function EditorProperties({
     const effectivePanelFields = useMemo(() => {
         let fields = panelFields
         if (isWatermarkImageOperation) {
-            fields = fields.filter(f => !['opacity', 'rotation', 'keepAspectRatio'].includes(f.key))
+            fields = fields.filter(f => !['opacity', 'rotation', 'keepAspectRatio', 'brightness', 'contrast', 'saturation', 'hue'].includes(f.key))
         }
         if (isWatermarkTextOperation) {
             fields = fields.filter(f => f.key !== 'fontSize')
@@ -172,6 +172,10 @@ export function EditorProperties({
                                         onClick={() => updateParams({
                                             opacity: 0.8,
                                             rotation: 0,
+                                            brightness: 0,
+                                            contrast: 1,
+                                            saturation: 1,
+                                            hue: 0,
                                             keepAspectRatio: true,
                                         })}
                                         className="px-2 py-1 rounded-md text-[9px] font-semibold cursor-pointer transition"
@@ -197,6 +201,39 @@ export function EditorProperties({
                                         step={1}
                                         suffix="deg"
                                         onChange={(next) => updateParam('rotation', next)}
+                                    />
+                                    <QuickSlider
+                                        label="Brightness"
+                                        value={Number(operation.params.brightness ?? 0)}
+                                        min={-1}
+                                        max={1}
+                                        step={0.01}
+                                        onChange={(next) => updateParam('brightness', next)}
+                                    />
+                                    <QuickSlider
+                                        label="Contrast"
+                                        value={Number(operation.params.contrast ?? 1)}
+                                        min={0.2}
+                                        max={2}
+                                        step={0.01}
+                                        onChange={(next) => updateParam('contrast', next)}
+                                    />
+                                    <QuickSlider
+                                        label="Saturation"
+                                        value={Number(operation.params.saturation ?? 1)}
+                                        min={0}
+                                        max={3}
+                                        step={0.01}
+                                        onChange={(next) => updateParam('saturation', next)}
+                                    />
+                                    <QuickSlider
+                                        label="Hue"
+                                        value={Number(operation.params.hue ?? 0)}
+                                        min={-180}
+                                        max={180}
+                                        step={1}
+                                        suffix="deg"
+                                        onChange={(next) => updateParam('hue', next)}
                                     />
                                 </div>
                                 <div className="flex items-center justify-between">

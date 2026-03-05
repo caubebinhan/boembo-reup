@@ -3,6 +3,7 @@
  * Uses shared types from ./types
  */
 import { useRef, useCallback, useState, useMemo } from 'react'
+import type { ReactElement } from 'react'
 import type { PluginMeta, VideoEditOperation } from './types'
 import { GROUP_COLORS, V } from './types'
 
@@ -21,7 +22,7 @@ const GROUP_EMOJI: Record<string, string> = {
     overlay: '🖼️', transform: '📐', filter: '✨', audio: '🔊', 'anti-detect': '🛡️',
 }
 
-export function EditorTimeline({ operations, plugins, duration, currentTime, selectedOpId, onSeek, onSelectOperation }: EditorTimelineProps) {
+export function EditorTimeline({ operations, plugins, duration, currentTime, selectedOpId, onSeek, onSelectOperation }: EditorTimelineProps): ReactElement {
     const rulerRef = useRef<HTMLDivElement>(null)
     const [zoom, setZoom] = useState(1)
 
@@ -34,7 +35,7 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
         return r
     }, [effectiveDuration, zoom])
 
-    const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+    const fmt = (s: number): string => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
     const handleRulerClick = useCallback((e: React.MouseEvent) => {
         const rect = rulerRef.current?.getBoundingClientRect(); if (!rect) return
@@ -62,14 +63,14 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
 
     return (
         <div className="flex flex-col select-none shrink-0"
-            style={{ height: 210, background: V.card, borderTop: `1px solid ${V.beige}` }}>
+            style={{ height: 220, background: V.card, borderTop: `1px solid ${V.beige}`, borderRadius: '14px 14px 0 0' }}>
 
             {/* Toolbar */}
             <div className="flex items-center justify-between px-4 shrink-0"
-                style={{ height: 34, borderBottom: `1px solid ${V.beige}`, background: V.cream }}>
+                style={{ height: 38, borderBottom: `1px solid ${V.beige}`, background: V.cream }}>
                 <div className="flex items-center gap-2">
-                    <span className="text-sm">✂️</span>
-                    <span className="text-[10px] font-medium" style={{ color: V.textDim }}>
+                    <span className="text-sm">🧭</span>
+                    <span className="text-[10px] font-semibold tracking-wide uppercase" style={{ color: V.textDim }}>
                         {sortedOps.length} track{sortedOps.length !== 1 ? 's' : ''}
                     </span>
                 </div>
@@ -98,20 +99,20 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
                         aria-valuemin={0}
                         aria-valuemax={Math.round(effectiveDuration)}
                         aria-valuenow={Math.round(currentTime)}
-                        style={{ height: 24, background: V.cream, borderBottom: `1px solid ${V.beige}` }}
+                        style={{ height: 24, background: '#18212f', borderBottom: '1px solid #1f2937' }}
                         onClick={handleRulerClick}
                         onKeyDown={handleRulerKeyDown}>
                         {markers.map(t => (
                             <div key={t} className="absolute top-0 h-full flex flex-col items-start" style={{ left: t * pxPerSecond + LABEL_W }}>
-                                <span className="text-[10px] font-mono mt-1 ml-1" style={{ color: V.textDim }}>{fmt(t)}</span>
-                                <div className="w-px mt-auto" style={{ height: 5, background: V.beige }} />
+                                <span className="text-[10px] font-mono mt-1 ml-1" style={{ color: '#9fb0c6' }}>{fmt(t)}</span>
+                                <div className="w-px mt-auto" style={{ height: 5, background: '#334155' }} />
                             </div>
                         ))}
                     </div>
 
                     <div className="flex">
                         {/* Labels */}
-                        <div className="shrink-0 sticky left-0 z-20" style={{ width: LABEL_W, background: V.card, borderRight: `1px solid ${V.beige}` }}>
+                        <div className="shrink-0 sticky left-0 z-20" style={{ width: LABEL_W, background: '#0f172a', borderRight: '1px solid #334155' }}>
                             {sortedOps.map(op => {
                                 const plugin = plugins.find(p => p.id === op.pluginId)
                                 const isSelected = op.id === selectedOpId
@@ -121,17 +122,17 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
                                         tabIndex={0}
                                         aria-label={`Select ${plugin?.name || op.pluginId} track`}
                                         style={{
-                                            height: TRACK_H, borderBottom: `1px solid ${V.beige}`,
-                                            background: isSelected ? V.accentSoft : 'transparent',
-                                            borderLeft: `2px solid ${isSelected ? V.accent : 'transparent'}`,
+                                            height: TRACK_H, borderBottom: '1px solid #1f2937',
+                                            background: isSelected ? '#172033' : 'transparent',
+                                            borderLeft: `2px solid ${isSelected ? '#67e8f9' : 'transparent'}`,
                                         }}
                                         onClick={() => onSelectOperation(op.id)}
                                         onKeyDown={e => handleOperationKeyDown(e, op.id)}>
                                         <span className="text-sm shrink-0">{GROUP_EMOJI[plugin?.group || ''] || '🎬'}</span>
                                         <div className="min-w-0">
                                             <div className="text-[10px] font-semibold truncate"
-                                                style={{ color: isSelected ? V.accent : V.charcoal }}>{plugin?.name || op.pluginId}</div>
-                                            {!op.enabled && <div className="text-[9px]" style={{ color: V.textDim }}>off</div>}
+                                                style={{ color: isSelected ? '#67e8f9' : '#d1d9e6' }}>{plugin?.name || op.pluginId}</div>
+                                            {!op.enabled && <div className="text-[9px]" style={{ color: '#8ea1ba' }}>off</div>}
                                         </div>
                                     </div>
                                 )
@@ -144,21 +145,22 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
                                 const plugin = plugins.find(p => p.id === op.pluginId)
                                 const color = GROUP_COLORS[plugin?.group || ''] || DEFAULT_COLOR
                                 const isSelected = op.id === selectedOpId
-                                const start = op.params.timeRange?.start ?? 0
-                                const end = op.params.timeRange?.end ?? effectiveDuration
+                                const timeRange = (op.params.timeRange || {}) as { start?: number; end?: number }
+                                const start = timeRange.start ?? 0
+                                const end = timeRange.end ?? effectiveDuration
 
                                 return (
-                                    <div key={op.id} style={{ height: TRACK_H, position: 'relative', background: V.bg, borderBottom: `1px solid ${V.beige}` }}>
-                                        <div className="absolute flex items-center overflow-hidden cursor-pointer transition-all"
-                                            role="button"
-                                            tabIndex={0}
+                                <div key={op.id} style={{ height: TRACK_H, position: 'relative', background: '#111827', borderBottom: '1px solid #1f2937' }}>
+                                    <div className="absolute flex items-center overflow-hidden cursor-pointer transition-all"
+                                        role="button"
+                                        tabIndex={0}
                                             aria-label={`Select ${plugin?.name || op.pluginId} timeline bar`}
                                             style={{
                                                 left: start * pxPerSecond, width: Math.max(20, (end - start) * pxPerSecond),
                                                 top: 5, bottom: 5, background: color.bg, borderRadius: 8,
                                                 border: `1.5px solid ${color.border}`,
                                                 opacity: op.enabled ? 1 : 0.3,
-                                                boxShadow: isSelected ? `0 0 0 2px ${V.accent}, 0 2px 8px ${V.accent}22` : '0 1px 3px rgba(0,0,0,0.04)',
+                                                boxShadow: isSelected ? '0 0 0 2px #67e8f9, 0 2px 12px rgba(103,232,249,0.25)' : '0 1px 3px rgba(15,23,42,0.35)',
                                             }}
                                             onClick={() => onSelectOperation(op.id)}
                                             onKeyDown={e => handleOperationKeyDown(e, op.id)}>
@@ -171,11 +173,11 @@ export function EditorTimeline({ operations, plugins, duration, currentTime, sel
                             })}
                             {/* Playhead */}
                             <div className="absolute top-0 bottom-0 pointer-events-none z-30"
-                                style={{ left: playheadX, width: 2, background: V.accent }}>
+                                style={{ left: playheadX, width: 2, background: '#67e8f9' }}>
                                 <div style={{
                                     width: 0, height: 0,
                                     borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
-                                    borderTop: `6px solid ${V.accent}`,
+                                    borderTop: '6px solid #67e8f9',
                                     position: 'absolute', top: -1, left: -4,
                                 }} />
                             </div>

@@ -9,14 +9,14 @@ export interface PluginConfigField {
   key: string
   type: string
   label: string
-  default?: any
+  default?: unknown
   min?: number
   max?: number
   step?: number
   unit?: string
   options?: Array<{ value: string; label: string; icon?: string }>
   description?: string
-  condition?: { field: string; value: any }
+  condition?: { field: string; value: unknown }
   isArray?: boolean
   arrayFields?: PluginConfigField[]
   placeholder?: string
@@ -44,7 +44,7 @@ export interface VideoEditOperation {
   id: string
   pluginId: string
   enabled: boolean
-  params: Record<string, any>
+  params: Record<string, unknown>
   order: number
 }
 
@@ -58,27 +58,27 @@ export const PLUGIN_GROUPS: { id: string; emoji: string; label: string }[] = [
 ]
 
 export const GROUP_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  transform: { bg: '#d6e4f0', border: '#93b4d4', text: '#2e5a88' },
-  overlay: { bg: '#e8d5f5', border: '#c09ee0', text: '#6b3fa0' },
-  filter: { bg: '#f4dce0', border: '#e0a8b0', text: '#9e3d4d' },
-  audio: { bg: '#d4e8d8', border: '#94c8a0', text: '#2e6e3e' },
-  'anti-detect': { bg: '#f9e3d3', border: '#e0b896', text: '#8e5a2b' },
+  transform: { bg: '#d9ebf2', border: '#84b9cc', text: '#155e75' },
+  overlay: { bg: '#e7efe2', border: '#a8c89b', text: '#365314' },
+  filter: { bg: '#f9e8d5', border: '#efb676', text: '#9a3412' },
+  audio: { bg: '#e7ebf7', border: '#99a7d8', text: '#3730a3' },
+  'anti-detect': { bg: '#f4e4dc', border: '#d7a892', text: '#7c2d12' },
 }
 
-/** Vintage Pastel palette (shared across editor components) */
+/** Editorial warm-light palette (shared across editor components) */
 export const V = {
-  bg: '#fcfbf8',
-  cream: '#f5f3ee',
-  beige: '#e8e4db',
+  bg: '#f5f7fb',
+  cream: '#eef2f7',
+  beige: '#cbd5e1',
   card: '#ffffff',
-  charcoal: '#2c2a29',
-  textMuted: '#5c5551',
-  textDim: '#6f6660',
-  accent: '#7c3aed',
-  accentSoft: '#f3effe',
-  pastelPink: '#f4dce0',
-  pastelMint: '#d4e8d8',
-  pastelBlue: '#d6e4f0',
-  pastelPeach: '#f9e3d3',
-  pastelYellow: '#fef3c7',
+  charcoal: '#0f172a',
+  textMuted: '#334155',
+  textDim: '#64748b',
+  accent: '#0ea5e9',
+  accentSoft: '#e0f2fe',
+  pastelPink: '#ffe4e6',
+  pastelMint: '#dcfce7',
+  pastelBlue: '#dbeafe',
+  pastelPeach: '#ffedd5',
+  pastelYellow: '#fef9c3',
 }

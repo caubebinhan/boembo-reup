@@ -184,7 +184,7 @@ function NodeCard({
     const showRawStats = !isTimeout && !isBatchNode && stat.total > 0
 
     return (
-        <div className="relative group z-10 w-max h-max">
+        <div className="relative group z-10 w-max h-max" data-vis-node-card="true">
             {/* Settings floating button */}
             {node.editable_settings && (
                 <span
@@ -237,6 +237,9 @@ function NodeCard({
                     padding: compact ? '6px 10px' : '10px 12px',
                 }}
             >
+                <div id={`vis-node-in-${node.instance_id}`} className="absolute left-0 top-1/2 -translate-y-1/2 h-[1px] w-[1px] pointer-events-none" />
+                <div id={`vis-node-out-${node.instance_id}`} className="absolute right-0 top-1/2 -translate-y-1/2 h-[1px] w-[1px] pointer-events-none" />
+
                 {status === 'running' && (
                     <div className="absolute top-0 left-0 right-0 h-[2px] animate-pulse"
                         style={{ backgroundImage: `linear-gradient(90deg, transparent, ${meta.color}, transparent)` }} />
@@ -351,7 +354,15 @@ function LoopBlock({
 
 // ── SVG Edge Overlay (straight lines, centered on nodes) ──────
 function SvgOverlay({ edges, flowData, containerRef, campaignId, vertical }: { edges: FlowEdge[], flowData: { nodes: FlowNodeInfo[] }, containerRef: any, campaignId: string, vertical?: boolean }) {
-    const [paths, setPaths] = useState<{ d: string, isRunning: boolean, isError: boolean, isDone: boolean, label?: string, labelX?: number, labelY?: number }[]>([])
+    const [paths, setPaths] = useState<Array<{
+        d: string
+        isRunning: boolean
+        stroke: string
+        marker: string
+        label?: string
+        labelX?: number
+        labelY?: number
+    }>>([])
     const stats = useSelector((s: RootState) => s.nodeEvents.byCampaign[campaignId]?.nodeStats)
     const active = useSelector((s: RootState) => s.nodeEvents.activeNodes?.[campaignId])
 
@@ -367,111 +378,71 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId, vertical }: { e
             outgoingBySource.get(edge.from)!.push(edge)
         }
 
-        const usedBackSlots = new Map<string, number>()
+        const usedBackwardSlots = new Map<string, number>()
 
         for (const edge of edges) {
-            const elFrom = document.getElementById(`vis-node-${edge.from}`) || document.getElementById(`vis-loop-out-${edge.from}`) || document.getElementById(`vis-loop-${edge.from}`)
-            const elTo = document.getElementById(`vis-node-${edge.to}`) || document.getElementById(`vis-loop-in-${edge.to}`) || document.getElementById(`vis-loop-${edge.to}`)
+            const fromEl = document.getElementById(`vis-node-out-${edge.from}`)
+                || document.getElementById(`vis-loop-out-${edge.from}`)
+                || document.getElementById(`vis-node-${edge.from}`)
+            const toEl = document.getElementById(`vis-node-in-${edge.to}`)
+                || document.getElementById(`vis-loop-in-${edge.to}`)
+                || document.getElementById(`vis-node-${edge.to}`)
+            if (!fromEl || !toEl) continue
 
-            if (!elFrom || !elTo) continue
+            const r1 = fromEl.getBoundingClientRect()
+            const r2 = toEl.getBoundingClientRect()
+            const x1 = r1.left + (r1.width / 2) - containerRect.left
+            const y1 = r1.top + (r1.height / 2) - containerRect.top
+            const x2 = r2.left + (r2.width / 2) - containerRect.left
+            const y2 = r2.top + (r2.height / 2) - containerRect.top
 
-            const r1 = elFrom.getBoundingClientRect()
-            const r2 = elTo.getBoundingClientRect()
-
-            let x1: number, y1: number, x2: number, y2: number
-
-            if (vertical) {
-                // Top to bottom
-                x1 = r1.left + r1.width / 2 - containerRect.left
-                y1 = r1.bottom - containerRect.top
-                x2 = r2.left + r2.width / 2 - containerRect.left
-                y2 = r2.top - containerRect.top
-            } else {
-                // Left to right
-                x1 = r1.right - containerRect.left
-                y1 = r1.top + r1.height / 2 - containerRect.top
-                x2 = r2.left - containerRect.left
-                y2 = r2.top + r2.height / 2 - containerRect.top
-            }
-
-            const isBackward = vertical ? (y2 <= y1) : (x2 <= x1)
             const siblings = outgoingBySource.get(edge.from) || []
             const branchIndex = siblings.findIndex(e => e.to === edge.to && e.when === edge.when)
             const totalBranches = siblings.length
+            const branchOffset = totalBranches > 1 ? (branchIndex - (totalBranches - 1) / 2) * 22 : 0
+
             const sourceNode = nodeByInstance.get(edge.from)
             const isConditionSource = sourceNode?.node_id === 'core.condition'
+            const label = edge.when?.trim()
+                || (isConditionSource && totalBranches > 1 && branchIndex > 0 ? 'else' : isConditionSource ? 'if' : undefined)
 
             let d = ''
             let labelX = 0
             let labelY = 0
-            const R = 8 // corner radius for smooth-step
 
-            if (isBackward) {
-                // Backward routing
-                const slotKey = `back-${edge.from}`
-                const slot = usedBackSlots.get(slotKey) || 0
-                usedBackSlots.set(slotKey, slot + 1)
-
-                if (vertical) {
-                    // Route backward around the right side
-                    const rightX = Math.max(r1.right, r2.right) - containerRect.left + 30 + (slot * 20)
-                    const srcMidY = r1.top + r1.height / 2 - containerRect.top
-                    const tgtMidY = r2.top + r2.height / 2 - containerRect.top
-                    // Right from source -> up -> left to target
-                    d = [
-                        `M ${r1.right - containerRect.left} ${srcMidY}`,
-                        `L ${rightX - R} ${srcMidY}`,
-                        `Q ${rightX} ${srcMidY}, ${rightX} ${srcMidY - R}`,
-                        `L ${rightX} ${tgtMidY + R}`,
-                        `Q ${rightX} ${tgtMidY}, ${rightX - R} ${tgtMidY}`,
-                        `L ${r2.right - containerRect.left + 6} ${tgtMidY}`
-                    ].join(' ')
-                    labelX = rightX + 10
-                    labelY = (srcMidY + tgtMidY) / 2
+            if (vertical) {
+                const isBackward = y2 <= y1 + 8
+                if (isBackward) {
+                    const slot = usedBackwardSlots.get(edge.from) || 0
+                    usedBackwardSlots.set(edge.from, slot + 1)
+                    const laneX = Math.max(x1, x2) + 38 + slot * 24
+                    const midY = (y1 + y2) / 2
+                    d = `M ${x1} ${y1} C ${x1} ${y1 + 24}, ${laneX} ${y1 + 24}, ${laneX} ${midY} C ${laneX} ${y2 - 24}, ${x2} ${y2 - 24}, ${x2} ${y2}`
+                    labelX = laneX + 10
+                    labelY = midY
                 } else {
-                    // Backward: smooth-step route below both nodes
-                    const botX = r2.left + r2.width / 2 - containerRect.left
-                    const botY = r2.bottom - containerRect.top
-                    const dropY = Math.max(r1.bottom, r2.bottom) - containerRect.top + 30 + (slot * 20)
-                    d = [
-                        `M ${x1} ${y1}`,
-                        `L ${x1 + 12 - R} ${y1}`,
-                        `Q ${x1 + 12} ${y1}, ${x1 + 12} ${y1 + R}`,
-                        `L ${x1 + 12} ${dropY - R}`,
-                        `Q ${x1 + 12} ${dropY}, ${x1 + 12 - R} ${dropY}`,
-                        `L ${botX + R} ${dropY}`,
-                        `Q ${botX} ${dropY}, ${botX} ${dropY - R}`,
-                        `L ${botX} ${botY + 6}`,
-                    ].join(' ')
-                    labelX = (x1 + 12 + botX) / 2
-                    labelY = dropY - 10
+                    const cp = Math.max(48, Math.min(150, Math.abs(y2 - y1) * 0.45))
+                    d = `M ${x1} ${y1} C ${x1 + branchOffset} ${y1 + cp}, ${x2 + branchOffset} ${y2 - cp}, ${x2} ${y2}`
+                    labelX = x1 + ((x2 - x1) / 2) + branchOffset
+                    labelY = y1 + ((y2 - y1) / 2)
                 }
             } else {
-                // Forward: n8n style beautiful bezier curve
-                const stagger = totalBranches > 1 ? (branchIndex - (totalBranches - 1) / 2) * 20 : 0;
-
-                if (vertical) {
-                    if (Math.abs(x1 - x2) < 3) {
-                        d = `M ${x1} ${y1} L ${x2} ${y2}`
-                    } else {
-                        const cpDist = Math.max(Math.abs(y2 - y1) / 2.5, 40);
-                        d = `M ${x1} ${y1} C ${x1 + stagger} ${y1 + cpDist}, ${x2 - stagger} ${y2 - cpDist}, ${x2} ${y2}`
-                    }
-                    labelX = x1 + (x2 - x1) / 2
-                    labelY = y1 + (y2 - y1) / 2
+                const isBackward = x2 <= x1 + 8
+                if (isBackward) {
+                    const slot = usedBackwardSlots.get(edge.from) || 0
+                    usedBackwardSlots.set(edge.from, slot + 1)
+                    const laneY = Math.max(y1, y2) + 34 + slot * 22
+                    d = `M ${x1} ${y1} C ${x1 + 24} ${y1}, ${x1 + 24} ${laneY}, ${x1 + 52} ${laneY} L ${x2 - 52} ${laneY} C ${x2 - 24} ${laneY}, ${x2 - 24} ${y2}, ${x2} ${y2}`
+                    labelX = x1 + ((x2 - x1) / 2)
+                    labelY = laneY - 10
                 } else {
-                    if (Math.abs(y1 - y2) < 3) {
-                        d = `M ${x1} ${y1} L ${x2} ${y2}`
-                    } else {
-                        const cpDist = Math.max(Math.abs(x2 - x1) / 2.5, 40);
-                        d = `M ${x1} ${y1} C ${x1 + cpDist + stagger} ${y1}, ${x2 - cpDist - stagger} ${y2}, ${x2} ${y2}`
-                    }
-                    labelX = x1 + (x2 - x1) / 2
-                    labelY = y1 + (y2 - y1) / 2 - 12
+                    const cp = Math.max(56, Math.min(180, Math.abs(x2 - x1) * 0.45))
+                    d = `M ${x1} ${y1} C ${x1 + cp} ${y1 + branchOffset}, ${x2 - cp} ${y2 + branchOffset}, ${x2} ${y2}`
+                    labelX = x1 + ((x2 - x1) / 2)
+                    labelY = y1 + ((y2 - y1) / 2) + branchOffset - 12
                 }
             }
 
-            // Status detection
             const targetId = edge.to
             const tStat = stats?.[targetId] || { running: 0, completed: 0, failed: 0 }
             const tAct = active?.[targetId]
@@ -479,10 +450,27 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId, vertical }: { e
             const isRunning = tAct?.status === 'running' || tStat.running > 0
             const isDone = tStat.completed > 0 && !isRunning && !isError
 
+            let stroke = '#94a3b8'
+            let marker = 'url(#arrow-idle)'
+            if (isError) {
+                stroke = '#ef4444'
+                marker = 'url(#arrow-error)'
+            } else if (isRunning) {
+                stroke = '#0ea5e9'
+                marker = 'url(#arrow-run)'
+            } else if (isDone) {
+                stroke = '#10b981'
+                marker = 'url(#arrow-done)'
+            }
+
             newPaths.push({
-                d, isRunning, isError, isDone,
-                label: edge.when?.trim() || (isConditionSource && totalBranches > 1 && branchIndex > 0 ? 'else' : isConditionSource ? 'if' : undefined),
-                labelX, labelY
+                d,
+                isRunning,
+                stroke,
+                marker,
+                label,
+                labelX,
+                labelY,
             })
         }
         setPaths(newPaths)
@@ -493,7 +481,7 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId, vertical }: { e
         if (containerRef.current) obs.observe(containerRef.current)
         updatePaths()
         return () => obs.disconnect()
-    }, [edges, flowData, stats, active])
+    }, [edges, flowData, stats, active, vertical])
 
     return (
         <svg className="absolute inset-0 w-full h-full pointer-events-none z-0" style={{ overflow: 'visible' }}>
@@ -502,30 +490,46 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId, vertical }: { e
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
                 </marker>
                 <marker id="arrow-run" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#3B82F6" />
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#0ea5e9" />
                 </marker>
                 <marker id="arrow-done" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#10B981" />
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
+                </marker>
+                <marker id="arrow-error" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
                 </marker>
             </defs>
             {paths.map((p, i) => {
                 const labelW = p.label ? Math.max(40, Math.min(160, p.label.length * 6 + 18)) : 0
                 return (
                     <g key={i}>
-                        <path d={p.d} fill="none" stroke="#cbd5e1" strokeWidth="2" markerEnd="url(#arrow-idle)" strokeLinejoin="round" />
-                        {p.isDone && <path d={p.d} fill="none" stroke="#10b981" strokeWidth="2" opacity="0.6" markerEnd="url(#arrow-done)" strokeLinejoin="round" />}
+                        <path
+                            d={p.d}
+                            fill="none"
+                            stroke={p.stroke}
+                            strokeWidth={p.isRunning ? 2.5 : 2}
+                            markerEnd={p.marker}
+                            strokeDasharray={p.isRunning ? '7 5' : undefined}
+                            strokeLinejoin="round"
+                            className={p.isRunning ? 'animate-[dash_1s_linear_infinite]' : undefined}
+                        />
                         {p.isRunning && (
-                            <path d={p.d} fill="none" stroke="#3b82f6" strokeWidth="2.5" markerEnd="url(#arrow-run)" strokeDasharray="6 4" strokeLinejoin="round" className="animate-[dash_1s_linear_infinite]" />
-                        )}
-                        {p.isRunning && (
-                            <circle r="3" fill="#60a5fa" className="shadow-lg">
+                            <circle r="3" fill="#38bdf8" className="shadow-lg">
                                 <animateMotion dur="2s" repeatCount="indefinite" path={p.d} />
                             </circle>
                         )}
                         {p.label && p.labelX != null && p.labelY != null && (
                             <>
-                                <rect x={p.labelX - (labelW / 2)} y={p.labelY - 7} width={labelW} height="14" rx="7"
-                                    fill="white" stroke="#e2e8f0" strokeWidth="1" />
+                                <rect
+                                    x={p.labelX - (labelW / 2)}
+                                    y={p.labelY - 7}
+                                    width={labelW}
+                                    height="14"
+                                    rx="7"
+                                    fill="white"
+                                    stroke="#e2e8f0"
+                                    strokeWidth="1"
+                                />
                                 <text x={p.labelX} y={p.labelY + 3} textAnchor="middle" fontSize="8" fontWeight="700" fill="#f97316">
                                     {p.label}
                                 </text>
@@ -715,20 +719,41 @@ export function PipelineVisualizer({ campaignId, workflowId, vertical = false }:
 
     // ── Drag-to-Pan ──────────────────────────────
     const isPanning = useRef(false)
+    const spacePressed = useRef(false)
     const panStart = useRef({ x: 0, y: 0, scrollX: 0, scrollY: 0 })
 
     const onPanDown = useCallback((e: React.MouseEvent) => {
-        // Only left-click on empty space (not on nodes/buttons)
-        if (e.button !== 0) return
-        const tag = (e.target as HTMLElement).tagName
-        if (['BUTTON', 'INPUT', 'A', 'SELECT'].includes(tag)) return
-        // Skip if clicked on a node card
-        if ((e.target as HTMLElement).closest('[role="button"]')) return
+        if (e.button !== 0 && e.button !== 1) return
+        const target = e.target as HTMLElement
+        const isInteractive = Boolean(target.closest('button,input,textarea,select,a,[data-no-pan="true"]'))
+        const onNodeCard = Boolean(target.closest('[data-vis-node-card="true"]'))
+        const usingPanModifier = e.button === 1 || (e.button === 0 && spacePressed.current)
+        if (!usingPanModifier && (isInteractive || onNodeCard)) return
 
         isPanning.current = true
         panStart.current = { x: e.clientX, y: e.clientY, scrollX: scrollRef.current?.scrollLeft || 0, scrollY: scrollRef.current?.scrollTop || 0 }
         if (scrollRef.current) scrollRef.current.style.cursor = 'grabbing'
         e.preventDefault()
+    }, [])
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.code !== 'Space') return
+            const tag = (e.target as HTMLElement | null)?.tagName
+            if (tag && ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
+            spacePressed.current = true
+            e.preventDefault()
+        }
+        const onKeyUp = (e: KeyboardEvent) => {
+            if (e.code !== 'Space') return
+            spacePressed.current = false
+        }
+        window.addEventListener('keydown', onKeyDown, { passive: false })
+        window.addEventListener('keyup', onKeyUp)
+        return () => {
+            window.removeEventListener('keydown', onKeyDown)
+            window.removeEventListener('keyup', onKeyUp)
+        }
     }, [])
 
     useEffect(() => {
@@ -818,7 +843,7 @@ export function PipelineVisualizer({ campaignId, workflowId, vertical = false }:
     return (
         <div className="flex bg-slate-50 rounded-xl border border-slate-200 overflow-hidden relative" style={{ minHeight: vertical ? '200px' : '280px' }}>
             <div ref={scrollRef}
-                className={`flex-1 p-6 relative ${vertical ? 'overflow-y-auto overflow-x-hidden' : 'overflow-x-auto overflow-y-hidden'}`}
+                className={`flex-1 p-6 relative ${vertical ? 'overflow-y-auto overflow-x-hidden' : 'overflow-x-auto overflow-y-auto'}`}
                 style={{ cursor: 'grab' }}
                 onMouseDown={onPanDown}>
                 <style>{`
@@ -832,12 +857,12 @@ export function PipelineVisualizer({ campaignId, workflowId, vertical = false }:
                 `}</style>
 
                 <div ref={containerRef}
-                    className={vertical
-                        ? 'flex flex-col gap-8 relative w-full'
-                        : 'flex items-center gap-16 relative min-w-max h-full'
-                    }
+                className={vertical
+                    ? 'flex flex-col gap-8 relative w-full'
+                    : 'flex items-center gap-16 relative min-w-max h-full'
+                }
                 >
-                    <SvgOverlay edges={flowData.edges} flowData={flowData} containerRef={containerRef} campaignId={campaignId} />
+                    <SvgOverlay edges={flowData.edges} flowData={flowData} containerRef={containerRef} campaignId={campaignId} vertical={vertical} />
 
                     {layers.map((layer, l_idx) => {
                         const firstNodeId = layer[0]?.instance_id ?? `layer-${l_idx}`

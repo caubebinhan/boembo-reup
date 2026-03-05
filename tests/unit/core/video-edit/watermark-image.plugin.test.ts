@@ -57,4 +57,24 @@ describe('watermark-image plugin', () => {
     expect(filters[0].options.h).toBe('main_h*0.4')
     expect(filters.some((f) => f.filter === 'rotate')).toBe(false)
   })
+
+  it('applies image color adjustments before overlay when configured', () => {
+    const filters = watermarkImage.buildFilters(
+      {
+        image: 'C:/logo.png',
+        overlaySize: { w: 22, h: 22 },
+        keepAspectRatio: false,
+        brightness: 0.15,
+        contrast: 1.25,
+        saturation: 0.7,
+        hue: 35,
+      },
+      buildContext(),
+    )
+
+    expect(filters.some((f) => f.filter === 'eq')).toBe(true)
+    expect(filters.some((f) => f.filter === 'hue')).toBe(true)
+    const overlay = filters.find((f) => f.filter === 'overlay')
+    expect(overlay?.inputs?.[1]).toBe('wm_hue_op1')
+  })
 })

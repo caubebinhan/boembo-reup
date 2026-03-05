@@ -62,6 +62,43 @@ const watermarkImage: VideoEditPlugin = {
       unit: 'deg',
     },
     {
+      key: 'brightness',
+      type: 'slider',
+      label: 'Brightness',
+      default: 0,
+      min: -1,
+      max: 1,
+      step: 0.01,
+    },
+    {
+      key: 'contrast',
+      type: 'slider',
+      label: 'Contrast',
+      default: 1,
+      min: 0.2,
+      max: 2,
+      step: 0.01,
+    },
+    {
+      key: 'saturation',
+      type: 'slider',
+      label: 'Saturation',
+      default: 1,
+      min: 0,
+      max: 3,
+      step: 0.01,
+    },
+    {
+      key: 'hue',
+      type: 'slider',
+      label: 'Hue',
+      default: 0,
+      min: -180,
+      max: 180,
+      step: 1,
+      unit: 'deg',
+    },
+    {
       key: 'keepAspectRatio',
       type: 'boolean',
       label: 'Lock aspect ratio',
@@ -113,6 +150,10 @@ const watermarkImage: VideoEditPlugin = {
     const keepAspectRatio = params.keepAspectRatio !== false
     const opacity = params.opacity ?? 0.8
     const rotation = Number(params.rotation ?? 0)
+    const brightness = clampNumber(params.brightness, 0, -1, 1)
+    const contrast = clampNumber(params.contrast, 1, 0.2, 2)
+    const saturation = clampNumber(params.saturation, 1, 0, 3)
+    const hue = clampNumber(params.hue, 0, -180, 180)
     const padding = params.padding ?? 20
 
     const filters: VideoFilter[] = []
@@ -155,11 +196,37 @@ const watermarkImage: VideoEditPlugin = {
       wmLabel = `wm_rot_${key}`
     }
 
+    if (Math.abs(brightness) > 0.001 || Math.abs(contrast - 1) > 0.001 || Math.abs(saturation - 1) > 0.001) {
+      filters.push({
+        filter: 'eq',
+        options: {
+          brightness,
+          contrast,
+          saturation,
+        },
+        inputs: [wmLabel],
+        outputs: [`wm_eq_${key}`],
+      })
+      wmLabel = `wm_eq_${key}`
+    }
+
+    if (Math.abs(hue) > 0.001) {
+      filters.push({
+        filter: 'hue',
+        options: {
+          h: hue,
+        },
+        inputs: [wmLabel],
+        outputs: [`wm_hue_${key}`],
+      })
+      wmLabel = `wm_hue_${key}`
+    }
+
     // Calculate overlay position
     const { x, y } = resolvePosition(params.position, padding)
 
     // Build overlay with optional time range
-    const overlayOpts: Record<string, any> = { x, y }
+    const overlayOpts: Record<string, string | number> = { x, y }
     const start = params.timeRange?.start
     const end = params.timeRange?.end
     const jitter = Math.max(0, Number(params.timeJitterSec ?? 0))
@@ -194,6 +261,12 @@ function clampTime(value: number, min: number, max: number): number {
   const v = Number.isFinite(value) ? value : min
   if (max <= min) return max
   return Math.max(min, Math.min(max, v))
+}
+
+function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return fallback
+  return Math.max(min, Math.min(max, num))
 }
 
 // -- Shared position resolver --

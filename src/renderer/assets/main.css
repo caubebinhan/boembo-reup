@@ -62,11 +62,11 @@ body {
 
   0%,
   100% {
-    box-shadow: 0 0 8px rgba(124, 58, 237, 0.3);
+    box-shadow: 0 0 8px rgba(15, 118, 110, 0.3);
   }
 
   50% {
-    box-shadow: 0 0 20px rgba(124, 58, 237, 0.6);
+    box-shadow: 0 0 20px rgba(15, 118, 110, 0.6);
   }
 }
 
@@ -175,7 +175,25 @@ body {
   animation: count-pulse 0.6s ease-out;
 }
 
+.video-editor-shell {
+  font-family:
+    'Avenir Next',
+    'Segoe UI Variable Text',
+    'Trebuchet MS',
+    'Helvetica Neue',
+    sans-serif;
+}
+
+.video-editor-shell :is(h1, h2, h3, .editor-heading) {
+  font-family:
+    'Avenir Next Condensed',
+    'Avenir Next',
+    'Trebuchet MS',
+    sans-serif;
+  letter-spacing: 0.02em;
+}
+
 .video-editor-shell :is(button, [role='button'], input, select, textarea):focus-visible {
-  outline: 2px solid #7c3aed;
+  outline: 2px solid #0f766e;
   outline-offset: 2px;
 }

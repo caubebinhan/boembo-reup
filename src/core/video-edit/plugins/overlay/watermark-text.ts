@@ -118,10 +118,9 @@ const watermarkText: VideoEditPlugin = {
     // Resolve position to x/y expressions
     const pos = resolveTextPosition(params.position || 'bottom-center', padding)
 
-    const drawtextOpts: Record<string, any> = {
+    const drawtextOpts: Record<string, string | number> = {
       text: escapeDrawtext(text),
       fontsize: fontSize,
-      font: fontFamily,
       fontcolor: fontColor,
       x: pos.x,
       y: pos.y,

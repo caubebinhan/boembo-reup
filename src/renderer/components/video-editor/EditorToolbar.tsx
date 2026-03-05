@@ -3,6 +3,7 @@
  * Uses shared types from ./types
  */
 import { useState, useRef, useEffect } from 'react'
+import type { ReactElement } from 'react'
 import type { PluginMeta } from './types'
 import { PLUGIN_GROUPS, V } from './types'
 
@@ -11,19 +12,19 @@ interface EditorToolbarProps {
     onAddOperation: (pluginId: string) => void
 }
 
-export function EditorToolbar({ plugins, onAddOperation }: EditorToolbarProps) {
+export function EditorToolbar({ plugins, onAddOperation }: EditorToolbarProps): ReactElement {
     const [openGroup, setOpenGroup] = useState<string | null>(null)
     const ref = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
-        const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpenGroup(null) }
+        const h = (e: MouseEvent): void => { if (ref.current && !ref.current.contains(e.target as Node)) setOpenGroup(null) }
         document.addEventListener('mousedown', h)
         return () => document.removeEventListener('mousedown', h)
     }, [])
 
     return (
-        <div ref={ref} className="flex flex-col items-center py-3 gap-1 shrink-0 relative"
-            style={{ width: 72, background: V.card, borderRight: `1px solid ${V.beige}` }}>
+        <div ref={ref} className="flex flex-col items-center py-3 gap-1 shrink-0 relative rounded-2xl overflow-visible"
+            style={{ width: 86, background: V.card, border: `1px solid ${V.beige}` }}>
             <div className="flex flex-col gap-1 w-full px-2">
                 {PLUGIN_GROUPS.map(group => {
                     const gp = plugins.filter(p => p.group === group.id)
@@ -37,21 +38,21 @@ export function EditorToolbar({ plugins, onAddOperation }: EditorToolbarProps) {
                                 aria-expanded={isOpen}
                                 className="w-full flex flex-col items-center justify-center gap-0.5 py-2.5 rounded-xl transition-all cursor-pointer"
                                 style={{
-                                    background: isOpen ? V.accentSoft : 'transparent',
-                                    color: isOpen ? V.accent : V.textDim,
+                                    background: isOpen ? V.charcoal : 'transparent',
+                                    color: isOpen ? '#fff' : V.textDim,
                                 }}
                                 onMouseEnter={e => { if (!isOpen) { e.currentTarget.style.background = V.cream; e.currentTarget.style.color = V.charcoal } }}
                                 onMouseLeave={e => { if (!isOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = V.textDim } }}
                                 title={group.label}>
                                 <span className="text-xl">{group.emoji}</span>
-                                <span className="text-[10px] font-medium">{group.label}</span>
+                                <span className="text-[10px] font-semibold tracking-wide">{group.label}</span>
                             </button>
                             {isOpen && (
                                 <div className="absolute left-full top-0 ml-2 flex flex-col overflow-hidden z-50"
-                                    style={{ width: 230, background: V.card, border: `1px solid ${V.beige}`, borderRadius: 12, boxShadow: '0 8px 32px rgba(44,42,41,0.12)' }}>
+                                    style={{ width: 246, background: V.card, border: `1px solid ${V.beige}`, borderRadius: 14, boxShadow: '0 20px 30px -20px rgba(15, 23, 42, 0.75)' }}>
                                     <div className="flex items-center gap-2 px-3 py-2.5" style={{ borderBottom: `1px solid ${V.beige}` }}>
                                         <span className="text-base">{group.emoji}</span>
-                                        <span className="text-xs font-bold tracking-wide uppercase" style={{ color: V.charcoal }}>{group.label}</span>
+                                        <span className="text-xs font-bold tracking-wider uppercase" style={{ color: V.charcoal }}>{group.label} Kit</span>
                                         <span className="text-[10px] px-1.5 py-0.5 rounded-full ml-auto"
                                             style={{ background: V.accentSoft, color: V.accent }}>{gp.length}</span>
                                     </div>
@@ -71,10 +72,10 @@ export function EditorToolbar({ plugins, onAddOperation }: EditorToolbarProps) {
                                                     </div>
                                                     {plugin.previewHint !== 'none' ? (
                                                         <span className="text-[9px] px-1 py-0.5 rounded-full shrink-0 font-bold"
-                                                            style={{ background: V.pastelMint, color: '#2e7d32' }}>LIVE</span>
+                                                            style={{ background: V.pastelMint, color: '#14532d' }}>CANVAS</span>
                                                     ) : (
                                                         <span className="text-[9px] px-1 py-0.5 rounded-full shrink-0 font-bold"
-                                                            style={{ background: '#fef3c7', color: '#92400e' }}>AUTO</span>
+                                                            style={{ background: '#fce7cf', color: '#9a3412' }}>RENDER</span>
                                                     )}
                                                 </button>
                                             )

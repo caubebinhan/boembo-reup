@@ -185,6 +185,103 @@ function resolveOperations(operations: VideoEditOperation[], opts: PipelineOptio
   return result
 }
 
+function parseAspectRatioSpec(value: unknown): number | null {
+  if (typeof value !== 'string') return null
+  const [wRaw, hRaw] = value.split(':')
+  const w = Number(wRaw)
+  const h = Number(hRaw)
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return null
+  return w / h
+}
+
+function toEven(value: number, fallback: number): number {
+  if (!Number.isFinite(value) || value <= 0) return fallback
+  const rounded = Math.max(2, Math.round(value))
+  const even = rounded - (rounded % 2)
+  return even >= 2 ? even : 2
+}
+
+function estimateOperationMetadata(
+  metadata: VideoMetadata,
+  pluginId: string,
+  params: Record<string, unknown>,
+): VideoMetadata {
+  const baseWidth = toEven(metadata.width, 2)
+  const baseHeight = toEven(metadata.height, 2)
+  let nextWidth = baseWidth
+  let nextHeight = baseHeight
+
+  if (pluginId === 'builtin.crop') {
+    const mode = String(params.mode || 'aspect')
+    if (mode === 'manual') {
+      const region = params.cropRegion as { w?: number; h?: number } | undefined
+      if (region && Number.isFinite(region.w) && Number.isFinite(region.h)) {
+        const rw = Math.max(1, Math.min(100, Number(region.w)))
+        const rh = Math.max(1, Math.min(100, Number(region.h)))
+        nextWidth = toEven((baseWidth * rw) / 100, baseWidth)
+        nextHeight = toEven((baseHeight * rh) / 100, baseHeight)
+      } else {
+        nextWidth = toEven(Number(params.w), baseWidth)
+        nextHeight = toEven(Number(params.h), baseHeight)
+      }
+    } else {
+      const targetAspect = parseAspectRatioSpec(params.aspectRatio) || (9 / 16)
+      const currentAspect = baseWidth / baseHeight
+      if (currentAspect > targetAspect) {
+        nextWidth = toEven(baseHeight * targetAspect, baseWidth)
+        nextHeight = baseHeight
+      } else {
+        nextWidth = baseWidth
+        nextHeight = toEven(baseWidth / targetAspect, baseHeight)
+      }
+    }
+  } else if (pluginId === 'builtin.rotate') {
+    const angle = String(params.angle || '0')
+    if (angle === '90' || angle === '270') {
+      nextWidth = baseHeight
+      nextHeight = baseWidth
+    }
+  } else if (pluginId === 'builtin.pad') {
+    nextWidth = toEven(Number(params.targetWidth), baseWidth)
+    nextHeight = toEven(Number(params.targetHeight), baseHeight)
+  } else if (pluginId === 'builtin.resize') {
+    const interactive = params.widthPercent != null || params.heightPercent != null || params.offsetPercent || params.canvasRect
+    if (!interactive) {
+      let w = Number(params.width ?? -1)
+      let h = Number(params.height ?? -1)
+      if (!Number.isFinite(w)) w = -1
+      if (!Number.isFinite(h)) h = -1
+      const mode = String(params.scaleMode || 'fit')
+      const upscaleAllowed = params.upscaleAllowed ?? false
+      if (!upscaleAllowed) {
+        if (w > baseWidth && w !== -1) w = baseWidth
+        if (h > baseHeight && h !== -1) h = baseHeight
+      }
+
+      if (w !== -1 || h !== -1) {
+        if (mode === 'stretch') {
+          nextWidth = w === -1 ? baseWidth : toEven(w, baseWidth)
+          nextHeight = h === -1 ? baseHeight : toEven(h, baseHeight)
+        } else if (w !== -1 && h !== -1) {
+          nextWidth = toEven(w, baseWidth)
+          nextHeight = toEven(h, baseHeight)
+        } else {
+          const ratio = baseWidth / Math.max(1, baseHeight)
+          if (w !== -1) {
+            nextWidth = toEven(w, baseWidth)
+            nextHeight = toEven(nextWidth / ratio, baseHeight)
+          } else {
+            nextHeight = toEven(h, baseHeight)
+            nextWidth = toEven(nextHeight * ratio, baseWidth)
+          }
+        }
+      }
+    }
+  }
+
+  return { ...metadata, width: nextWidth, height: nextHeight }
+}
+
 function createPluginContext(
   metadata: VideoMetadata,
   tempDir: string,
@@ -219,11 +316,13 @@ async function executeSinglePass(
   const allFilters: VideoFilter[] = []
   const allOutputOptions: string[] = []
   const additionalInputPaths: string[] = []
+  let progressiveMetadata: VideoMetadata = { ...metadata }
 
   for (const { operation, plugin } of resolved) {
     const reservationStart = inputIndexRef.value
+    const opMetadata = { ...progressiveMetadata }
     const inputCtx = createPluginContext(
-      metadata,
+      opMetadata,
       tempDir,
       operation.id,
       opts,
@@ -237,7 +336,7 @@ async function executeSinglePass(
     additionalInputPaths.push(...additionalInputs)
 
     const ctx = createPluginContext(
-      metadata,
+      opMetadata,
       tempDir,
       operation.id,
       opts,
@@ -252,6 +351,8 @@ async function executeSinglePass(
     // Collect output options
     const outOpts = plugin.getOutputOptions?.(operation.params) || []
     allOutputOptions.push(...outOpts)
+
+    progressiveMetadata = estimateOperationMetadata(opMetadata, plugin.id, operation.params)
   }
 
   // Build FFmpeg args manually (no FFmpegCommandBuilder dependency)

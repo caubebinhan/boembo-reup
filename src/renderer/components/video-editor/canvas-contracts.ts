@@ -188,23 +188,42 @@ function resolveCropRect(operation: VideoEditOperation, sourceAspect: number | n
   return clampCanvasRect({ x: 0, y, w: 100, h })
 }
 
+function findAppliedCropSpace(
+  operations: VideoEditOperation[],
+  sourceAspect: number | null,
+  isCandidate: (op: VideoEditOperation) => boolean,
+): CanvasRect | null {
+  const crop = [...operations]
+    .filter((op) =>
+      op.enabled
+      && op.pluginId === 'builtin.crop'
+      && op.params?.applyToTimeline === true
+      && isCandidate(op),
+    )
+    .sort((a, b) => b.order - a.order)
+    .map((op) => resolveCropRect(op, sourceAspect))
+    .find(Boolean)
+  return crop || null
+}
+
+export function resolveTimelineCropSpace(
+  operations: VideoEditOperation[],
+  sourceAspect?: number | null,
+): CanvasRect | null {
+  const normalizedAspect = sourceAspect && Number.isFinite(sourceAspect) && sourceAspect > 0 ? sourceAspect : null
+  return findAppliedCropSpace(operations, normalizedAspect, () => true)
+}
+
 function resolveAppliedCropSpace(
   operation: VideoEditOperation,
   operations: VideoEditOperation[],
   sourceAspect: number | null,
 ): CanvasRect | null {
-  const priorCrop = [...operations]
-    .filter((op) =>
-      op.enabled
-      && op.order < operation.order
-      && op.id !== operation.id
-      && op.pluginId === 'builtin.crop'
-      && op.params?.applyToTimeline === true,
-    )
-    .sort((a, b) => b.order - a.order)
-    .map((op) => resolveCropRect(op, sourceAspect))
-    .find(Boolean)
-  return priorCrop || null
+  return findAppliedCropSpace(
+    operations,
+    sourceAspect,
+    (op) => op.order < operation.order && op.id !== operation.id,
+  )
 }
 
 export function resolveCanvasSpace(
