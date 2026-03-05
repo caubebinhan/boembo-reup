@@ -96,15 +96,20 @@ export class CampaignStore {
     this.doc.videos = normalizeVideoListInPlace(Array.isArray(this.doc.videos) ? this.doc.videos : [])
   }
 
-  // ���� Videos ��������������������������������������������������������������������
+  // ── Items (entity records) ──────────────────────────────────────
   get videos(): VideoRecord[] {
     this.doc.videos = normalizeVideoListInPlace(Array.isArray(this.doc.videos) ? this.doc.videos : [])
     return this.doc.videos
   }
 
-  findVideo(platformId: string): VideoRecord | undefined {
+  findItem(platformId: string): VideoRecord | undefined {
     const found = this.doc.videos.find(v => v.platform_id === platformId)
     return found ? normalizeVideoRecordInPlace(found) : undefined
+  }
+
+  /** @deprecated Use findItem() */
+  findVideo(platformId: string): VideoRecord | undefined {
+    return this.findItem(platformId)
   }
 
   addVideos(videos: VideoRecord[]): void {
@@ -153,11 +158,16 @@ export class CampaignStore {
     }
   }
 
-  updateVideo(platformId: string, patch: Partial<VideoRecord>): void {
-    const video = this.findVideo(platformId)
+  updateItem(platformId: string, patch: Partial<VideoRecord>): void {
+    const video = this.findItem(platformId)
     if (!video) return
     Object.assign(video, patch)
     normalizeVideoRecordInPlace(video)
+  }
+
+  /** @deprecated Use updateItem() */
+  updateVideo(platformId: string, patch: Partial<VideoRecord>): void {
+    this.updateItem(platformId, patch)
   }
 
   videosByStatus(...statuses: string[]): VideoRecord[] {

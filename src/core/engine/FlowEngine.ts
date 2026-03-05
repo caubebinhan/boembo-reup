@@ -2,6 +2,7 @@ import { nodeRegistry } from '../nodes/NodeRegistry'
 import { jobRepo } from '@main/db/repositories/JobRepo'
 import { campaignRepo, CampaignStore } from '@main/db/repositories/CampaignRepo'
 import { FlowResolver } from '../flow/FlowResolver'
+import { runtimeProjectionService } from '@main/services/RuntimeProjectionService'
 import { flowLoader } from '../flow/FlowLoader'
 import { ExecutionLogger } from './ExecutionLogger'
 import { FlowDefinition, FlowNodeDefinition } from '../flow/ExecutionContracts'
@@ -11,7 +12,7 @@ import { AppSettingsService } from '@main/services/AppSettingsService'
 import { isNetworkError, isDiskError } from '../nodes/NodeHelpers'
 import { getFreeDiskSpaceMB } from '@main/utils/diskSpace'
 import { CodedError } from '@core/errors/CodedError'
-import { VideoProcessingLock, CampaignPipelineLock } from './VideoProcessingLock'
+import { EntityLock, CampaignPipelineLock } from './ConcurrencyLock'
 import type { NodeRetryPolicy } from '../nodes/NodeDefinition'
 
 // ── Error handling helpers ────────────────────────────────────────────
@@ -118,16 +119,16 @@ function matchNodeEvent(nodeDef: FlowNodeDefinition, errorMsg: string): { eventK
   return null
 }
 
-/** Find start nodes (no incoming edges, not loop children). */
+/** Find start nodes (no incoming edges, not managed sub-nodes of loop/parallel). */
 function findStartNodes(flow: FlowDefinition): FlowNodeDefinition[] {
   const targets = new Set(flow.edges.map(e => e.to))
-  const loopChildren = new Set<string>()
+  const managed = new Set<string>()
   for (const node of flow.nodes) {
     if (node.children) {
-      for (const childId of node.children) loopChildren.add(childId)
+      for (const childId of node.children) managed.add(childId)
     }
   }
-  return flow.nodes.filter(n => !targets.has(n.instance_id) && !loopChildren.has(n.instance_id))
+  return flow.nodes.filter(n => !targets.has(n.instance_id) && !managed.has(n.instance_id))
 }
 
 /** Build a node execution context.
@@ -208,7 +209,7 @@ async function executeWithTimeout(NodeImpl: any, inputData: any, ctx: any, nodeD
  *   - Handle loop nodes (iterate children over input array)
  *
  * Does NOT know about:
- *   - Video records, sorting, scheduling
+ *   - Entity records, sorting, scheduling
  *   - Download/publish counting
  *   - CAPTCHA or any workflow-specific error handling
  *   - Any domain concept - nodes handle their own logic via ctx.store
@@ -314,11 +315,29 @@ export class FlowEngine {
 
   public pauseCampaign(campaignId: string) {
     campaignRepo.updateStatus(campaignId, 'paused')
-    // Note: we do NOT force-release CampaignPipelineLock or VideoProcessingLock here.
+    // Note: we do NOT force-release CampaignPipelineLock or EntityLock here.
     // The running job will detect isCampaignActive() === false on the next loop iteration
     // and exit naturally, releasing its own locks via try/finally.
     // Force-releasing here would create a race window where a new job starts before the old one exits.
     ExecutionLogger.campaignEvent(campaignId, 'campaign:paused', 'Campaign paused')
+  }
+
+  /** Save pause checkpoint via RuntimeProjectionService. */
+  private savePauseCheckpoint(
+    campaignId: string,
+    checkpoint: {
+      itemIndex: number
+      entityKey?: string
+      lastActiveChild?: string
+      lastProgressMessage?: string
+      reason: 'manual' | 'event' | 'network' | 'disk'
+      eventKey?: string
+    }
+  ) {
+    runtimeProjectionService.setPauseCheckpoint(campaignId, {
+      ...checkpoint,
+      timestamp: Date.now(),
+    })
   }
 
   public async resumeCampaign(campaignId: string) {
@@ -337,6 +356,7 @@ export class FlowEngine {
 
     campaignRepo.updateStatus(campaignId, 'active')
     ExecutionLogger.campaignEvent(campaignId, 'campaign:resumed', 'Campaign resumed')
+    // RuntimeProjectionService clears pauseCheckpoint via execution:trace listener
 
     const pendingCount = jobRepo.countPendingForCampaign(campaignId)
     if (pendingCount > 0) return // Jobs already queued, engine will pick them up
@@ -346,9 +366,9 @@ export class FlowEngine {
     if (store) {
       const doc = store.doc as any
       const loopData = doc._loopData
-      const loopInstanceId = doc._loopInstanceId || 'video_loop'
+      const loopInstanceId = doc._loopInstanceId
       const loopNodeId = doc._loopNodeId || 'core.loop'
-      if (loopData) {
+      if (loopData && loopInstanceId) {
         ExecutionLogger.campaignEvent(campaignId, 'campaign:loop-resumed',
           `Resuming loop from item ${store.lastProcessedIndex + 1}`)
         this.createJob(campaignId, store.doc.workflow_id, loopInstanceId, loopNodeId, loopData)
@@ -380,8 +400,9 @@ export class FlowEngine {
 
   // ── Execute Job ───────────────────────────────────────────────────────
   private async executeJob(job: JobDocument) {
-    // ── Per-campaign pipeline lock: only one job executes at a time ──
-    if (!CampaignPipelineLock.acquire(job.campaign_id, job.id)) {
+    // ── Per-campaign pipeline lock (group-aware for parallel branches) ──
+    const parallelGroup = job.data?._parallelGroup as string | undefined
+    if (!CampaignPipelineLock.acquire(job.campaign_id, job.id, parallelGroup)) {
       console.log(`[FlowEngine] Campaign ${job.campaign_id} already has an active job — deferring job ${job.id}`)
       // Return job to pending so it gets re-picked in the next tick
       jobRepo.updateStatus(job.id, 'pending')
@@ -402,7 +423,14 @@ export class FlowEngine {
       const store = campaignRepo.open(job.campaign_id)
       const params = store.params
 
-      // ── Loop node? ───────────────────────────────────────────────────
+      // ── Parallel fork node? Uses children as branch list ──────────────
+      if (nodeDef.children && nodeDef.children.length > 0 && nodeDef.node_id === 'core.parallel') {
+        await this.executeParallel(job, flow, nodeDef, job.data)
+        jobRepo.updateStatus(job.id, 'completed')
+        return
+      }
+
+      // ── Loop node? (any node with children that isn't parallel) ─────
       if (nodeDef.children && nodeDef.children.length > 0) {
         await this.executeLoop(job, flow, nodeDef, job.data, params, store)
         jobRepo.updateStatus(job.id, 'completed')
@@ -432,6 +460,18 @@ export class FlowEngine {
         store.status = 'finished'
         store.save()
         ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Campaign finished')
+        return
+      }
+
+      if (result.action === 'wait') {
+        // Join barrier not met — reschedule with 5s delay
+        jobRepo.updateStatus(job.id, 'pending') // revert from completed
+        this.createJob(job.campaign_id, job.workflow_id, nodeDef.instance_id, nodeDef.node_id,
+          result.data || job.data, Date.now() + 5000)
+        ExecutionLogger.log({
+          campaign_id: job.campaign_id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
+          level: 'info', event: 'node:wait', message: result.message || 'Waiting for parallel branches',
+        })
         return
       }
 
@@ -494,6 +534,64 @@ export class FlowEngine {
     }
   }
 
+  // ── Parallel Execution (Fork/Join) ──────────────────────────────────
+  /**
+   * Fork: create one job per branch, all tagged with a shared _parallelGroup UUID.
+   * Then create a join job that will poll for branch completion.
+   *
+   * The join node is resolved from the outgoing edges of this fork node.
+   * Branch nodes are listed in `parallelDef.children`.
+   */
+  private async executeParallel(
+    job: JobDocument,
+    flow: FlowDefinition,
+    parallelDef: FlowNodeDefinition,
+    inputData: any,
+  ) {
+    const branches = parallelDef.children || []
+    const groupId = `pg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const onBranchFail = parallelDef.params?.onBranchFail || 'continue'
+
+    ExecutionLogger.log({
+      campaign_id: job.campaign_id, instance_id: parallelDef.instance_id, node_id: parallelDef.node_id,
+      level: 'info', event: 'parallel:fork',
+      message: `Forking ${branches.length} branches: [${branches.join(', ')}] (group: ${groupId})`,
+      data: { branches, groupId, onBranchFail },
+    })
+
+    // Create one job per branch — all share the _parallelGroup tag
+    const branchData = {
+      ...(inputData || {}),
+      _parallelGroup: groupId,
+    }
+
+    for (const branchId of branches) {
+      const branchNode = findNode(flow, branchId)
+      if (!branchNode) {
+        ExecutionLogger.log({
+          campaign_id: job.campaign_id, instance_id: parallelDef.instance_id, node_id: parallelDef.node_id,
+          level: 'error', event: 'parallel:branch-missing',
+          message: `Branch node '${branchId}' not found in flow definition — skipping`,
+        })
+        continue
+      }
+      this.createJob(job.campaign_id, job.workflow_id, branchNode.instance_id, branchNode.node_id, branchData)
+    }
+
+    // Resolve join node from outgoing edges (the node after the fork)
+    const joinNodes = resolveNextEdges(flow, parallelDef.instance_id, inputData)
+    for (const joinNode of joinNodes) {
+      // Create join job with a short delay to give branches time to start
+      const joinData = {
+        ...(inputData || {}),
+        _parallelGroup: groupId,
+      }
+      // Merge fork params into join params if join node needs branches list
+      this.createJob(job.campaign_id, job.workflow_id, joinNode.instance_id, joinNode.node_id,
+        joinData, Date.now() + 3000)
+    }
+  }
+
   // ── Loop Execution ──────────────────────────────────────────────────
   /**
    * Core loop: iterate input array through child nodes sequentially.
@@ -501,7 +599,7 @@ export class FlowEngine {
    * The input MUST be an array. If the loop node receives non-array data,
    * it wraps it in a single-element array.
    *
-   * No sorting, no counting, no video-specific logic.
+   * No sorting, no counting, no domain-specific logic.
    * Nodes handle their own domain concerns via ctx.store.
    */
   private async executeLoop(
@@ -515,6 +613,10 @@ export class FlowEngine {
     const items = Array.isArray(inputData) ? inputData : [inputData]
     const children = loopDef.children || []
     const startIndex = store.lastProcessedIndex
+
+    // ── Pause checkpoint tracking ──
+    let lastActiveChild = ''
+    let lastProgressMsg = ''
 
     ExecutionLogger.log({
       campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
@@ -532,9 +634,20 @@ export class FlowEngine {
           doc._loopInstanceId = loopDef.instance_id
           doc._loopNodeId = loopDef.node_id
           store.save()
+          // Save pause checkpoint via RuntimeProjectionService
+          const entityKey = items[i]?.entityKey != null ? String(items[i].entityKey)
+                          : items[i]?.platform_id != null ? String(items[i].platform_id)
+                          : undefined
+          this.savePauseCheckpoint(job.campaign_id, {
+            itemIndex: i,
+            entityKey,
+            lastActiveChild: lastActiveChild || undefined,
+            lastProgressMessage: lastProgressMsg || undefined,
+            reason: 'manual',
+          })
         } catch { /* best-effort */ }
-        // Release all video locks for this campaign on pause
-        VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
+        // Release all entity locks for this campaign on pause
+        EntityLock.releaseAllForCampaign(job.campaign_id)
         ExecutionLogger.log({
           campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
           level: 'info', event: 'loop:paused',
@@ -546,22 +659,22 @@ export class FlowEngine {
       let currentData = items[i]
       let skipToNextItem = false
 
-      // ── Per-video singleton guard: acquire lock for the entire child chain ──
-      // Normalize videoId to String to avoid number/string Map key mismatch
-      const videoId = currentData?.platform_id != null ? String(currentData.platform_id)
-                    : currentData?.videoId != null ? String(currentData.videoId)
+      // ── Per-entity singleton guard: acquire lock for the entire child chain ──
+      // Normalize entityKey to String to avoid number/string Map key mismatch
+      const entityKey = currentData?.entityKey != null ? String(currentData.entityKey)
+                    : currentData?.platform_id != null ? String(currentData.platform_id)
                     : undefined
       let lockAcquired = false
-      if (videoId) {
-        lockAcquired = VideoProcessingLock.acquire(videoId, loopDef.instance_id, job.id, job.campaign_id)
+      if (entityKey) {
+        lockAcquired = EntityLock.acquire(entityKey, loopDef.instance_id, job.id, job.campaign_id)
         if (!lockAcquired) {
-          const holder = VideoProcessingLock.isLocked(videoId)
+          const holder = EntityLock.isLocked(entityKey)
           ExecutionLogger.log({
             campaign_id: job.campaign_id, instance_id: loopDef.instance_id, node_id: loopDef.node_id,
-            level: 'warn', event: 'video:lock-rejected',
-            message: `Video ${videoId} is locked by ${holder?.instanceId}/${holder?.jobId} — will retry on next run`,
+            level: 'warn', event: 'entity:lock-rejected',
+            message: `Entity ${entityKey} is locked by ${holder?.instanceId}/${holder?.jobId} — will retry on next run`,
           })
-          // Do NOT advance lastProcessedIndex — this video should be retried on the next loop run
+          // Do NOT advance lastProcessedIndex — this entity should be retried on the next loop run
           continue
         }
       }
@@ -608,10 +721,14 @@ export class FlowEngine {
         }
 
         const startTime = Date.now()
+        lastActiveChild = childDef.instance_id
         ExecutionLogger.nodeStart(job.campaign_id, job.id, childDef.instance_id, childDef.node_id,
           { itemIndex: i, totalItems: items.length })
 
         const ctx = buildNodeContext(job, childDef, params, store)
+        // Intercept onProgress to capture for pause checkpoint
+        const origOnProgress = ctx.onProgress
+        ctx.onProgress = (msg: string) => { lastProgressMsg = msg; origOnProgress(msg) }
 
         try {
           const result = await executeWithTimeout(NodeImpl, skipToNextItem ? {} : currentData, ctx, childDef, job)
@@ -625,7 +742,7 @@ export class FlowEngine {
           if (result.action === 'finish') {
             store.status = 'finished'
             store.save()
-            VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
+            EntityLock.releaseAllForCampaign(job.campaign_id)
             ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Finished by child node')
             return
           }
@@ -661,16 +778,21 @@ export class FlowEngine {
               })
             }
             if (handler.action === 'pause_campaign') {
+              this.savePauseCheckpoint(job.campaign_id, {
+                itemIndex: i, entityKey, lastActiveChild: childDef.instance_id,
+                lastProgressMessage: lastProgressMsg || undefined,
+                reason: 'event', eventKey,
+              })
               store.status = 'paused'
               store.save()
-              VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
+              EntityLock.releaseAllForCampaign(job.campaign_id)
               ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:paused', `Paused by event "${eventKey}"`)
               return
             }
             if (handler.action === 'stop_campaign') {
               store.status = 'error'
               store.save()
-              VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
+              EntityLock.releaseAllForCampaign(job.campaign_id)
               ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:error', `Stopped by event "${eventKey}": ${err.message}`)
               return
             }
@@ -681,7 +803,7 @@ export class FlowEngine {
           if (onError === 'stop_campaign') {
             store.status = 'error'
             store.save()
-            VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
+            EntityLock.releaseAllForCampaign(job.campaign_id)
             ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:error',
               `Campaign stopped: node "${childDef.instance_id}" failed: ${err.message}`)
             return
@@ -691,20 +813,30 @@ export class FlowEngine {
           // Auto-pause on network or auto-fail on disk errors
           // Note: these functions change campaign status — releaseAllForCampaign is called in finally
           if (handleNetworkError(err.message, job.campaign_id, childDef.instance_id, store)) {
-            VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
+            this.savePauseCheckpoint(job.campaign_id, {
+              itemIndex: i, entityKey, lastActiveChild: childDef.instance_id,
+              lastProgressMessage: lastProgressMsg || undefined,
+              reason: 'network',
+            })
+            EntityLock.releaseAllForCampaign(job.campaign_id)
             return
           }
           if (handleDiskError(err.message, job.campaign_id, childDef.instance_id, store)) {
-            VideoProcessingLock.releaseAllForCampaign(job.campaign_id)
+            this.savePauseCheckpoint(job.campaign_id, {
+              itemIndex: i, entityKey, lastActiveChild: childDef.instance_id,
+              lastProgressMessage: lastProgressMsg || undefined,
+              reason: 'disk',
+            })
+            EntityLock.releaseAllForCampaign(job.campaign_id)
             return
           }
         }
       }
 
       } finally {
-        // ALWAYS release video lock — even on early return from errors
-        if (videoId && lockAcquired) {
-          VideoProcessingLock.release(videoId, job.id)
+        // ALWAYS release entity lock — even on early return from errors
+        if (entityKey && lockAcquired) {
+          EntityLock.release(entityKey, job.id)
         }
       }
 

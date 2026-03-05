@@ -24,7 +24,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
         month: '2-digit',
       })
       ctx.logger.info(`[CheckInTime] Campaign starts at ${startStr}. Waiting ${waitMins}min...`)
-      ctx.onProgress(`Waiting for campaign start time (${startStr})...`)
+      ctx.onProgress(`Chờ giờ bắt đầu (${startStr})...`)
       await new Promise((resolve) => setTimeout(resolve, waitMs))
       ctx.logger.info('[CheckInTime] Campaign start time reached')
     }
@@ -47,7 +47,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
     const rangeDesc = ranges.map((r) => `${r.start}-${r.end}`).join(', ')
     ctx.logger.info(`[CheckInTime] Outside active window (${rangeDesc}). Waiting ${sleepMins}min until ${wakeStr}`)
-    ctx.onProgress(`Outside active hours. Resume at ${wakeStr}.`)
+    ctx.onProgress(`Ngoài giờ hoạt động. Tiếp tục lúc ${wakeStr}.`)
     await new Promise((resolve) => setTimeout(resolve, sleepMs))
     ctx.logger.info('[CheckInTime] Back in active window, resuming')
   }
@@ -63,7 +63,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       })
       const waitMins = (waitMs / 60_000).toFixed(1)
       ctx.logger.info(`[CheckInTime] Waiting ${waitMins}min until scheduled time ${scheduledStr}`)
-      ctx.onProgress(`Next video at ${scheduledStr} (${waitMins}min).`)
+      ctx.onProgress(`Video kế tiếp lúc ${scheduledStr} (${waitMins} phút).`)
       await new Promise((resolve) => setTimeout(resolve, waitMs))
       ctx.logger.info('[CheckInTime] Scheduled time reached')
     } else {
@@ -71,6 +71,6 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     }
   }
 
-  ctx.onProgress('Ready - continuing')
+  ctx.onProgress('Sẵn sàng ✓')
   return { data: input, action: 'continue' }
 }

@@ -29,7 +29,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     ctx.store.status = 'finished'
     ctx.store.save()
 
-    const summary = `Campaign finished - ${stats.published} published, ${stats.failed} failed, ${stats.skipped} skipped (${stats.total} total)`
+    const summary = `Hoàn tất — ${stats.published} đã đăng, ${stats.failed} thất bại, ${stats.skipped} bỏ qua (${stats.total} tổng)`
 
     ctx.logger.info(`[CampaignFinish] ${summary}`)
     ctx.onProgress(summary)

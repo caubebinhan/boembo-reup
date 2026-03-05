@@ -33,12 +33,12 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     const waitMins = (waitMs / 60000).toFixed(1)
 
     ctx.logger.info(`Waiting ${waitMins}min (gap=${gapMinutes}min, jitter=${enableJitter ? '±50%' : 'off'})`)
-    ctx.onProgress(`Waiting ${waitMins} min before next video...`)
+    ctx.onProgress(`Chờ ${waitMins} phút trước video kế...`)
 
     await new Promise(resolve => setTimeout(resolve, waitMs))
 
     ctx.logger.info('Timeout done, continuing to next video')
-    ctx.onProgress('Timeout done')
+    ctx.onProgress('Hết thời gian chờ ✓')
     return { data: input, action: 'continue' }
   } catch (err: any) {
     ctx.logger.error(`[Timeout] Unexpected error: ${err?.message || err}`)

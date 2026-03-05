@@ -34,6 +34,7 @@ export const IPC_CHANNELS = {
   CAMPAIGN_GET_NODE_PROGRESS: 'campaign:get-node-progress',
   CAMPAIGN_GET_VIDEO_EVENTS: 'campaign:get-video-events',
   CAMPAIGN_TRIGGER_EVENT: 'campaign:trigger-event',
+  CAMPAIGN_GET_RUNTIME_STATE: 'campaign:get-runtime-state',
 
   // Video operations
   VIDEO_RESCHEDULE: 'video:reschedule',

@@ -43,8 +43,22 @@ function onNodeEvent(payload: { campaignId: string; instanceId: string; event: s
 
     case 'publish:failed':
       sendNotification(
-        '❌ Publish thất bại',
-        `Video ${descOf(data)} bị lỗi khi publish`,
+        '❌ Đăng video thất bại',
+        `Video ${descOf(data)} bị lỗi khi đăng`,
+      )
+      break
+
+    case 'download:failed':
+      sendNotification(
+        '❌ Tải video thất bại',
+        `Video ${descOf(data)} không tải được: ${data?.error || 'Lỗi không xác định'}`,
+      )
+      break
+
+    case 'scan:failed':
+      sendNotification(
+        '⚠️ Quét nguồn thất bại',
+        `Nguồn "${data?.sourceName || 'unknown'}" bị lỗi khi quét: ${data?.error || 'Lỗi không xác định'}`,
       )
       break
 

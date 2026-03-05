@@ -9,17 +9,23 @@ const INSTANCE_ID = 'downloader_1'
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const video = input
   if (!video?.download_url && !video?.url) {
-    return failGracefully(ctx, INSTANCE_ID, video?.platform_id || 'unknown', 'no_download_url',
-      'No download URL available')
+    const noUrlResult = failGracefully(ctx, INSTANCE_ID, video?.platform_id || 'unknown', 'no_download_url',
+      'No download URL available', { suppressEvent: true })
+    ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'download:failed', {
+      videoId: video?.platform_id || 'unknown',
+      errorType: 'no_download_url',
+      error: 'Không có URL tải video',
+    })
+    return noUrlResult
   }
 
-  ctx.onProgress(`Downloading: ${video.description?.slice(0, 40) || video.platform_id}`)
+  ctx.onProgress(`Đang tải: ${video.description?.slice(0, 40) || video.platform_id}`)
   const downloadStartMs = Date.now()
   const videoLabel = video.description?.slice(0, 40) || video.platform_id || 'video'
   ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'video:downloading', {
     videoId: video.platform_id,
     url: video.download_url || video.url,
-    message: `Downloading ${videoLabel}...`,
+    message: `Đang tải ${videoLabel}...`,
   })
 
   let result: any
@@ -28,8 +34,15 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     const downloadUrl = video.download_url || video.url
     result = await scanner.downloadVideo(downloadUrl, video.platform_id)
   } catch (err: any) {
-    return failGracefully(ctx, INSTANCE_ID, video.platform_id, 'download_failed',
-      `Download failed: ${err?.message || err}`)
+    const downloadResult = failGracefully(ctx, INSTANCE_ID, video.platform_id, 'download_failed',
+      `Download failed: ${err?.message || err}`, { suppressEvent: true })
+    ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'download:failed', {
+      videoId: video.platform_id,
+      errorType: 'download_failed',
+      error: err?.message || String(err),
+      description: video.description,
+    })
+    return downloadResult
   }
 
   // Use real caption from the download API (scanner alt text includes music info)

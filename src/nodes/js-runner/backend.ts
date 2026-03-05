@@ -16,7 +16,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   const code: string = ctx.params.code || 'return data'
 
   ctx.logger.info(`[JSRunner] Executing custom code (${code.length} chars)`)
-  ctx.onProgress('Running JS code...')
+  ctx.onProgress('Đang chạy mã JS...')
 
   let result: any
   try {
@@ -33,7 +33,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     result = await Promise.resolve(fn(input, ctx.params, sandboxCtx))
   } catch (e: any) {
     ctx.logger.error(`[JSRunner] Code execution error: ${e.message}`, e)
-    ctx.onProgress(`Error: ${e.message}`)
+    ctx.onProgress(`Lỗi: ${e.message}`)
     return {
       data: { ...input, js_error: e.message },
       action: 'continue',
@@ -45,7 +45,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   const output = result !== undefined ? result : input
 
   ctx.logger.info(`[JSRunner] Code executed successfully`)
-  ctx.onProgress('JS code done')
+  ctx.onProgress('Hoàn tất mã JS ✓')
 
   return {
     data: output,

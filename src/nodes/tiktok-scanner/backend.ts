@@ -2,6 +2,7 @@ import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefin
 import { TikTokScanner } from '@main/tiktok/TikTokScanner'
 import { accountRepo } from '@main/db/repositories/AccountRepo'
 import { shouldUseProfileSession } from '@main/tiktok/TikTokAuthMode'
+import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 
 export async function execute(_input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   const sources = ctx.params.sources || []
@@ -33,7 +34,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     const sortOrder = source.sortOrder ?? 'newest'
     const timeRange = source.timeRange ?? 'history_and_future'
 
-    ctx.onProgress(`Scanning ${source.type}: ${source.name} (limit=${limit})`)
+    ctx.onProgress(`Đang quét ${source.type}: ${source.name} (limit=${limit})`)
     ctx.logger.info(`[Scanner] source="${source.name}" type=${source.type} limit=${limit} sort=${sortOrder} timeRange=${timeRange}`)
 
     try {
@@ -91,9 +92,14 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
 
       allVideos.push(...mapped)
       sourceCounts.push(`${sourceLabel}: ${mapped.length}`)
-      ctx.onProgress(`${sourceLabel}: ${mapped.length} videos${filteredOut > 0 ? ` (${filteredOut} filtered)` : ''}`)
+      ctx.onProgress(`${sourceLabel}: ${mapped.length} video${filteredOut > 0 ? ` (${filteredOut} đã lọc)` : ''}`)
     } catch (err: any) {
       ctx.logger.error(`Failed to scan ${source.name}`, err)
+      ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'scanner_1', 'scan:failed', {
+        sourceName: source.name,
+        sourceType: source.type,
+        error: err?.message || String(err),
+      })
     }
   }
 
@@ -116,8 +122,8 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
 
   // Build summary progress with per-source breakdown
   const summary = sources.length > 1
-    ? `Scanned ${allVideos.length} videos (${sourceCounts.join(', ')})`
-    : `Scanned ${allVideos.length} videos`
+    ? `Đã quét ${allVideos.length} video (${sourceCounts.join(', ')})`
+    : `Đã quét ${allVideos.length} video`
   ctx.logger.info(`Scanner found ${allVideos.length} videos from ${sources.length} sources`)
   ctx.onProgress(summary)
 

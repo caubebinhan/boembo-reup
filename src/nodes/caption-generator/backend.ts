@@ -45,6 +45,8 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       ctx.store.save()
     }
 
+    ctx.onProgress(`Tạo caption: ${(video.platform_id || video.id).toString().slice(0, 20)}`)
+
     ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'caption:transformed', {
       videoId: video.platform_id || video.id,
       original: original.slice(0, 120),

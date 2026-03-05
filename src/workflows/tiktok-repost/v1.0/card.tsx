@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from 'react'
+import { computeGroupTotals } from '@nodes/tiktok-publisher/constants'
 
 // Per-workflow campaign card for TikTok Repost (Vintage Pastel)
 // Auto-discovered by CampaignCard via import.meta.glob
@@ -66,24 +67,24 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
             if (ev.event === 'captcha:detected') {
                 setAlerts(prev => {
                     if (prev.some(a => a.type === 'captcha')) return prev
-                    return [...prev, { type: 'captcha', message: 'CAPTCHA detected — needs resolve' }]
+                    return [...prev, { type: 'captcha', message: 'Phát hiện CAPTCHA — cần giải' }]
                 })
             } else if (ev.event === 'violation:detected') {
-                setAlerts(prev => [...prev, { type: 'violation', message: ev.data?.error || 'Content violation detected' }])
+                setAlerts(prev => [...prev, { type: 'violation', message: ev.data?.error || 'Vi phạm nội dung' }])
             } else if (ev.event === 'session:expired') {
                 setAlerts(prev => {
                     if (prev.some(a => a.type === 'session_expired')) return prev
-                    return [...prev, { type: 'session_expired', message: 'Session expired — re-login required' }]
+                    return [...prev, { type: 'session_expired', message: 'Phiên hết hạn — cần đăng nhập lại' }]
                 })
             } else if (ev.event === 'node:failed') {
-                setAlerts(prev => [...prev, { type: 'error', message: ev.data?.error || 'Node execution failed' }])
+                setAlerts(prev => [...prev, { type: 'error', message: ev.data?.error || 'Lỗi xử lý node' }])
             }
         })
 
         // Listen for campaign-level health check failures
         const offHealthCheck = api.on?.('campaign:healthcheck-failed', (ev: any) => {
             if (ev.campaign_id === campaign.id) {
-                setAlerts(prev => [...prev, { type: 'error', message: ev.message || 'Health check failed' }])
+                setAlerts(prev => [...prev, { type: 'error', message: ev.message || 'Kiểm tra sức khỏe thất bại' }])
             }
         })
 
@@ -92,18 +93,18 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
             if (ev.campaignId === campaign.id) {
                 setAlerts(prev => {
                     if (prev.some(a => a.message === ev.message)) return prev
-                    return [...prev, { type: 'info', message: ev.message || 'System event' }]
+                    return [...prev, { type: 'info', message: ev.message || 'Sự kiện hệ thống' }]
                 })
             }
         })
         const offNetworkError = api.on?.('campaign:network-error', (ev: any) => {
             if ((ev.campaignId || ev.campaign_id) === campaign.id) {
-                setAlerts(prev => [...prev, { type: 'network', message: ev.message || 'Network error detected' }])
+                setAlerts(prev => [...prev, { type: 'network', message: ev.message || 'Lỗi mạng' }])
             }
         })
         const offDiskError = api.on?.('campaign:disk-error', (ev: any) => {
             if ((ev.campaignId || ev.campaign_id) === campaign.id) {
-                setAlerts(prev => [...prev, { type: 'disk', message: ev.message || 'Disk error detected' }])
+                setAlerts(prev => [...prev, { type: 'disk', message: ev.message || 'Lỗi ổ đĩa' }])
             }
         })
 
@@ -131,56 +132,27 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
 
     // ── Status config — covers ALL possible campaign statuses ──
     const statusConfig: Record<string, { label: string; emoji: string; color: string; bg: string; border: string; blink?: boolean }> = {
-        idle: { label: 'Idle', emoji: '💤', color: P.textDim, bg: P.cream, border: P.beige },
-        active: { label: 'Running', emoji: '🌿', color: '#2e7d32', bg: P.pastelMint, border: '#94c8a0', blink: true },
-        running: { label: 'Running', emoji: '🌿', color: '#2e7d32', bg: P.pastelMint, border: '#94c8a0', blink: true },
-        paused: { label: 'Paused', emoji: '☕', color: '#8e5a2b', bg: P.pastelPeach, border: '#e0b896' },
-        finished: { label: 'Done', emoji: '🎉', color: '#2e5a88', bg: P.pastelBlue, border: '#93b4d4' },
-        error: { label: 'Error', emoji: '🥀', color: '#9e3d4d', bg: P.pastelPink, border: '#e0a8b0' },
-        cancelled: { label: 'Cancelled', emoji: '🚫', color: '#6b6b6b', bg: '#f0f0f0', border: '#d0d0d0' },
+        idle: { label: 'Chờ', emoji: '💤', color: P.textDim, bg: P.cream, border: P.beige },
+        active: { label: 'Đang chạy', emoji: '🌿', color: '#2e7d32', bg: P.pastelMint, border: '#94c8a0', blink: true },
+        running: { label: 'Đang chạy', emoji: '🌿', color: '#2e7d32', bg: P.pastelMint, border: '#94c8a0', blink: true },
+        paused: { label: 'Tạm dừng', emoji: '☕', color: '#8e5a2b', bg: P.pastelPeach, border: '#e0b896' },
+        finished: { label: 'Xong', emoji: '🎉', color: '#2e5a88', bg: P.pastelBlue, border: '#93b4d4' },
+        error: { label: 'Lỗi', emoji: '🥀', color: '#9e3d4d', bg: P.pastelPink, border: '#e0a8b0' },
+        cancelled: { label: 'Đã hủy', emoji: '🚫', color: '#6b6b6b', bg: '#f0f0f0', border: '#d0d0d0' },
         needs_captcha: { label: 'Captcha', emoji: '🧩', color: '#8e5a2b', bg: P.pastelPeach, border: '#e0b896' },
-        scheduling: { label: 'Scheduling', emoji: '📋', color: '#7c3aed', bg: P.pastelLavender, border: '#c09ee0', blink: true },
-        session_expired: { label: 'Re-login', emoji: '🔑', color: '#92400e', bg: P.pastelYellow, border: '#fcd34d' },
-        recovering: { label: 'Recovering', emoji: '🔄', color: '#2563eb', bg: P.pastelBlue, border: '#93b4d4', blink: true },
-        degraded: { label: 'Degraded', emoji: '⚠️', color: '#d97706', bg: P.pastelPeach, border: '#e0b896' },
+        scheduling: { label: 'Lên lịch', emoji: '📋', color: '#7c3aed', bg: P.pastelLavender, border: '#c09ee0', blink: true },
+        session_expired: { label: 'Đăng nhập lại', emoji: '🔑', color: '#92400e', bg: P.pastelYellow, border: '#fcd34d' },
+        recovering: { label: 'Phục hồi', emoji: '🔄', color: '#2563eb', bg: P.pastelBlue, border: '#93b4d4', blink: true },
+        degraded: { label: 'Suy giảm', emoji: '⚠️', color: '#d97706', bg: P.pastelPeach, border: '#e0b896' },
     }
 
     const badge = statusConfig[campaign.status] || statusConfig.idle!
     const sourceCount = config.sources?.length || 0
     const counters = campaign.counters || {}
 
-    // ── Comprehensive counters ──
-    const queued = counters.queued || 0
-    const pendingApproval = counters.pending_approval || 0
-    const downloaded = counters.downloaded || 0
-    const captioned = counters.captioned || 0
-    const published = counters.published || 0
-    const verified = counters.verified || 0
-    const underReview = counters.under_review || 0
-    const verificationIncomplete = counters.verification_incomplete || 0
-    const failed = counters.failed || 0
-    const publishFailed = counters.publish_failed || 0
-    const duplicate = counters.duplicate || 0
-    const captcha = counters.captcha || 0
-    const sessionExpired = counters.session_expired || 0
-    const skipped = counters.skipped || 0
-
-    // Total = all non-zero statuses
-    const total = queued + pendingApproval + downloaded + captioned + published + verified +
-        underReview + verificationIncomplete + failed + publishFailed + duplicate + captcha +
-        sessionExpired + skipped
-
-    // Terminal — Public success = published + verified
-    const publicCount = published + verified
-    // Terminal — Submitted = under_review + verification_incomplete
-    const submittedCount = underReview + verificationIncomplete
-    // Terminal fail = failed + publish_failed (real errors)
-    const failCount = failed + publishFailed
-    // Terminal skip = duplicate + skipped (not errors)
-    const skipCount = duplicate + skipped
-    // Progress = terminal states / total
-    const terminalCount = publicCount + submittedCount + failCount + skipCount + captcha + sessionExpired
-    const progressPct = total > 0 ? Math.round((terminalCount / total) * 100) : 0
+    // ── Group-based counters — defined once in constants.ts ──
+    const g = computeGroupTotals(counters)
+    const progressPct = g.total > 0 ? Math.round((g.terminal / g.total) * 100) : 0
 
     // Target account info
     const targetAccount = config.targetChannel || config.publishAccount || null
@@ -190,10 +162,10 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
     // Schedule info
     const scheduleLabel = useMemo(() => {
         if (!interval) return null
-        if (interval < 60) return `Every ${interval}min`
-        if (interval === 60) return 'Every 1h'
-        if (interval % 60 === 0) return `Every ${interval / 60}h`
-        return `Every ${Math.floor(interval / 60)}h ${interval % 60}m`
+        if (interval < 60) return `Mỗi ${interval} phút`
+        if (interval === 60) return 'Mỗi 1 giờ'
+        if (interval % 60 === 0) return `Mỗi ${interval / 60} giờ`
+        return `Mỗi ${Math.floor(interval / 60)}h ${interval % 60}phút`
     }, [interval])
 
     // Next scheduled video
@@ -215,10 +187,10 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
         const updatedAt = campaign.updated_at || campaign.created_at
         if (!updatedAt) return null
         const diff = Date.now() - new Date(updatedAt).getTime()
-        if (diff < 60_000) return 'Just now'
-        if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
-        if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
-        return `${Math.floor(diff / 86400_000)}d ago`
+        if (diff < 60_000) return 'Vừa xong'
+        if (diff < 3600_000) return `${Math.floor(diff / 60_000)} phút trước`
+        if (diff < 86400_000) return `${Math.floor(diff / 3600_000)} giờ trước`
+        return `${Math.floor(diff / 86400_000)} ngày trước`
     }, [campaign.updated_at, campaign.created_at])
 
     const createdDate = new Date(campaign.created_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -256,7 +228,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
             }}
         >
             {/* Progress bar accent */}
-            {total > 0 && (
+            {g.total > 0 && (
                 <div className="absolute top-0 left-0 right-0" style={{ height: 3, background: P.beige }}>
                     <div className="h-full transition-all duration-700"
                         style={{ width: `${progressPct}%`, background: `linear-gradient(90deg, ${P.accent}, #a78bfa, ${P.pastelMint})` }} />
@@ -280,10 +252,10 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                     {targetAccount && (
                         <MetaChip icon="👤" text={typeof targetAccount === 'object' ? (targetAccount.display_name || targetAccount.username || 'Account') : targetAccount} />
                     )}
-                    <MetaChip icon="📺" text={`${sourceCount} source${sourceCount !== 1 ? 's' : ''}`} />
+                    <MetaChip icon="📺" text={`${sourceCount} nguồn`} />
                     {scheduleLabel && <MetaChip icon="⏰" text={scheduleLabel} />}
-                    {videoEdits > 0 && <MetaChip icon="🎬" text={`${videoEdits} edit${videoEdits !== 1 ? 's' : ''}`} />}
-                    {nextScheduled && <MetaChip icon="⏭️" text={`Next: ${nextScheduled}`} highlight />}
+                    {videoEdits > 0 && <MetaChip icon="🎬" text={`${videoEdits} hiệu ứng`} />}
+                    {nextScheduled && <MetaChip icon="⏭️" text={`Kế: ${nextScheduled}`} highlight />}
                     {workflowVersion && <MetaChip icon="📦" text={`v${workflowVersion}`} dim />}
                     <MetaChip icon="📅" text={createdDate} dim />
                     {lastActivity && <MetaChip icon="🕐" text={lastActivity} dim />}
@@ -306,6 +278,33 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                         <span className="text-[11px] truncate" style={{ color: '#2e7d32' }}>{liveMsg.msg}</span>
                     </div>
                 )}
+
+                {/* Pause checkpoint banner */}
+                {campaign.status === 'paused' && (() => {
+                    const cp = (campaign as any)?.meta?.runtime?.pauseCheckpoint
+                    if (!cp) return null
+                    const NODE_LABELS: Record<string, string> = {
+                        'downloader_1': '⬇️ Tải video', 'video_edit_1': '🎬 Chỉnh sửa',
+                        'caption_1': '✍️ Tạo caption', 'publisher_1': '📤 Đăng video',
+                        'dedup_1': '🔍 Kiểm tra trùng', 'account_dedup_1': '🔍 Kiểm tra TK',
+                        'check_time_1': '⏰ Chờ lịch', 'scanner_1': '🔎 Quét nguồn',
+                        'monitor_1': '👁 Theo dõi',
+                    }
+                    const REASON_LABELS: Record<string, string> = {
+                        manual: '⏸ Tạm dừng thủ công', event: '⚡ Dừng bởi sự kiện',
+                        network: '🌐 Lỗi mạng', disk: '💾 Lỗi ổ đĩa',
+                    }
+                    const nodeLabel = cp.lastActiveChild ? (NODE_LABELS[cp.lastActiveChild] || cp.lastActiveChild) : ''
+                    const reason = REASON_LABELS[cp.reason] || cp.reason
+                    const video = cp.itemIndex != null ? `Video #${cp.itemIndex + 1}` : ''
+                    return (
+                        <div className="flex items-center gap-1.5 mb-2.5 px-2.5 py-1.5 rounded-lg text-[11px]"
+                            style={{ background: P.pastelPeach + '60', border: `1px solid ${P.pastelPeach}`, color: '#8e5a2b' }}>
+                            <span className="shrink-0">📍</span>
+                            <span className="truncate">{reason}{video ? ` — ${video}` : ''}{nodeLabel ? ` — ${nodeLabel}` : ''}</span>
+                        </div>
+                    )
+                })()}
             </div>
 
             {/* Row 3: Stats bar + Actions */}
@@ -313,20 +312,18 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                 style={{ background: P.cream, borderTop: `1px solid ${P.beige}` }}>
                 {/* Stats */}
                 <div className="flex items-center gap-1.5 text-xs flex-wrap">
-                    <StatPill emoji="📥" value={queued} label="Queued" bg={P.pastelBlue} />
-                    {pendingApproval > 0 && <StatPill emoji="⏳" value={pendingApproval} label="Pending Approval" bg={P.pastelYellow} />}
-                    <StatPill emoji="💾" value={downloaded} label="Downloaded" bg={P.pastelPeach} />
-                    {captioned > 0 && <StatPill emoji="✍️" value={captioned} label="Captioned" bg={P.pastelLavender} />}
-                    <StatPill emoji="🌸" value={publicCount} label="Đã đăng" bg={P.pastelMint}
-                        valueColor={publicCount > 0 ? '#2e7d32' : P.textDim} bold={publicCount > 0} />
-                    {submittedCount > 0 && <StatPill emoji="⏳" value={submittedCount} label="Đã gửi, chờ duyệt" bg={P.pastelYellow} valueColor="#92400e" />}
-                    {captcha > 0 && <StatPill emoji="🧩" value={captcha} label="Captcha" bg={P.pastelPeach} valueColor="#8e5a2b" bold />}
-                    {duplicate > 0 && <StatPill emoji="🔄" value={duplicate} label="Duplicate" bg={P.cream} />}
-                    {failCount > 0 && (
-                        <StatPill emoji="🥀" value={failCount} label="Failed" bg={P.pastelPink} valueColor="#9e3d4d" bold />
+                    <StatPill emoji="📥" value={g.queued} label="Đang chờ" bg={P.pastelBlue} />
+                    {g.in_progress > 0 && <StatPill emoji="⚙️" value={g.in_progress} label="Đang xử lý" bg={P.pastelPeach} />}
+                    <StatPill emoji="🌸" value={g.published} label="Đã đăng" bg={P.pastelMint}
+                        valueColor={g.published > 0 ? '#2e7d32' : P.textDim} bold={g.published > 0} />
+                    {g.submitted > 0 && <StatPill emoji="⏳" value={g.submitted} label="Chờ duyệt" bg={P.pastelYellow} valueColor="#92400e" />}
+                    {g.captcha > 0 && <StatPill emoji="🧩" value={g.captcha} label="Captcha" bg={P.pastelPeach} valueColor="#8e5a2b" bold />}
+                    {g.duplicate > 0 && <StatPill emoji="🔄" value={g.duplicate} label="Trùng" bg={P.cream} />}
+                    {g.failed > 0 && (
+                        <StatPill emoji="🥀" value={g.failed} label="Thất bại" bg={P.pastelPink} valueColor="#9e3d4d" bold />
                     )}
-                    {skipped > 0 && <StatPill emoji="⏭️" value={skipped} label="Skipped" bg={P.cream} />}
-                    {total > 0 && (
+                    {g.skipped > 0 && <StatPill emoji="⏭️" value={g.skipped} label="Bỏ qua" bg={P.cream} />}
+                    {g.total > 0 && (
                         <div className="flex items-center gap-1 ml-1 pl-2" style={{ borderLeft: `1px solid ${P.beige}` }} title="Progress">
                             <span className="font-bold text-sm" style={{ color: P.accent }}>{progressPct}%</span>
                         </div>
@@ -343,7 +340,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                         }}
                             disabled={!!actionInFlight}
                             bg={P.pastelMint} color="#2e7d32" hoverBg="#c3dac6" borderColor="#94c8a0">
-                            {actionInFlight === 'trigger' ? '⏳ Starting...' : '🌿 Run'}
+                            {actionInFlight === 'trigger' ? '⏳ Đang...' : '🌿 Chạy'}
                         </ActionBtn>
                     )}
                     {(campaign.status === 'active' || campaign.status === 'running') && (
@@ -354,7 +351,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                         }}
                             disabled={!!actionInFlight}
                             bg={P.pastelPeach} color="#8e5a2b" hoverBg="#ebd5c5" borderColor="#e0b896">
-                            {actionInFlight === 'pause' ? '⏳ Pausing...' : '☕ Pause'}
+                            {actionInFlight === 'pause' ? '⏳ Đang...' : '☕ Dừng'}
                         </ActionBtn>
                     )}
                     {campaign.status === 'paused' && (
@@ -365,18 +362,19 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                         }}
                             disabled={!!actionInFlight}
                             bg={P.pastelMint} color="#2e7d32" hoverBg="#c3dac6" borderColor="#94c8a0">
-                            {actionInFlight === 'resume' ? '⏳ Resuming...' : '🌿 Resume'}
+                            {actionInFlight === 'resume' ? '⏳ Đang...' : '🌿 Tiếp tục'}
                         </ActionBtn>
                     )}
                     <button
                         onClick={(e) => {
                             e.stopPropagation()
-                            if (confirm(`Delete campaign "${campaign.name}"?`)) {
+                            if (confirm(`Xóa campaign "${campaign.name}"?`)) {
                                 onAction('campaign:delete', { id: campaign.id })
                             }
                         }}
                         className="p-1.5 text-xs rounded-lg transition cursor-pointer"
                         style={{ color: P.textDim }}
+                        title="Xóa campaign" aria-label="Xóa campaign"
                         onMouseEnter={e => { e.currentTarget.style.color = '#9e3d4d'; e.currentTarget.style.background = P.pastelPink }}
                         onMouseLeave={e => { e.currentTarget.style.color = P.textDim; e.currentTarget.style.background = 'transparent' }}>
                         🗑
@@ -408,7 +406,7 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
                         )
                     })}
                     {alerts.length > 3 && (
-                        <span className="text-[10px] pl-2" style={{ color: P.textDim }}>+{alerts.length - 3} more alerts</span>
+                        <span className="text-[10px] pl-2" style={{ color: P.textDim }}>+{alerts.length - 3} cảnh báo khác</span>
                     )}
                 </div>
             )}

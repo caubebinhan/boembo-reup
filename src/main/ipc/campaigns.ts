@@ -10,7 +10,7 @@ import { campaignRepo } from '../db/repositories/CampaignRepo'
 import { jobRepo } from '../db/repositories/JobRepo'
 import { createCampaignDocument } from '../db/models/Campaign'
 import { db } from '../db/Database'
-import { VideoProcessingLock } from '@core/engine/VideoProcessingLock'
+import { EntityLock } from '@core/engine/ConcurrencyLock'
 
 /**
  * Safe IPC wrapper — catches all errors and returns structured { success, error } responses
@@ -58,6 +58,11 @@ export function setupCampaignIPC() {
 
   safeHandle(IPC_CHANNELS.CAMPAIGN_GET, async (_event, { id }) => {
     return campaignRepo.findById(id)
+  })
+
+  safeHandle(IPC_CHANNELS.CAMPAIGN_GET_RUNTIME_STATE, async (_event, { id }) => {
+    const { runtimeProjectionService } = require('../services/RuntimeProjectionService')
+    return runtimeProjectionService.getRuntimeState(id)
   })
 
   safeHandle(IPC_CHANNELS.CAMPAIGN_CREATE, async (_event, payload) => {
@@ -316,12 +321,12 @@ export function setupCampaignIPC() {
       return { success: false, alreadyPending: true, existingJobId: existingJob.id, error: 'A retry job is already pending or running for this node' }
     }
 
-    // ── Video processing lock: reject if this video is actively being processed ──
+    // ── Entity processing lock: reject if this entity is actively being processed ──
     if (vid) {
-      const holder = VideoProcessingLock.isLocked(vid)
+      const holder = EntityLock.isLocked(vid)
       if (holder) {
-        console.log(`[IPC:pipeline:retry-node] Video ${vid} locked by ${holder.instanceId}/${holder.jobId} — skipping retry`)
-        return { success: false, videoLocked: true, error: `Video is currently being processed by ${holder.instanceId}` }
+        console.log(`[IPC:pipeline:retry-node] Entity ${vid} locked by ${holder.instanceId}/${holder.jobId} — skipping retry`)
+        return { success: false, videoLocked: true, error: `Entity is currently being processed by ${holder.instanceId}` }
       }
     }
 

@@ -1,6 +1,7 @@
 import { db } from '@main/db/Database'
 import { BrowserWindow } from 'electron'
 import { EventEmitter } from 'node:events'
+import type { TraceEntry } from '@core/flow/ExecutionContracts'
 
 export interface LogEntry {
   campaign_id: string
@@ -74,6 +75,23 @@ export class ExecutionLogger {
       data_json: entry.data ? JSON.stringify(entry.data) : null,
       created_at: timestamp
     })
+
+    // 4) Trace Bus → main-process listeners (RuntimeProjectionService etc.)
+    const category = entry.event.startsWith('campaign:') ? 'campaign'
+      : entry.event.startsWith('loop:') ? 'loop'
+      : entry.event.startsWith('job:') ? 'job'
+      : 'node'
+    _bus.emit('execution:trace', {
+      category,
+      event: entry.event,
+      campaignId: entry.campaign_id,
+      instanceId: entry.instance_id,
+      nodeId: entry.node_id,
+      jobId: entry.job_id,
+      message: entry.message,
+      data: entry.data,
+      timestamp,
+    } satisfies TraceEntry)
   }
 
   // Convenience methods

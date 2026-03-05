@@ -10,6 +10,7 @@ import { setupWizardIPC } from './ipc/wizard'
 import { setupVideoEditorIPC } from './ipc/video-editor'
 import { setupAccountsIPC } from './ipc/accounts'
 import { initSentry } from './sentry'
+import { runtimeProjectionService } from './services/RuntimeProjectionService'
 import { flowEngine } from '../core/engine/FlowEngine'
 import { setupCampaignIPC } from './ipc/campaigns'
 import { setupSettingsIPC } from './ipc/settings'
@@ -129,6 +130,7 @@ app.whenReady().then(() => {
 
   // Initialize Engine
   flowEngine.start()
+  runtimeProjectionService.start()
 
   // Start runtime service health monitor (pings workflow URLs periodically)
   serviceHealthMonitor.start()

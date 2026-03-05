@@ -122,37 +122,45 @@ export function setupVideoEditorIPC() {
     })
     _editorInitDataByContentsId.set(editorWin.webContents.id, payload?.data || {})
 
-    // Fix 7: Warn user about unsaved changes when closing via window controls
+    // Cache webContents.id before events — webContents may be destroyed in 'closed'
+    const editorContentsId = editorWin.webContents.id
+
+    // Warn user about unsaved changes when closing via window controls
     editorWin.on('close', (e) => {
+      // Guard: during app shutdown the window may already be destroyed
+      if (editorWin.isDestroyed()) return
       // Skip dialog if this close was triggered by Done button
-      if (_intentionalCloseSet.has(editorWin.webContents.id)) {
-        _intentionalCloseSet.delete(editorWin.webContents.id)
+      if (_intentionalCloseSet.has(editorContentsId)) {
+        _intentionalCloseSet.delete(editorContentsId)
         return
       }
-      const choice = dialog.showMessageBoxSync(editorWin, {
-        type: 'question',
-        buttons: ['Discard changes', 'Cancel'],
-        defaultId: 1,
-        title: 'Unsaved changes',
-        message: 'You have unsaved video editor changes. Discard and close?',
-      })
-      if (choice === 1) {
-        e.preventDefault()
-        return
+      try {
+        const choice = dialog.showMessageBoxSync(editorWin, {
+          type: 'question',
+          buttons: ['Discard changes', 'Cancel'],
+          defaultId: 1,
+          title: 'Unsaved changes',
+          message: 'You have unsaved video editor changes. Discard and close?',
+        })
+        if (choice === 1) {
+          e.preventDefault()
+          return
+        }
+      } catch {
+        // Window destroyed between guard and dialog — let it close gracefully
       }
     })
 
     editorWin.on('closed', () => {
-      _intentionalCloseSet.delete(editorWin.webContents.id)
-      _editorInitDataByContentsId.delete(editorWin.webContents.id)
+      _intentionalCloseSet.delete(editorContentsId)
+      _editorInitDataByContentsId.delete(editorContentsId)
       // Keep wizard state in sync when user closes editor with window controls.
       safeSendToWindow(_editorParentWin, IPC_CHANNELS.VIDEO_EDITOR_DONE, null)
       _editorParentWin = null
     })
 
     editorWin.webContents.on('did-finish-load', () => {
-      editorWin.webContents.send(
-        IPC_CHANNELS.VIDEO_EDITOR_INIT_DATA,
+      safeSendToWindow(editorWin, IPC_CHANNELS.VIDEO_EDITOR_INIT_DATA,
         _editorInitDataByContentsId.get(editorWin.webContents.id) || {},
       )
     })

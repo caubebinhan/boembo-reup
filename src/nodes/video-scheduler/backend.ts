@@ -65,7 +65,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       : `${ranges.length} ranges`
 
     ctx.logger.info(`[VideoScheduler] Scheduling ${videos.length} videos (interval=${intervalMinutes}min, jitter=${enableJitter}, window=${rangeDesc})`)
-    ctx.onProgress(`Scheduling ${videos.length} videos...`)
+    ctx.onProgress(`Lên lịch ${videos.length} video...`)
 
     // Reset last_processed_index for a fresh run
     ctx.store.lastProcessedIndex = 0
@@ -152,8 +152,8 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       ctx.logger.info(`[VideoScheduler] Rescheduled ${rescheduled.length} missed videos`)
       ctx.alert(
         'warn',
-        `Missed schedule detected (${missedVideos.length} video(s))`,
-        `Rescheduled ${rescheduled.length} video(s) from current time (interval=${intervalMinutes}min, jitter=${enableJitter ? 'on' : 'off'}).`,
+        `Phát hiện lịch bị lỡ (${missedVideos.length} video)`,
+        `Đã lên lịch lại ${rescheduled.length} video từ thời điểm hiện tại (interval=${intervalMinutes}ph, jitter=${enableJitter ? 'bật' : 'tắt'}).`,
       )
     }
 
@@ -161,7 +161,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     const lastTs = videos[videos.length - 1].scheduled_for
     const rangeLabel = formatRange(firstTs, lastTs)
     ctx.logger.info(`[VideoScheduler] ${videos.length} videos scheduled: ${rangeLabel}`)
-    ctx.onProgress(`${videos.length} videos queued (${rangeLabel})`)
+    ctx.onProgress(`${videos.length} video đã xếp lịch (${rangeLabel})`)
 
     return { data: videos, action: 'continue', message: `${videos.length} videos scheduled` }
   } catch (err: any) {

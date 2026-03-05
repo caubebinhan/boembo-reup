@@ -1,5 +1,6 @@
 import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { TikTokScanner, ScanOptions } from '@main/tiktok/TikTokScanner'
+import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 
 /**
  * Monitoring Node
@@ -13,10 +14,10 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
   const waitMs = intervalMinutes * 60 * 1000
 
   ctx.logger.info(`[Monitor] Starting continuous monitoring (interval=${intervalMinutes}min)`)
-  ctx.onProgress(`Monitoring started (interval ${intervalMinutes}min).`)
+  ctx.onProgress(`Đang theo dõi (mỗi ${intervalMinutes} phút).`)
 
   while (true) {
-    ctx.onProgress(`Waiting ${intervalMinutes}min before next scan...`)
+    ctx.onProgress(`Chờ ${intervalMinutes} phút trước lần quét kế...`)
     await new Promise((resolve) => setTimeout(resolve, waitMs))
 
     // Check campaign status from store (re-read fresh)
@@ -24,7 +25,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     const freshStore = campaignRepo.tryOpen(ctx.campaign_id)
     if (!freshStore || !['active', 'running'].includes(freshStore.status)) {
       ctx.logger.info(`[Monitor] Campaign status=${freshStore?.status} - stopping monitor`)
-      ctx.onProgress('Monitoring stopped (campaign paused/stopped).')
+      ctx.onProgress('Dừng theo dõi (campaign đã dừng).')
       return { data: [], action: 'continue', message: 'Campaign paused/stopped - monitoring ended' }
     }
 
@@ -68,7 +69,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
       }
 
       try {
-        ctx.onProgress(`Scanning ${source.type}: ${source.name}...`)
+        ctx.onProgress(`Đang quét ${source.type}: ${source.name}...`)
 
         let result
         if (source.type === 'channel') {
@@ -89,6 +90,11 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
         }
       } catch (err: any) {
         ctx.logger.error(`[Monitor] Error scanning "${source.name}": ${err.message}`)
+        ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'monitoring_1', 'scan:failed', {
+          sourceName: source.name,
+          sourceType: source.type,
+          error: err?.message || String(err),
+        })
       }
     }
 
@@ -100,11 +106,11 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
 
     if (newVideos.length > 0) {
       ctx.logger.info(`[Monitor] Found ${newVideos.length} new videos - sending to scheduler`)
-      ctx.onProgress(`Found ${newVideos.length} new videos.`)
+      ctx.onProgress(`Tìm thấy ${newVideos.length} video mới.`)
       return { data: newVideos, action: 'continue', message: `${newVideos.length} new videos detected` }
     }
 
     ctx.logger.info(`[Monitor] Scanned ${totalScanned} videos - no new ones.`)
-    ctx.onProgress(`No new videos. Next scan in ${intervalMinutes}min.`)
+    ctx.onProgress(`Không có video mới. Quét lại sau ${intervalMinutes} phút.`)
   }
 }

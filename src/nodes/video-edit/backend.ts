@@ -46,7 +46,7 @@ export default async function execute(
     const defaults = videoEditPluginRegistry.getDefaults()
     const hasEnabledDefaults = defaults.some((d) => d.enabled)
     if (!hasEnabledDefaults) {
-      const skipMsg = 'Video edit skipped: no enabled operations.'
+      const skipMsg = 'Chỉnh sửa video bỏ qua: không có thao tác nào được bật.'
       ctx.logger.info(skipMsg)
       return { data: input, message: skipMsg }
     }
@@ -141,8 +141,8 @@ export default async function execute(
     // Hard fail — stop the pipeline for this video.
     // Common cause: FFmpeg not installed → "ffmpeg_or_ffprobe_not_available"
     const userMessage = msg.includes('ffmpeg_or_ffprobe_not_available')
-      ? 'FFmpeg is missing. Please install FFmpeg/FFprobe.'
-      : `Video edit failed: ${msg}`
+      ? 'FFmpeg chưa được cài đặt. Vui lòng cài FFmpeg/FFprobe.'
+      : `Chỉnh sửa video thất bại: ${msg}`
 
     ctx.alert('error', userMessage)
     throw new Error(userMessage)

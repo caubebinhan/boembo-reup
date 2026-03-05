@@ -7,12 +7,12 @@ import { ExecutionLogger } from '../engine/ExecutionLogger'
  */
 
 /**
- * Gracefully fail a video — sets status to 'failed', emits a typed event, returns { action: 'continue' }.
+ * Gracefully fail an item — sets status to 'failed', emits a typed event, returns { action: 'continue' }.
  * Use this instead of `throw new Error(...)` when failure should NOT crash the loop.
  *
  * @param ctx          Node execution context
  * @param instanceId   The node instance ID for event scoping (e.g. 'publisher_1', 'downloader_1')
- * @param platformId   Video platform_id (or fallback string)
+ * @param platformId   Entity key / platform_id (or fallback string)
  * @param errorType    Machine-readable error category (e.g. 'file_not_found', 'no_account')
  * @param message      Human-readable error description
  * @param opts         Optional: errorCode (DG-xxx), retryable flag, extra event fields
@@ -23,30 +23,33 @@ export function failGracefully(
   platformId: string,
   errorType: string,
   message: string,
-  opts?: { errorCode?: string; retryable?: boolean; extra?: Record<string, any> }
+  opts?: { errorCode?: string; retryable?: boolean; statusOverride?: string; suppressEvent?: boolean; extra?: Record<string, any> }
 ): NodeExecutionResult {
   const errorCode = opts?.errorCode
   const logMsg = errorCode ? `[${errorCode}] ${message}` : message
   ctx.logger.error(logMsg)
 
-  // Update video status if we have a valid platform_id
+  // Update entity status if we have a valid platform_id
   if (platformId && platformId !== 'unknown') {
     try {
-      ctx.store.updateVideo(platformId, { status: 'failed' })
+      ctx.store.updateItem(platformId, { status: opts?.statusOverride || 'failed' })
       ctx.store.save()
     } catch (err) {
-      ctx.logger.error(`[failGracefully] Could not update video status`, err)
+      ctx.logger.error(`[failGracefully] Could not update entity status`, err)
     }
   }
 
-  ExecutionLogger.emitNodeEvent(ctx.campaign_id, instanceId, 'node:failed', {
-    videoId: platformId,
-    error: message,
-    errorType,
-    errorCode,
-    retryable: opts?.retryable ?? false,
-    ...opts?.extra,
-  })
+  // Emit generic node:failed unless caller suppresses it (to emit a more specific event instead)
+  if (!opts?.suppressEvent) {
+    ExecutionLogger.emitNodeEvent(ctx.campaign_id, instanceId, 'node:failed', {
+      entityKey: platformId,
+      error: message,
+      errorType,
+      errorCode,
+      retryable: opts?.retryable ?? false,
+      ...opts?.extra,
+    })
+  }
 
   return { action: 'continue', data: null, message: logMsg }
 }
@@ -59,33 +62,35 @@ export function failGracefully(
  * @param instanceId   The node instance ID
  * @param errorType    Machine-readable error category
  * @param message      Human-readable error description
- * @param opts         Optional: errorCode (DG-xxx), retryable flag
+ * @param opts         Optional: errorCode (DG-xxx), retryable flag, suppressEvent
  */
 export function failBatchGracefully(
   ctx: NodeExecutionContext,
   instanceId: string,
   errorType: string,
   message: string,
-  opts?: { errorCode?: string; retryable?: boolean }
+  opts?: { errorCode?: string; retryable?: boolean; suppressEvent?: boolean }
 ): NodeExecutionResult {
   const errorCode = opts?.errorCode
   const logMsg = errorCode ? `[${errorCode}] ${message}` : message
   ctx.logger.error(logMsg)
 
-  ExecutionLogger.emitNodeEvent(ctx.campaign_id, instanceId, 'node:failed', {
-    error: message,
-    errorType,
-    errorCode,
-    retryable: opts?.retryable ?? false,
-  })
+  if (!opts?.suppressEvent) {
+    ExecutionLogger.emitNodeEvent(ctx.campaign_id, instanceId, 'node:failed', {
+      error: message,
+      errorType,
+      errorCode,
+      retryable: opts?.retryable ?? false,
+    })
+  }
 
   return { action: 'continue', data: [], message: logMsg }
 }
 
 /**
- * Safely update a video's status + persist. Swallows errors so a DB failure doesn't crash the node.
+ * Safely update an entity's status + persist. Swallows errors so a DB failure doesn't crash the node.
  */
-export function setVideoStatus(
+export function setItemStatus(
   ctx: NodeExecutionContext,
   platformId: string,
   status: string,
@@ -93,18 +98,21 @@ export function setVideoStatus(
   dataPatch?: Record<string, any>
 ) {
   try {
-    const video = ctx.store.findVideo(platformId)
+    const video = ctx.store.findItem(platformId)
     const mergedData = dataPatch && video ? { ...video.data, ...dataPatch } : undefined
-    ctx.store.updateVideo(platformId, {
+    ctx.store.updateItem(platformId, {
       status,
       publish_url: publishUrl || undefined,
       ...(mergedData ? { data: mergedData } : {}),
     })
     ctx.store.save()
   } catch (err) {
-    ctx.logger.error(`Failed to update video status to ${status}`, err)
+    ctx.logger.error(`Failed to update entity status to ${status}`, err)
   }
 }
+
+/** @deprecated Use setItemStatus() */
+export const setVideoStatus = setItemStatus
 
 /**
  * Detect network/connectivity errors from exception messages.

@@ -97,7 +97,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   const captionShort = publishDedupMeta.captionPreview || captionPreview(caption)
   const fileFingerprint = publishDedupMeta.fileFingerprint || await computeFileFingerprint(video.local_path).catch(() => undefined)
   const mediaSignature = publishDedupMeta.mediaSignature || undefined
-  ctx.onProgress(`Publishing to @${account.username}...`)
+  ctx.onProgress(`Đang đăng lên @${account.username}...`)
 
   ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:active', {
     videoId: video.platform_id,
@@ -170,20 +170,26 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
   try {
     result = await publisher.publish(video.local_path, caption, useProfileSession ? undefined : cookies, (msg) => {
-      ctx.onProgress(`[Playwright] ${msg}`)
+      ctx.onProgress(msg)
     }, {
       privacy: ctx.params.privacy || 'public',
       username: account.username,
       useProfileSession,
     })
   } catch (err: any) {
-    // Unexpected crash during publish (browser crash, OOM, network drop mid-session, etc.)
-    // Remove claim so retries can re-claim
     if (claimId) removePublishClaim(claimId)
-    return failGracefully(ctx, INSTANCE_ID, video.platform_id, 'publish_crash',
+    const crashResult = failGracefully(ctx, INSTANCE_ID, video.platform_id, 'publish_crash',
       `Publisher crashed unexpectedly: ${err?.message || err}`, {
+        statusOverride: 'publish_failed',
+        suppressEvent: true,
         extra: { description: video.description, author: video.author },
       })
+    ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'publish:failed', {
+      videoId: video.platform_id, errorType: 'publish_crash',
+      error: err?.message || String(err),
+      description: video.description, author: video.author,
+    })
+    return crashResult
   }
 
   if (!result.success) {
@@ -237,17 +243,33 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
 
     // ── Upload failed ──
     if (result.errorType === 'upload_failed') {
-      return failGracefully(ctx, INSTANCE_ID, video.platform_id, 'upload_failed',
+      const uploadResult = failGracefully(ctx, INSTANCE_ID, video.platform_id, 'upload_failed',
         `Upload failed for video ${video.platform_id}: ${result.error}`, {
+          statusOverride: 'publish_failed',
+          suppressEvent: true,
           extra: { description: video.description, author: video.author, debugArtifacts: result.debugArtifacts },
         })
+      ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'publish:failed', {
+        videoId: video.platform_id, errorType: 'upload_failed',
+        error: result.error,
+        description: video.description, author: video.author,
+      })
+      return uploadResult
     }
 
     // ── Generic / unknown failure ──
-    return failGracefully(ctx, INSTANCE_ID, video.platform_id, result.errorType || 'unknown',
+    const genericResult = failGracefully(ctx, INSTANCE_ID, video.platform_id, result.errorType || 'unknown',
       `Publish failed: ${result.error}`, {
+        statusOverride: 'publish_failed',
+        suppressEvent: true,
         extra: { description: video.description, author: video.author, debugArtifacts: result.debugArtifacts },
       })
+    ExecutionLogger.emitNodeEvent(ctx.campaign_id, INSTANCE_ID, 'publish:failed', {
+      videoId: video.platform_id, errorType: result.errorType || 'unknown',
+      error: result.error,
+      description: video.description, author: video.author,
+    })
+    return genericResult
   }
 
   // ── Success path ──

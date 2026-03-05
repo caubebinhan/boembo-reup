@@ -47,7 +47,7 @@ export interface NodeExecutionResult {
   /** Data to pass to the next node */
   data: any
   /** Flow control action */
-  action?: 'continue' | 'recall' | 'finish'
+  action?: 'continue' | 'recall' | 'finish' | 'wait'
   /** If action='recall', which instance_id to jump back to */
   recall_target?: string
   /** Human-readable message for logs */

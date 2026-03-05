@@ -134,7 +134,7 @@ function NodeTooltip({ node, campaignId, onViewError }: { node: FlowNodeInfo; ca
                             {retryable && (
                                 <button onClick={handleRetry} disabled={retrying}
                                     className="text-[9px] font-bold px-2.5 py-1 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition cursor-pointer disabled:opacity-50">
-                                    {retrying ? '⏳' : '🔄'} Retry
+                                    {retrying ? '⏳' : '🔄'} Thử lại
                                 </button>
                             )}
                             <button onClick={(e) => { e.stopPropagation(); onViewError?.() }}
@@ -255,7 +255,7 @@ function NodeCard({
                     )}
                 </div>
 
-                {isTimeout && waitMinutes && <p className="text-[8px] text-slate-400 mt-0.5 font-medium bg-slate-100 rounded px-1.5 py-0.5 inline-block border border-slate-200">Wait {waitMinutes} min</p>}
+                {isTimeout && waitMinutes && <p className="text-[8px] text-slate-400 mt-0.5 font-medium bg-slate-100 rounded px-1.5 py-0.5 inline-block border border-slate-200">Chờ {waitMinutes} phút</p>}
 
                 {showRawStats && (
                     <div className="flex items-center gap-1 text-[8px] mt-0.5 font-medium">
@@ -266,7 +266,7 @@ function NodeCard({
                 )}
 
                 {progressMsg && <p className="text-[8px] truncate mt-0.5 font-medium" style={{ color: meta.color }}>{progressMsg}</p>}
-                {isBatchNode && !progressMsg && stat.completed > 0 && <p className="text-[8px] mt-0.5 font-medium text-emerald-600">✓ Done</p>}
+                {isBatchNode && !progressMsg && stat.completed > 0 && <p className="text-[8px] mt-0.5 font-medium text-emerald-600">✓ Xong</p>}
             </div>
 
             {/* Hover tooltip with rich fail diagnostics/actions */}
@@ -319,7 +319,7 @@ function LoopBlock({
                 <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-white px-4 py-1 rounded-full border border-sky-200 font-bold shadow-sm z-20 whitespace-nowrap">
                     <span className={`text-[10px] ${isRunning ? 'animate-spin' : ''}`}>🔁</span>
                     <span className="text-sky-600 text-[9px] uppercase tracking-[0.15em]">
-                        {progressMsg || (stat.total ? `Loop: ${stat.total} videos` : 'Loop: Per Video')}
+                        {progressMsg || (stat.total ? `Vòng lặp: ${stat.total} video` : 'Vòng lặp: Mỗi video')}
                     </span>
                     {stat.total > 0 && (
                         <div className="flex items-center gap-1.5 text-[9px] ml-1.5 border-l border-slate-200 pl-1.5">
@@ -608,29 +608,29 @@ function InspectPanel({ node, campaignId, onClose, campaignParams, onParamsUpdat
                     backgroundColor: status === 'running' ? `${meta.color}10` : status === 'error' ? '#fef2f2' : status === 'done' ? '#ecfdf5' : '#f9fafb',
                     borderColor: status === 'running' ? `${meta.color}30` : status === 'error' ? '#fca5a5' : status === 'done' ? '#86efac' : '#e2e8f0'
                 }}>
-                {status === 'running' ? '● Running' : status === 'done' ? '✓ Done' : status === 'error' ? '✗ Error' : '○ Idle'}
+                {status === 'running' ? '● Đang chạy' : status === 'done' ? '✓ Xong' : status === 'error' ? '✗ Lỗi' : '○ Chờ'}
             </span>
 
             {stat.total > 0 && (
                 <div className="grid grid-cols-2 gap-1.5 text-xs">
                     <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-1.5 flex items-center justify-between">
-                        <span className="text-slate-500">Done</span><span className="text-emerald-600 font-bold">{stat.completed}</span>
+                        <span className="text-slate-500">Xong</span><span className="text-emerald-600 font-bold">{stat.completed}</span>
                     </div>
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-1.5 flex items-center justify-between">
-                        <span className="text-slate-500">Run</span><span className="text-blue-600 font-bold">{stat.running}</span>
+                        <span className="text-slate-500">Chạy</span><span className="text-blue-600 font-bold">{stat.running}</span>
                     </div>
                     <div className="bg-amber-50 border border-amber-200 rounded-lg p-1.5 flex items-center justify-between">
-                        <span className="text-slate-500">Wait</span><span className="text-amber-600 font-bold">{stat.pending}</span>
+                        <span className="text-slate-500">Chờ</span><span className="text-amber-600 font-bold">{stat.pending}</span>
                     </div>
                     <div className="bg-rose-50 border border-rose-200 rounded-lg p-1.5 flex items-center justify-between">
-                        <span className="text-slate-500">Fail</span><span className="text-rose-500 font-bold">{stat.failed}</span>
+                        <span className="text-slate-500">Lỗi</span><span className="text-rose-500 font-bold">{stat.failed}</span>
                     </div>
                 </div>
             )}
 
             {progressMsg && (
                 <div className="text-xs p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                    <p className="text-slate-400 text-[9px] mb-0.5 font-bold tracking-wider">PROGRESS</p>
+                    <p className="text-slate-400 text-[9px] mb-0.5 font-bold tracking-wider">TIẾN ĐỘ</p>
                     <p style={{ color: meta.color }} className="font-medium animate-pulse">{progressMsg}</p>
                 </div>
             )}
@@ -638,7 +638,7 @@ function InspectPanel({ node, campaignId, onClose, campaignParams, onParamsUpdat
             {error && (
                 <div className="text-xs p-2.5 rounded-xl bg-red-50 border border-red-200">
                     <div className="flex items-center gap-1.5 mb-0.5">
-                        <p className="text-red-500 text-[9px] font-bold tracking-wider">ERROR</p>
+                        <p className="text-red-500 text-[9px] font-bold tracking-wider">LỖI</p>
                         {errorCode && <span className="text-[8px] font-mono bg-red-100 text-red-600 px-1.5 py-0.5 rounded">{errorCode}</span>}
                     </div>
                     <p className="text-red-600 font-mono break-words leading-tight">{error}</p>
@@ -656,7 +656,7 @@ function InspectPanel({ node, campaignId, onClose, campaignParams, onParamsUpdat
 
             {fields.length > 0 && (
                 <div className="border-t border-slate-100 pt-2 flex flex-col gap-2">
-                    <p className="text-[9px] text-slate-400 font-bold tracking-wider">⚙ SETTINGS</p>
+                    <p className="text-[9px] text-slate-400 font-bold tracking-wider">⚙ CÀI ĐẶT</p>
                     {fields.map((field: any) => (
                         <div key={field.key} className="flex flex-col gap-0.5">
                             <label className="text-[10px] text-slate-500 font-medium">{field.label || field.key}</label>
@@ -671,7 +671,7 @@ function InspectPanel({ node, campaignId, onClose, campaignParams, onParamsUpdat
                     ))}
                     <button onClick={handleSave} disabled={saving}
                         className="mt-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition disabled:opacity-50 cursor-pointer">
-                        {saving ? '⏳ Saving...' : '💾 Save & Apply'}
+                        {saving ? '⏳ Đang lưu...' : '💾 Lưu & Áp dụng'}
                     </button>
                 </div>
             )}
@@ -750,7 +750,7 @@ export function PipelineVisualizer({ campaignId, workflowId, vertical = false }:
 
     useEffect(() => {
         // @ts-ignore
-        window.api.invoke('campaign:get-flow-nodes', { workflowId })
+        window.api.invoke('campaign:get-flow-nodes', { workflowId, campaignId })
             .then((data: any) => setFlowData(data))
             .catch((err: any) => console.error('[PipelineVisualizer] Failed:', err))
 
@@ -813,7 +813,7 @@ export function PipelineVisualizer({ campaignId, workflowId, vertical = false }:
         return { layers: levels, allChildren: nodes.filter(n => cs.has(n.instance_id)) }
     }, [flowData])
 
-    if (!flowData) return <div className="p-6 flex text-slate-400">Loading pipeline...</div>
+    if (!flowData) return <div className="p-6 flex text-slate-400">Đang tải pipeline...</div>
 
     return (
         <div className="flex bg-slate-50 rounded-xl border border-slate-200 overflow-hidden relative" style={{ minHeight: vertical ? '200px' : '280px' }}>
