@@ -179,8 +179,8 @@ function NodeCard({
     if (isSelected) borderColor = '#a855f7'
 
     const isTimeout = node.node_id === 'core.timeout'
-    const isBatchNode = ['tiktok.scanner', 'core.file_source', 'core.video_scheduler', 'core.check_in_time', 'core.campaign_finish'].includes(node.node_id)
-    const waitMinutes = isTimeout ? (campaignParams?.intervalMinutes || '?') : null
+    const isBatchNode = ['tiktok.scanner', 'core.file_source', 'core.publish_scheduler', 'core.time_gate', 'core.campaign_finish'].includes(node.node_id)
+    const waitMinutes = isTimeout ? (campaignParams?.publishIntervalMinutes || '?') : null
     const showRawStats = !isTimeout && !isBatchNode && stat.total > 0
 
     return (

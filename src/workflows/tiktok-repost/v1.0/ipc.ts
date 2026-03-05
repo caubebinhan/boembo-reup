@@ -56,8 +56,8 @@ export function setup() {
     if (!store) return { success: false, error: 'Campaign not found' }
 
     const params = store.params
-    const intervalMinutes = params.intervalMinutes ?? 60
-    const intervalMs = intervalMinutes * 60 * 1000
+    const publishIntervalMinutes = params.publishIntervalMinutes ?? 60
+    const intervalMs = publishIntervalMinutes * 60 * 1000
     const ranges = normalizeTimeRanges(params)
 
     const queuedVideos = store.videosByStatus('queued')
@@ -76,10 +76,10 @@ export function setup() {
     ExecutionLogger.log({
       campaign_id: id,
       instance_id: 'scheduler_1',
-      node_id: 'core.video_scheduler',
+      node_id: 'core.publish_scheduler',
       level: 'info',
       event: 'videos:rescheduled',
-      message: `📋 ${queuedVideos.length} videos rescheduled (interval=${intervalMinutes}min)`,
+      message: `📋 ${queuedVideos.length} videos rescheduled (interval=${publishIntervalMinutes}min)`,
     })
 
     BrowserWindow.getAllWindows().forEach(w => {

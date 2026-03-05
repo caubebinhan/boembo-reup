@@ -8,7 +8,7 @@ export interface FlowDefinition {
   nodes: FlowNodeDefinition[]
   edges: FlowEdgeDefinition[]
   ui?: WorkflowUIDescriptor
-  /** Service endpoints this workflow requires — checked at startup */
+  /** Service endpoints for background health monitoring (ServiceHealthMonitor) */
   health_checks?: Array<{ name: string; url: string }>
 }
 

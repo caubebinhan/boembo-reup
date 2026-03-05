@@ -10,7 +10,7 @@ export type PublishAccountSelection = {
 }
 
 function readSelectedAccounts(ctx: NodeExecutionContext): string[] {
-  const raw = Array.isArray(ctx.params.selectedAccounts) ? ctx.params.selectedAccounts : []
+  const raw = Array.isArray(ctx.params.publishAccountIds) ? ctx.params.publishAccountIds : []
   return raw.map((v: any) => String(v || '').trim()).filter(Boolean)
 }
 
@@ -24,24 +24,24 @@ function resolveAccountById(accountId: string) {
 }
 
 export function selectPublishAccount(video: any, ctx: NodeExecutionContext): PublishAccountSelection {
-  const selectedAccounts = readSelectedAccounts(ctx)
+  const publishAccountIds = readSelectedAccounts(ctx)
   /** @throws DG-132 — No publish accounts configured for campaign */
-  if (selectedAccounts.length === 0) throw new CodedError('DG-132', 'No publish accounts configured')
+  if (publishAccountIds.length === 0) throw new CodedError('DG-132', 'No publish accounts configured')
 
   const presetId = String(video?.publish_target_account_id || '').trim()
   if (presetId) {
     const account = resolveAccountById(presetId)
-    const selectedIndex = Math.max(0, selectedAccounts.indexOf(presetId))
+    const selectedIndex = Math.max(0, publishAccountIds.indexOf(presetId))
     return { account, accountId: presetId, selectedIndex, source: 'preset' }
   }
 
   const rrKey = `rr_${ctx.campaign_id}`
   const rrState: Map<string, number> = (globalThis as any).__rrState || new Map()
   if (!(globalThis as any).__rrState) (globalThis as any).__rrState = rrState
-  const idx = (rrState.get(rrKey) || 0) % selectedAccounts.length
+  const idx = (rrState.get(rrKey) || 0) % publishAccountIds.length
   rrState.set(rrKey, idx + 1)
 
-  const accountId = selectedAccounts[idx]
+  const accountId = publishAccountIds[idx]
   const account = resolveAccountById(accountId)
   return { account, accountId, selectedIndex: idx, source: 'round_robin' }
 }

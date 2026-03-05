@@ -10,14 +10,14 @@ import { ExecutionLogger } from '@core/engine/ExecutionLogger'
  * If campaign is paused/stopped, exit gracefully.
  */
 export async function execute(_input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
-  const intervalMinutes = ctx.params.monitorIntervalMinutes ?? 5
-  const waitMs = intervalMinutes * 60 * 1000
+  const publishIntervalMinutes = ctx.params.monitorPollMinutes ?? 5
+  const waitMs = publishIntervalMinutes * 60 * 1000
 
-  ctx.logger.info(`[Monitor] Starting continuous monitoring (interval=${intervalMinutes}min)`)
-  ctx.onProgress(`Đang theo dõi (mỗi ${intervalMinutes} phút).`)
+  ctx.logger.info(`[Monitor] Starting continuous monitoring (interval=${publishIntervalMinutes}min)`)
+  ctx.onProgress(`Đang theo dõi (mỗi ${publishIntervalMinutes} phút).`)
 
   while (true) {
-    ctx.onProgress(`Chờ ${intervalMinutes} phút trước lần quét kế...`)
+    ctx.onProgress(`Chờ ${publishIntervalMinutes} phút trước lần quét kế...`)
     await new Promise((resolve) => setTimeout(resolve, waitMs))
 
     // Check campaign status from store (re-read fresh)
@@ -31,7 +31,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
 
     const params = freshStore.params
     const sources = params.sources || []
-    const lastScanTimes = params.last_scan_times || {}
+    const lastScanTimes = freshStore.doc.meta?.runtime?.monitor?.lastScanBySource || {}
 
     if (sources.length === 0) {
       ctx.logger.info('[Monitor] No sources configured - skipping scan')
@@ -98,9 +98,13 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
       }
     }
 
-    // Save updated last_scan_times
+    // Save updated lastScanBySource to meta.runtime
     if (updatedScanTimes) {
-      ctx.store.doc.params = { ...params, last_scan_times: lastScanTimes }
+      const doc = ctx.store.doc
+      if (!doc.meta) doc.meta = {}
+      if (!doc.meta.runtime) doc.meta.runtime = {}
+      if (!doc.meta.runtime.monitor) doc.meta.runtime.monitor = {}
+      doc.meta.runtime.monitor.lastScanBySource = lastScanTimes
       ctx.store.save()
     }
 
@@ -111,6 +115,6 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     }
 
     ctx.logger.info(`[Monitor] Scanned ${totalScanned} videos - no new ones.`)
-    ctx.onProgress(`Không có video mới. Quét lại sau ${intervalMinutes} phút.`)
+    ctx.onProgress(`Không có video mới. Quét lại sau ${publishIntervalMinutes} phút.`)
   }
 }

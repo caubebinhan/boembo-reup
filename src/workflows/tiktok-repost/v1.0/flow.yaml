@@ -21,14 +21,14 @@ health_checks:
 
 # ── NODES ────────────────────────────────
 nodes:
-  - node_id: core.check_in_time
+  - node_id: core.time_gate
     instance_id: start_gate
 
   - node_id: tiktok.scanner
     instance_id: scanner_1
     timeout: 30000
 
-  - node_id: core.video_scheduler
+  - node_id: core.publish_scheduler
     instance_id: scheduler_1
 
   - node_id: core.loop
@@ -42,13 +42,13 @@ nodes:
       - account_dedup_1
       - publisher_1
 
-  - node_id: core.check_in_time
+  - node_id: core.time_gate
     instance_id: check_time_1
 
-  - node_id: core.deduplicator
+  - node_id: core.skip_processed
     instance_id: dedup_1
 
-  - node_id: core.downloader
+  - node_id: core.media_downloader
     instance_id: downloader_1
 
   - node_id: core.video_edit
@@ -70,7 +70,7 @@ nodes:
     params:
       expression: "(params.sources || []).some(s => s.timeRange !== 'history_only') && !(params.sources || []).every(s => s.timeRange === 'custom_range' && s.endDate)"
 
-  - node_id: core.monitoring
+  - node_id: core.source_watcher
     instance_id: monitor_1
 
   - node_id: core.campaign_finish

@@ -52,7 +52,7 @@ export const tiktokRepostSteps: WizardStepConfig[] = [
     description: 'Select accounts to publish to',
     component: WizardTarget,
     validate: (data) => {
-      const accounts = data.selectedAccounts || data.accounts || []
+      const accounts = data.publishAccountIds || []
       if (accounts.length === 0) return 'Select at least one publish account'
       return null
     },

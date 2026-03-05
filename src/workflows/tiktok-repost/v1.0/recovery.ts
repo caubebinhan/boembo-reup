@@ -24,7 +24,7 @@ export function recover(campaignId: string): void {
       .sort((a, b) => (a.queue_index ?? 0) - (b.queue_index ?? 0))
 
     if (missedVideos.length > 0) {
-      const handling = params.missedJobHandling || 'auto'
+      const handling = params.missedSchedulePolicy || 'auto'
 
       if (handling === 'manual') {
         // Manual mode: pause campaign and alert the user
@@ -33,7 +33,7 @@ export function recover(campaignId: string): void {
 
         store.addAlert({
           instance_id: 'scheduler_1',
-          node_id: 'core.video_scheduler',
+          node_id: 'core.publish_scheduler',
           level: 'warn',
           title: `? ${missedVideos.length} video b? missed - campaign ?a t?m d?ng`,
           body: 'Ki?m tra l?i va resume campaign khi s?n sang.',
@@ -51,8 +51,8 @@ export function recover(campaignId: string): void {
       // Auto mode (default): reschedule using shared helper (respects time slots + jitter)
       const ranges = normalizeTimeRanges(params)
       const rescheduled = scheduleVideos(missedVideos, {
-        intervalMinutes: params.intervalMinutes ?? 1,
-        enableJitter: params.enableJitter === true,
+        publishIntervalMinutes: params.publishIntervalMinutes ?? 1,
+        publishJitterEnabled: params.publishJitterEnabled === true,
         ranges,
       })
       for (const r of rescheduled) {
@@ -68,10 +68,10 @@ export function recover(campaignId: string): void {
       // Emit alert for the Alert Panel
       store.addAlert({
         instance_id: 'scheduler_1',
-        node_id: 'core.video_scheduler',
+        node_id: 'core.publish_scheduler',
         level: 'warn',
         title: `? Detected ${missedVideos.length} missed video(s)`,
-        body: `Rescheduled from now (interval=${params.intervalMinutes ?? 1}min, jitter=${params.enableJitter ? 'on' : 'off'})`,
+        body: `Rescheduled from now (interval=${params.publishIntervalMinutes ?? 1}min, jitter=${params.publishJitterEnabled ? 'on' : 'off'})`,
       })
     }
 

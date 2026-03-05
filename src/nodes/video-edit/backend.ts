@@ -2,7 +2,7 @@
  * VideoEdit Node — Backend
  * ────────────────────────
  * Executes the video editing pipeline on each video in the campaign.
- * Reads `videoEditOperations` from campaign params, runs enabled operations via FFmpeg,
+ * Reads `videoEditOps` from campaign params, runs enabled operations via FFmpeg,
  * and updates video records with edited file paths.
  */
 import type { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
@@ -33,15 +33,12 @@ export default async function execute(
 
   const videoPath: string = video.local_path
 
-  // Get operation configs from campaign params (multi-instance format)
+  // Get operation configs from campaign params
   const operations: VideoEditOperation[] =
-    ctx.params?.videoEditOperations || []
-
-  // Fallback to legacy format
-  const legacyConfigs = ctx.params?.videoEditPlugins
+    ctx.params?.videoEditOps || []
 
   const enabledCount = operations.filter((o) => o.enabled).length
-  if (enabledCount === 0 && !legacyConfigs) {
+  if (enabledCount === 0) {
     // Auto-apply defaults (anti-detect plugins)
     const defaults = videoEditPluginRegistry.getDefaults()
     const hasEnabledDefaults = defaults.some((d) => d.enabled)
@@ -65,7 +62,6 @@ export default async function execute(
       inputPath: videoPath,
       processor: ffmpegProcessor,
       operations: operations.length > 0 ? operations : undefined,
-      configs: legacyConfigs,
       assetResolver: (assetId) => {
         const assets = ctx.params?.videoEditAssets || {}
         return assets[assetId]?.path || assetId

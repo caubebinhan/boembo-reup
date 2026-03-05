@@ -13,9 +13,11 @@
  * All versions are loaded so campaigns on different versions coexist.
  */
 import { CrashRecoveryService } from '../main/services/CrashRecovery'
+import { lifecycleRegistry, type WorkflowLifecycle } from '../core/flow/WorkflowLifecycle'
 
 type SetupModule = { setup?: () => void }
 type RecoveryModule = { recover?: (campaignId: string) => void }
+type LifecycleModule = { default?: WorkflowLifecycle }
 
 // Extract workflowId from path like ./tiktok-repost/v1.0/events.ts
 function extractWorkflowId(p: string): string | null {
@@ -76,3 +78,18 @@ for (const [path, mod] of Object.entries(eventModules)) {
   if (typeof m.setup === 'function') { m.setup(); evtCount++ }
 }
 console.log(`[Workflows] Auto-discovered ${evtCount} workflow event modules`)
+
+// ── Lifecycle modules ───────────────────────────────────
+const lifecycleModules = import.meta.glob('./*/v*/lifecycle.ts', { eager: true })
+let lcCount = 0
+for (const [path, mod] of Object.entries(lifecycleModules)) {
+  const wfId = extractWorkflowId(path)
+  if (!wfId) continue
+  const m = mod as LifecycleModule
+  if (m.default) {
+    lifecycleRegistry.register(wfId, m.default)
+    lcCount++
+  }
+}
+console.log(`[Workflows] Auto-discovered ${lcCount} workflow lifecycle modules`)
+

@@ -53,7 +53,7 @@ function toFileSrc(path: string): string {
 function hasInitPayloadShape(initData: any): boolean {
   if (!initData || typeof initData !== 'object') return false
   return (
-    Object.prototype.hasOwnProperty.call(initData, 'videoEditOperations')
+    Object.prototype.hasOwnProperty.call(initData, 'videoEditOps')
     || Object.prototype.hasOwnProperty.call(initData, '_videoPath')
     || Object.prototype.hasOwnProperty.call(initData, '_previewVideoSrc')
     || Object.prototype.hasOwnProperty.call(initData, '_enabledPluginIds')
@@ -90,9 +90,9 @@ export function useEditorState(): UseEditorStateReturn {
     if (hasAppliedInitPayloadRef.current) return
     hasAppliedInitPayloadRef.current = true
 
-    if (Object.prototype.hasOwnProperty.call(initData, 'videoEditOperations')) {
-      const restoredOps = Array.isArray(initData.videoEditOperations)
-        ? (initData.videoEditOperations as VideoEditOperation[])
+    if (Object.prototype.hasOwnProperty.call(initData, 'videoEditOps')) {
+      const restoredOps = Array.isArray(initData.videoEditOps)
+        ? (initData.videoEditOps as VideoEditOperation[])
         : []
       setOperations(restoredOps)
       setSelectedOpId(restoredOps[0]?.id || null)
@@ -331,7 +331,7 @@ export function useEditorState(): UseEditorStateReturn {
       new Set(operations.filter(op => op.enabled).map(op => op.pluginId)),
     )
     const payload = {
-      videoEditOperations: operations,
+      videoEditOps: operations,
       _enabledPluginIds: enabledPluginIds,
       _previewVideoSrc: previewSrc,
       _videoPath: videoPath,

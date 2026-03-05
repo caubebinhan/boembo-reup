@@ -6,7 +6,7 @@ import React, { useRef } from 'react'
 // ─── Step: File Picker ────────────────────────────
 function FilePickerStep({ data, updateData }: WizardStepProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const files: Array<{ name: string; path: string; caption: string }> = data.local_files || []
+  const files: Array<{ name: string; path: string; caption: string }> = data.localFiles || []
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return
@@ -15,18 +15,18 @@ function FilePickerStep({ data, updateData }: WizardStepProps) {
       path: (f as any).path || f.name,
       caption: '',
     }))
-    updateData({ local_files: [...files, ...newFiles] })
+    updateData({ localFiles: [...files, ...newFiles] })
   }
 
   const removeFile = (index: number) => {
     const updated = files.filter((_, i) => i !== index)
-    updateData({ local_files: updated })
+    updateData({ localFiles: updated })
   }
 
   const updateCaption = (index: number, caption: string) => {
     const updated = [...files]
     updated[index] = { ...updated[index], caption }
-    updateData({ local_files: updated })
+    updateData({ localFiles: updated })
   }
 
   return (
@@ -133,7 +133,7 @@ export const uploadLocalSteps: WizardStepConfig[] = [
     description: 'Select local video files to upload',
     component: FilePickerStep,
     validate: (data) => {
-      const files = data.local_files || []
+      const files = data.localFiles || []
       if (files.length === 0) return 'Select at least one video file'
       return null
     },
@@ -152,7 +152,7 @@ export const uploadLocalSteps: WizardStepConfig[] = [
     description: 'Select accounts to publish to',
     component: WizardTarget,
     validate: (data) => {
-      const accounts = data.selectedAccounts || data.accounts || []
+      const accounts = data.publishAccountIds || []
       if (accounts.length === 0) return 'Select at least one publish account'
       return null
     },

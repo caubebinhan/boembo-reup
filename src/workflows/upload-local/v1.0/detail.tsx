@@ -41,7 +41,7 @@ function useUploadLocalState(campaignId: string, config: any): UploadLocalState 
     })
 
     const rebuild = useCallback(async () => {
-        const localFiles: any[] = config.local_files || []
+        const localFiles: any[] = config.localFiles || []
 
         // Start with files from config
         const fileMap = new Map<string, LocalFile>()

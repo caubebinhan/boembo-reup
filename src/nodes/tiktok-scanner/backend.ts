@@ -141,7 +141,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
       }, {
         dedupeKey: `thumb-batch:${campaignId}:${Date.now()}`,
         maxAttempts: 3,
-        firstRunAt: Date.now() + 2000, // slight delay, let scanner finish first
+        startAt: Date.now() + 2000, // slight delay, let scanner finish first
         campaignId,
         ownerKey: `campaign:${campaignId}:thumbnails`,
       })

@@ -86,7 +86,7 @@ export interface AsyncTaskScheduleOptions {
   dedupeKey: string
   payloadVersion?: number      // default 1
   maxAttempts?: number          // default 6
-  firstRunAt?: number           // default now + retryIntervalMs
+  startAt?: number           // default now + retryIntervalMs
   retryIntervalMs?: number      // default 120_000 (2 min)
   concurrencyKey?: string
   maxConcurrent?: number        // default 1

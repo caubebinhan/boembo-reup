@@ -5,7 +5,7 @@ const INSTANCE_ID = 'file_source_1'
 
 export async function execute(_input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   try {
-    const localFiles = ctx.params.local_files || []
+    const localFiles = ctx.params.localFiles || []
 
     if (localFiles.length === 0) {
       return failBatchGracefully(ctx, INSTANCE_ID, 'no_files',

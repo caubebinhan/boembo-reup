@@ -25,17 +25,11 @@ const manifest: NodeManifest = {
       },
     ],
   },
-  errorPrefix: 'PUB',
   retryPolicy: {
     maxRetries: 0,
     backoff: 'none',
     initialDelayMs: 0,
     maxDelayMs: 0,
-  },
-  behavior: {
-    sideEffects: ['browser_session', 'network_call', 'publishes_content'],
-    idempotent: false,
-    crashBehavior: 'skip_video',
   },
 }
 

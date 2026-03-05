@@ -9,12 +9,6 @@ const manifest: NodeManifest = {
   category: 'transform',
   icon: '✏️',
   description: 'Generate captions from template with variable substitution',
-  errorPrefix: 'CAP',
-  behavior: {
-    sideEffects: [],
-    idempotent: true,
-    crashBehavior: 'skip_video',
-  },
 }
 
 const node: NodeDefinition = { manifest, execute }

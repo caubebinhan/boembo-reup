@@ -16,7 +16,7 @@ interface WizardTargetProps {
 export function WizardTarget({ data, updateData }: WizardTargetProps) {
     const [accounts, setAccounts] = useState<Account[]>([])
     const [addingAccount, setAddingAccount] = useState(false)
-    const selectedAccounts: string[] = data.selectedAccounts || []
+    const publishAccountIds: string[] = data.publishAccountIds || []
 
     const fetchAccounts = useCallback(async () => {
         try {
@@ -41,10 +41,10 @@ export function WizardTarget({ data, updateData }: WizardTargetProps) {
     }, [fetchAccounts])
 
     const toggleAccount = (id: string) => {
-        if (selectedAccounts.includes(id)) {
-            updateData({ selectedAccounts: selectedAccounts.filter(a => a !== id) })
+        if (publishAccountIds.includes(id)) {
+            updateData({ publishAccountIds: publishAccountIds.filter(a => a !== id) })
         } else {
-            updateData({ selectedAccounts: [...selectedAccounts, id] })
+            updateData({ publishAccountIds: [...publishAccountIds, id] })
         }
     }
 
@@ -74,7 +74,7 @@ export function WizardTarget({ data, updateData }: WizardTargetProps) {
                 <div className="flex flex-col border-r border-purple-200">
                     <span className="text-xs text-purple-500 font-bold tracking-wider">SCHEDULE</span>
                     <span className="font-medium text-sky-600">
-                        📅 Recurring (Every {data.intervalMinutes || 60}m)
+                        📅 Recurring (Every {data.publishIntervalMinutes || 60}m)
                     </span>
                 </div>
                 <div className="flex flex-col pl-2">
@@ -103,7 +103,7 @@ export function WizardTarget({ data, updateData }: WizardTargetProps) {
 
                 <div className="flex flex-col gap-3 mt-2">
                     {accounts.map((acc, i) => {
-                        const isSelected = selectedAccounts.includes(acc.id)
+                        const isSelected = publishAccountIds.includes(acc.id)
 
                         return (
                             <div
@@ -151,8 +151,8 @@ export function WizardTarget({ data, updateData }: WizardTargetProps) {
 
                 {/* Info Text */}
                 <div className="flex justify-end mt-2">
-                    {selectedAccounts.length > 0 ? (
-                        <span className="text-emerald-600 font-medium">✅ {selectedAccounts.length} account{selectedAccounts.length > 1 ? 's' : ''} selected</span>
+                    {publishAccountIds.length > 0 ? (
+                        <span className="text-emerald-600 font-medium">✅ {publishAccountIds.length} account{publishAccountIds.length > 1 ? 's' : ''} selected</span>
                     ) : (
                         <span className="text-red-500 font-medium">Please select at least 1 account</span>
                     )}

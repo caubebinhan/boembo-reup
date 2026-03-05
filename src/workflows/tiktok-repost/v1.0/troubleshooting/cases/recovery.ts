@@ -20,7 +20,7 @@ export const recoveryCases: TroubleshootingCaseDefinition[] = [
     meta: meta({
       parameters: [
         { key: 'fixtureMissedQueuedCount', value: 3 },
-        { key: 'intervalMinutes', value: 1 }
+        { key: 'publishIntervalMinutes', value: 1 }
       ],
       checks: {
         db: [

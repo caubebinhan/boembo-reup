@@ -90,8 +90,23 @@ export function setupCampaignIPC() {
     return doc
   })
 
-  //  Campaign Delete (cascade: jobs, async_tasks, execution_logs)
+  //  Campaign Delete (cascade: lifecycle hook, jobs, async_tasks, execution_logs, locks, cache)
   safeHandle(IPC_CHANNELS.CAMPAIGN_DELETE, async (_event, { id }) => {
+    // 1. Call workflow lifecycle hook for cleanup (files, etc.)
+    try {
+      const store = campaignRepo.tryOpen(id)
+      if (store) {
+        const { lifecycleRegistry } = await import('@core/flow/WorkflowLifecycle')
+        const lifecycle = lifecycleRegistry.get(store.doc.workflow_id)
+        if (lifecycle?.onDelete) {
+          await lifecycle.onDelete(id, store.params)
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[campaigns] lifecycle.onDelete error: ${err?.message}`)
+    }
+
+    // 2. DB cascade (transactional)
     const deleteCascade = db.transaction((campaignId: string) => {
       db.prepare('DELETE FROM jobs WHERE campaign_id = ?').run(campaignId)
       db.prepare('DELETE FROM async_tasks WHERE campaign_id = ?').run(campaignId)
@@ -99,6 +114,20 @@ export function setupCampaignIPC() {
       campaignRepo.delete(campaignId)
     })
     deleteCascade(id)
+
+    // 3. Release concurrency locks
+    try {
+      const { EntityLock, CampaignPipelineLock } = await import('@core/engine/ConcurrencyLock')
+      EntityLock.releaseAllForCampaign(id)
+      CampaignPipelineLock.forceRelease(id)
+    } catch { /* best-effort */ }
+
+    // 4. Clear runtime projection cache
+    try {
+      const { runtimeProjectionService } = await import('@main/services/RuntimeProjectionService')
+      runtimeProjectionService.clear(id)
+    } catch { /* best-effort */ }
+
     return true
   })
 
@@ -249,8 +278,8 @@ export function setupCampaignIPC() {
     if (!store) return { success: false, error: 'Campaign not found' }
 
     if (event === 'reschedule') {
-      const intervalMinutes = params?.intervalMinutes ?? store.doc.params?.intervalMinutes ?? 60
-      const intervalMs = intervalMinutes * 60 * 1000
+      const publishIntervalMinutes = params?.publishIntervalMinutes ?? store.doc.params?.publishIntervalMinutes ?? 60
+      const intervalMs = publishIntervalMinutes * 60 * 1000
       const videos = store.videos
       if (videos.length === 0) return { success: true, message: 'No videos to reschedule' }
 
@@ -275,7 +304,7 @@ export function setupCampaignIPC() {
           // Window may be destroyed
         }
       })
-      return { success: true, message: `Rescheduled ${videos.length} videos with ${intervalMinutes}min interval` }
+      return { success: true, message: `Rescheduled ${videos.length} videos with ${publishIntervalMinutes}min interval` }
     }
 
     return { success: false, error: `Unknown event: ${event}` }

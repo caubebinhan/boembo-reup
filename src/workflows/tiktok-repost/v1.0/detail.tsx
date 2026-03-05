@@ -533,7 +533,7 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
     const [pipelineExpanded, setPipelineExpanded] = useState(false)
 
     const sources = config.sources || []
-    const gapMinutes = config.intervalMinutes
+    const gapMinutes = config.publishIntervalMinutes
     const phase = PHASE_UI[state.phase] || PHASE_UI.idle
 
     // Group-based counters — computed from video statuses
@@ -557,7 +557,7 @@ function TikTokRepostDetail({ campaignId, campaign, workflowId }: WorkflowDetail
         if (s.minViews) parts.push(`ít nhất ${Number(s.minViews).toLocaleString()} lượt xem`)
         if (s.maxViews) parts.push(`tối đa ${Number(s.maxViews).toLocaleString()} lượt xem`)
         if (s.withinDays) parts.push(`trong ${s.withinDays} ngày gần nhất`)
-        if (s.maxVideos) parts.push(`tối đa ${s.maxVideos} video`)
+        if (s.maxItemCount) parts.push(`tối đa ${s.maxItemCount} video`)
         return parts.length > 0 ? parts.join(', ') : 'Tất cả video'
     }
 

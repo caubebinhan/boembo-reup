@@ -5,14 +5,14 @@ import { normalizeTimeRanges, isWithinAnyWindow, nextValidSlot } from '../_share
  * CheckInTime Node
  *
  * Performs up to three checks:
- * 0) Campaign start gate (firstRunAt)
+ * 0) Campaign start gate (startAt)
  * 1) Active hour window
  * 2) Per-video scheduled_for time
  */
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   // Step 0: Campaign start gate
-  if (ctx.params.firstRunAt) {
-    const firstRunMs = new Date(ctx.params.firstRunAt).getTime()
+  if (ctx.params.startAt) {
+    const firstRunMs = new Date(ctx.params.startAt).getTime()
     if (!isNaN(firstRunMs) && firstRunMs > Date.now()) {
       const waitMs = firstRunMs - Date.now()
       const waitMins = (waitMs / 60_000).toFixed(0)

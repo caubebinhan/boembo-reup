@@ -17,9 +17,9 @@ export interface ScheduleSlotOptions {
   /** Start cursor (ms timestamp). Default: Date.now() */
   cursor?: number
   /** Gap between videos in minutes */
-  intervalMinutes: number
+  publishIntervalMinutes: number
   /** Apply ±50% random jitter to gap */
-  enableJitter?: boolean
+  publishJitterEnabled?: boolean
   /** Daily active hour windows */
   ranges: TimeRange[]
   /** Number of slots to compute */
@@ -90,7 +90,7 @@ export function nextValidSlot(fromMs: number, ranges: TimeRange[]): number {
  * - Recovery service (reschedule missed videos)
  */
 export function computeScheduleSlots(opts: ScheduleSlotOptions): ScheduleSlot[] {
-  const intervalMs = opts.intervalMinutes * 60_000
+  const intervalMs = opts.publishIntervalMinutes * 60_000
   let cursor = opts.cursor ?? Date.now()
   let seed = opts.seed ?? -1 // -1 = use Math.random()
   const slots: ScheduleSlot[] = []
@@ -106,7 +106,7 @@ export function computeScheduleSlots(opts: ScheduleSlotOptions): ScheduleSlot[] 
 
     // Apply jitter
     let jitterFactor = 1
-    if (opts.enableJitter) {
+    if (opts.publishJitterEnabled) {
       if (seed >= 0) {
         // Deterministic pseudo-random (for stable preview)
         seed = (seed * 1103515245 + 12345) & 0x7fffffff

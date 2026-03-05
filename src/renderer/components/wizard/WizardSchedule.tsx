@@ -13,17 +13,17 @@ const DEFAULT_RANGES: TimeRange[] = [
 ]
 
 export function WizardSchedule({ data, updateData }: WizardScheduleProps) {
-    const ranges: TimeRange[] = data.timeRanges || DEFAULT_RANGES
+    const ranges: TimeRange[] = data.activeWindows || DEFAULT_RANGES
 
     useEffect(() => {
         const defaults: Record<string, any> = {}
-        if (data.intervalMinutes == null) defaults.intervalMinutes = 60
-        if (!data.timeRanges) defaults.timeRanges = DEFAULT_RANGES
+        if (data.publishIntervalMinutes == null) defaults.publishIntervalMinutes = 60
+        if (!data.activeWindows) defaults.activeWindows = DEFAULT_RANGES
         if (Object.keys(defaults).length > 0) updateData(defaults)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    const updateRanges = (newRanges: TimeRange[]) => updateData({ timeRanges: newRanges })
+    const updateRanges = (newRanges: TimeRange[]) => updateData({ activeWindows: newRanges })
 
     const addRange = () => {
         updateRanges([...ranges, { days: [0, 6], start: '10:00', end: '18:00' }])
@@ -45,23 +45,23 @@ export function WizardSchedule({ data, updateData }: WizardScheduleProps) {
         updateRange(rangeIdx, { days })
     }
 
-    const intervalMinutes = data.intervalMinutes || 60
-    const enableJitter = !!data.enableJitter
+    const publishIntervalMinutes = data.publishIntervalMinutes || 60
+    const publishJitterEnabled = !!data.publishJitterEnabled
 
     // Live preview using shared computeScheduleSlots (fixed interval, no jitter simulation)
     const preview = useMemo(() => {
         const slots = computeScheduleSlots({
             cursor: Date.now(),
-            intervalMinutes,
-            enableJitter: false,
+            publishIntervalMinutes,
+            publishJitterEnabled: false,
             ranges,
             count: 5,
         })
         return slots.map(s => ({
             time: new Date(s.timestamp).toLocaleString('vi-VN', { weekday: 'short', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }),
-            gapLabel: s.gapMs != null ? `+${Math.round(s.gapMs / 60_000)}min${enableJitter ? ' (±50%)' : ''}` : undefined,
+            gapLabel: s.gapMs != null ? `+${Math.round(s.gapMs / 60_000)}min${publishJitterEnabled ? ' (±50%)' : ''}` : undefined,
         }))
-    }, [intervalMinutes, enableJitter, ranges])
+    }, [publishIntervalMinutes, publishJitterEnabled, ranges])
 
     return (
         <div className="flex flex-col gap-6 text-slate-800 max-w-4xl mx-auto pb-10">
@@ -73,8 +73,8 @@ export function WizardSchedule({ data, updateData }: WizardScheduleProps) {
                     <div className="flex items-center gap-2">
                         <input
                             type="number" min={1}
-                            value={intervalMinutes}
-                            onChange={(e) => updateData({ intervalMinutes: Number(e.target.value) })}
+                            value={publishIntervalMinutes}
+                            onChange={(e) => updateData({ publishIntervalMinutes: Number(e.target.value) })}
                             className="bg-white border border-slate-200 focus:border-purple-400 focus:ring-2 focus:ring-purple-100 rounded-lg p-2.5 w-20 outline-none text-sm font-medium text-slate-700 transition"
                         />
                         <span className="text-sm text-slate-400">min</span>
@@ -86,13 +86,13 @@ export function WizardSchedule({ data, updateData }: WizardScheduleProps) {
                         <input
                             type="checkbox"
                             className="w-4 h-4 accent-purple-600"
-                            checked={enableJitter}
-                            onChange={(e) => updateData({ enableJitter: e.target.checked })}
+                            checked={publishJitterEnabled}
+                            onChange={(e) => updateData({ publishJitterEnabled: e.target.checked })}
                         />
                         <span className="text-sm text-slate-600 font-medium">Jitter ±50%</span>
-                        {enableJitter && (
+                        {publishJitterEnabled && (
                             <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 ml-1">
-                                🎲 {Math.round(intervalMinutes * 0.5)}–{Math.round(intervalMinutes * 1.5)}min
+                                🎲 {Math.round(publishIntervalMinutes * 0.5)}–{Math.round(publishIntervalMinutes * 1.5)}min
                             </span>
                         )}
                     </label>
@@ -169,7 +169,7 @@ export function WizardSchedule({ data, updateData }: WizardScheduleProps) {
             <div className="flex flex-col gap-2">
                 <h3 className="text-sm font-bold text-slate-400 tracking-wider">
                     🗓 SCHEDULE PREVIEW (next 5 slots)
-                    {enableJitter && <span className="ml-2 text-amber-600 font-normal text-xs">🎲 jitter active</span>}
+                    {publishJitterEnabled && <span className="ml-2 text-amber-600 font-normal text-xs">🎲 jitter active</span>}
                 </h3>
                 <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                     {preview.length === 0 ? (
@@ -179,7 +179,7 @@ export function WizardSchedule({ data, updateData }: WizardScheduleProps) {
                             <span className="text-xs bg-purple-50 text-purple-600 font-mono px-2 py-1 rounded-md border border-purple-200 font-semibold">#{idx + 1}</span>
                             <span className="text-sm font-mono flex-1 text-slate-700">{slot.time}</span>
                             {slot.gapLabel && (
-                                <span className={`text-xs font-mono ${enableJitter ? 'text-amber-600' : 'text-slate-400'}`}>
+                                <span className={`text-xs font-mono ${publishJitterEnabled ? 'text-amber-600' : 'text-slate-400'}`}>
                                     {slot.gapLabel}
                                 </span>
                             )}

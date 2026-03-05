@@ -31,12 +31,6 @@ const manifest: NodeManifest = {
       },
     ],
   },
-  errorPrefix: 'JSR',
-  behavior: {
-    sideEffects: ['arbitrary_code'],
-    idempotent: false,
-    crashBehavior: 'skip_video',
-  },
 }
 
 const node: NodeDefinition = { manifest, execute }

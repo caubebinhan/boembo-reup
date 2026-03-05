@@ -8,12 +8,11 @@ import { ExecutionLogger } from './ExecutionLogger'
 import { FlowDefinition, FlowNodeDefinition } from '../flow/ExecutionContracts'
 import type { JobDocument } from '@main/db/models/Job'
 import { asyncTaskScheduler } from '@main/services/AsyncTaskScheduler'
-import { AppSettingsService } from '@main/services/AppSettingsService'
 import { isNetworkError, isDiskError } from '../nodes/NodeHelpers'
-import { getFreeDiskSpaceMB } from '@main/utils/diskSpace'
 import { CodedError } from '@core/errors/CodedError'
 import { EntityLock, CampaignPipelineLock } from './ConcurrencyLock'
 import type { NodeRetryPolicy } from '../nodes/NodeDefinition'
+import { lifecycleRegistry } from '../flow/WorkflowLifecycle'
 
 // ── Error handling helpers ────────────────────────────────────────────
 
@@ -132,7 +131,7 @@ function findStartNodes(flow: FlowDefinition): FlowNodeDefinition[] {
 }
 
 /** Build a node execution context.
- * `campaignParams` = wizard config (sources, intervalMinutes, etc.)
+ * `campaignParams` = wizard config (sources, publishIntervalMinutes, etc.)
  * `nodeParams`     = inline params from flow.yaml for this specific node (title, body, expression, etc.)
  * Node params take precedence over campaign params.
  */
@@ -231,52 +230,6 @@ export class FlowEngine {
     console.log('[FlowEngine] Stopped')
   }
 
-  // ── Pre-run health check ──────────────────────────────────────────
-  /**
-   * Quick health check before starting a campaign.
-   * Checks storage space and workflow service endpoints.
-   * Returns { ok, errors[] } - caller decides whether to block.
-   */
-  public async preRunHealthCheck(campaignId: string): Promise<{ ok: boolean; errors: string[] }> {
-    const errors: string[] = []
-    const store = campaignRepo.tryOpen(campaignId)
-    if (!store) return { ok: false, errors: ['Campaign not found'] }
-
-    // 1. Storage check (cross-platform)
-    try {
-      const mediaPath = AppSettingsService.getMediaStoragePath()
-      const freeMB = await getFreeDiskSpaceMB(mediaPath)
-      if (freeMB >= 0 && freeMB < 100) {
-        errors.push(`Insufficient disk space: only ${freeMB} MB free (minimum 100 MB required)`)
-      }
-    } catch (err: any) {
-      // Non-blocking - log but don't prevent start
-      console.warn(`[FlowEngine] Storage check failed: ${err?.message}`)
-    }
-
-    // 2. Workflow service check
-    try {
-      const flow = FlowResolver.resolve(campaignId) || flowLoader.get(store.doc.workflow_id)
-      if (flow?.health_checks?.length) {
-        const { net } = require('electron')
-        for (const hc of flow.health_checks) {
-          try {
-            const controller = new AbortController()
-            const timeout = setTimeout(() => controller.abort(), 5000)
-            await net.fetch(hc.url, { method: 'HEAD', signal: controller.signal })
-            clearTimeout(timeout)
-          } catch {
-            errors.push(`${hc.name} unreachable (${hc.url})`)
-          }
-        }
-      }
-    } catch (err: any) {
-      console.warn(`[FlowEngine] Service check failed: ${err?.message}`)
-    }
-
-    return { ok: errors.length === 0, errors }
-  }
-
   // ── Trigger Campaign ──────────────────────────────────────────────────
   public async triggerCampaign(campaignId: string) {
     const store = campaignRepo.tryOpen(campaignId)
@@ -285,20 +238,26 @@ export class FlowEngine {
     const flow = FlowResolver.resolve(campaignId) || flowLoader.get(store.doc.workflow_id)
     if (!flow) return console.error(`[FlowEngine] Flow ${store.doc.workflow_id} not found`)
 
-    // Pre-run health check
-    const health = await this.preRunHealthCheck(campaignId)
-    if (!health.ok) {
-      const errorMsg = health.errors.join('; ')
-      store.status = 'error'
-      store.save()
-      ExecutionLogger.campaignEvent(campaignId, 'campaign:healthcheck-failed',
-        `? Cannot start: ${errorMsg}`)
-      // Emit to renderer for toast
-      ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
-        campaign_id: campaignId, errors: health.errors, message: errorMsg,
-      })
-      console.error(`[FlowEngine] Health check failed for ${campaignId}: ${errorMsg}`)
-      return
+    // Workflow lifecycle: beforeStart hook
+    const lifecycle = lifecycleRegistry.get(store.doc.workflow_id)
+    if (lifecycle?.beforeStart) {
+      try {
+        const check = await lifecycle.beforeStart(campaignId, store.params)
+        if (!check.ok) {
+          const errorMsg = check.errors.join('; ')
+          store.status = 'error'
+          store.save()
+          ExecutionLogger.campaignEvent(campaignId, 'campaign:healthcheck-failed',
+            `Cannot start: ${errorMsg}`)
+          ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
+            campaign_id: campaignId, errors: check.errors, message: errorMsg,
+          })
+          console.error(`[FlowEngine] beforeStart failed for ${campaignId}: ${errorMsg}`)
+          return
+        }
+      } catch (err: any) {
+        console.warn(`[FlowEngine] beforeStart hook error: ${err?.message}`)
+      }
     }
 
     store.status = 'active'
@@ -315,11 +274,17 @@ export class FlowEngine {
 
   public pauseCampaign(campaignId: string) {
     campaignRepo.updateStatus(campaignId, 'paused')
-    // Note: we do NOT force-release CampaignPipelineLock or EntityLock here.
-    // The running job will detect isCampaignActive() === false on the next loop iteration
-    // and exit naturally, releasing its own locks via try/finally.
-    // Force-releasing here would create a race window where a new job starts before the old one exits.
     ExecutionLogger.campaignEvent(campaignId, 'campaign:paused', 'Campaign paused')
+
+    // Workflow lifecycle: onPause hook
+    const store = campaignRepo.tryOpen(campaignId)
+    if (store) {
+      const lifecycle = lifecycleRegistry.get(store.doc.workflow_id)
+      if (lifecycle?.onPause) {
+        lifecycle.onPause(campaignId).catch(err =>
+          console.warn(`[FlowEngine] onPause hook error: ${err?.message}`))
+      }
+    }
   }
 
   /** Save pause checkpoint via RuntimeProjectionService. */
@@ -341,17 +306,33 @@ export class FlowEngine {
   }
 
   public async resumeCampaign(campaignId: string) {
-    // ── Pre-run health check before resume
-    const health = await this.preRunHealthCheck(campaignId)
-    if (!health.ok) {
-      const errorMsg = health.errors.join('; ')
-      ExecutionLogger.campaignEvent(campaignId, 'campaign:healthcheck-failed',
-        `? Cannot resume: ${errorMsg}`)
-      ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
-        campaign_id: campaignId, errors: health.errors, message: errorMsg,
-      })
-      console.error(`[FlowEngine] Health check failed for resume ${campaignId}: ${errorMsg}`)
-      return
+    const store = campaignRepo.tryOpen(campaignId)
+    if (!store) return console.error(`[FlowEngine] Campaign ${campaignId} not found for resume`)
+
+    // Workflow lifecycle: beforeStart hook (also used for resume validation)
+    const lifecycle = lifecycleRegistry.get(store.doc.workflow_id)
+    if (lifecycle?.beforeStart) {
+      try {
+        const check = await lifecycle.beforeStart(campaignId, store.params)
+        if (!check.ok) {
+          const errorMsg = check.errors.join('; ')
+          ExecutionLogger.campaignEvent(campaignId, 'campaign:healthcheck-failed',
+            `Cannot resume: ${errorMsg}`)
+          ExecutionLogger.emitToRenderer('campaign:healthcheck-failed', {
+            campaign_id: campaignId, errors: check.errors, message: errorMsg,
+          })
+          console.error(`[FlowEngine] beforeStart failed for resume ${campaignId}: ${errorMsg}`)
+          return
+        }
+      } catch (err: any) {
+        console.warn(`[FlowEngine] beforeStart hook error on resume: ${err?.message}`)
+      }
+    }
+
+    // Workflow lifecycle: onResume hook
+    if (lifecycle?.onResume) {
+      lifecycle.onResume(campaignId).catch(err =>
+        console.warn(`[FlowEngine] onResume hook error: ${err?.message}`))
     }
 
     campaignRepo.updateStatus(campaignId, 'active')
@@ -362,18 +343,15 @@ export class FlowEngine {
     if (pendingCount > 0) return // Jobs already queued, engine will pick them up
 
     // Check if we were mid-loop (paused inside executeLoop)
-    const store = campaignRepo.tryOpen(campaignId)
-    if (store) {
-      const doc = store.doc as any
-      const loopData = doc._loopData
-      const loopInstanceId = doc._loopInstanceId
-      const loopNodeId = doc._loopNodeId || 'core.loop'
-      if (loopData && loopInstanceId) {
-        ExecutionLogger.campaignEvent(campaignId, 'campaign:loop-resumed',
-          `Resuming loop from item ${store.lastProcessedIndex + 1}`)
-        this.createJob(campaignId, store.doc.workflow_id, loopInstanceId, loopNodeId, loopData)
-        return
-      }
+    const doc = store.doc as any
+    const loopData = doc._loopData
+    const loopInstanceId = doc._loopInstanceId
+    const loopNodeId = doc._loopNodeId || 'core.loop'
+    if (loopData && loopInstanceId) {
+      ExecutionLogger.campaignEvent(campaignId, 'campaign:loop-resumed',
+        `Resuming loop from item ${store.lastProcessedIndex + 1}`)
+      this.createJob(campaignId, store.doc.workflow_id, loopInstanceId, loopNodeId, loopData)
+      return
     }
 
     // Truly no pending work - re-trigger from start
@@ -460,6 +438,9 @@ export class FlowEngine {
         store.status = 'finished'
         store.save()
         ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Campaign finished')
+        // Workflow lifecycle: onFinished hook
+        const lc = lifecycleRegistry.get(job.workflow_id)
+        if (lc?.onFinished) lc.onFinished(job.campaign_id, 'finished').catch(() => {})
         return
       }
 

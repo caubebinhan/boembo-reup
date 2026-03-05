@@ -56,7 +56,7 @@ export function WizardVideoEdit({ data, updateData }: WizardStepProps) {
     const updateDataRef = useRef(updateData)
     useEffect(() => { updateDataRef.current = updateData }, [updateData])
 
-    const operations: VideoEditOperation[] = useMemo(() => data.videoEditOperations || [], [data.videoEditOperations])
+    const operations: VideoEditOperation[] = useMemo(() => data.videoEditOps || [], [data.videoEditOps])
     const enabledPluginIds: string[] = useMemo(() => data._enabledPluginIds || [], [data._enabledPluginIds])
 
     // Load plugin metadata for summary display
@@ -80,7 +80,7 @@ export function WizardVideoEdit({ data, updateData }: WizardStepProps) {
             try {
                 if (result) {
                     updateDataRef.current({
-                        videoEditOperations: result.videoEditOperations || [],
+                        videoEditOps: result.videoEditOps || [],
                         _enabledPluginIds: result._enabledPluginIds || [],
                         _previewVideoSrc: result._previewVideoSrc || null,
                         _videoPath: result._videoPath || null,
@@ -101,7 +101,7 @@ export function WizardVideoEdit({ data, updateData }: WizardStepProps) {
         try {
             await api?.invoke?.('video-editor:open', {
                 data: {
-                    videoEditOperations: data.videoEditOperations || [],
+                    videoEditOps: data.videoEditOps || [],
                     _enabledPluginIds: data._enabledPluginIds || [],
                     _previewVideoSrc: data._previewVideoSrc || null,
                     _videoPath: data._videoPath || null,

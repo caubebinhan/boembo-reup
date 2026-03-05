@@ -21,10 +21,10 @@ interface FlowEdge {
 
 const NODE_ICONS: Record<string, string> = {
     'tiktok.scanner': '🔍',
-    'core.deduplicator': '🔄',
-    'core.quality_filter': '⭐',
-    'core.limit': '🔢',
-    'core.downloader': '⬇️',
+    'core.skip_processed': '🔄',
+    'core.quality_gate': '⭐',
+    'core.item_limit': '🔢',
+    'core.media_downloader': '⬇️',
     'core.caption_gen': '📋',
     'tiktok.publisher': '📤',
     'youtube.publisher': '📺',
@@ -34,10 +34,10 @@ const NODE_ICONS: Record<string, string> = {
 
 const NODE_LABELS: Record<string, string> = {
     'tiktok.scanner': 'Scanner',
-    'core.deduplicator': 'Dedup',
-    'core.quality_filter': 'Quality',
-    'core.limit': 'Limit',
-    'core.downloader': 'Download',
+    'core.skip_processed': 'Dedup',
+    'core.quality_gate': 'Quality',
+    'core.item_limit': 'Limit',
+    'core.media_downloader': 'Download',
     'core.caption_gen': 'Caption',
     'tiktok.publisher': 'TikTok',
     'youtube.publisher': 'YouTube',

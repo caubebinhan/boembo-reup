@@ -73,15 +73,6 @@ export interface NodeManifest {
   /** Event name to emit when user saves editable_settings */
   on_save_event?: string
 
-  // ── Phase B: Error Tracking & Resilience ──────────────
-
-  /**
-   * @docCategory Error Tracking
-   * Unique 2-4 letter prefix for this node's error codes.
-   * Used in logs, Sentry tags, and error code generation.
-   * Example: 'PUB' → errors logged as [PUB] DG-110
-   */
-  errorPrefix?: string
 
   /**
    * @docCategory Retry Policy
@@ -90,11 +81,6 @@ export interface NodeManifest {
    */
   retryPolicy?: NodeRetryPolicy
 
-  /**
-   * @docCategory Behavior Spec
-   * Declarative description of node behavior for docs, AI tracing, and runtime decisions.
-   */
-  behavior?: NodeBehaviorSpec
 }
 
 /**
@@ -114,19 +100,6 @@ export interface NodeRetryPolicy {
   retryableErrors?: string[]
 }
 
-/**
- * @docCategory Behavior Spec
- * Declarative description of node side-effects and crash behavior.
- * Used by docs, AI tracing, and FlowEngine runtime decisions.
- */
-export interface NodeBehaviorSpec {
-  /** What side effects this node produces */
-  sideEffects: string[]
-  /** Whether executing twice with same input is safe */
-  idempotent: boolean
-  /** What FlowEngine should do when this node crashes */
-  crashBehavior: 'skip_video' | 'fail_job' | 'retry' | 'pause_campaign'
-}
 
 // ���� Node Definition ������������������������������������������������������������
 /** Complete node: manifest (contract) + execute (backend) */

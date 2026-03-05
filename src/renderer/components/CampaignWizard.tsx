@@ -202,8 +202,10 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
 
         setIsSubmitting(true)
         try {
+            // Strip UI-transient keys — video editor preview state, not config
+            const { _enabledPluginIds, _previewVideoSrc, _videoPath, ...cleanData } = stepData
             const payload = {
-                ...stepData,
+                ...cleanData,
                 name: campaignName.trim(),
                 workflow_id: selectedWorkflow,
             }
@@ -240,8 +242,8 @@ export function CampaignWizard({ onClose, flowId: initialFlowId }: CampaignWizar
                     <div className="mt-1 max-w-xs">
                         <VintageDatePicker
                             id="campaign-start-time"
-                            selected={stepData.firstRunAt ? new Date(stepData.firstRunAt) : null}
-                            onChange={(date) => setStepData(prev => ({ ...prev, firstRunAt: date ? date.toISOString().slice(0, 16) : '' }))}
+                            selected={stepData.startAt ? new Date(stepData.startAt) : null}
+                            onChange={(date) => setStepData(prev => ({ ...prev, startAt: date ? date.toISOString().slice(0, 16) : '' }))}
                             showTimeSelect
                             placeholder="Chọn thời gian bắt đầu..."
                             minDate={new Date(Date.now() + 60_000)}

@@ -22,7 +22,7 @@ function applyCaptionTemplate(template: string, original: string): string {
 export function WizardDetails({ data, updateData }: WizardDetailsProps) {
     useEffect(() => {
         const defaults: Record<string, any> = {}
-        if (data.missedJobHandling == null) defaults.missedJobHandling = 'auto'
+        if (data.missedSchedulePolicy == null) defaults.missedSchedulePolicy = 'auto'
         if (Object.keys(defaults).length > 0) updateData(defaults)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -103,16 +103,16 @@ export function WizardDetails({ data, updateData }: WizardDetailsProps) {
                     <div
                         role="button"
                         tabIndex={0}
-                        onClick={() => updateData({ missedJobHandling: 'auto' })}
-                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && updateData({ missedJobHandling: 'auto' })}
-                        className={`p-4 rounded-xl cursor-pointer border-2 transition hover:shadow-md ${(data.missedJobHandling || 'auto') === 'auto'
+                        onClick={() => updateData({ missedSchedulePolicy: 'auto' })}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && updateData({ missedSchedulePolicy: 'auto' })}
+                        className={`p-4 rounded-xl cursor-pointer border-2 transition hover:shadow-md ${(data.missedSchedulePolicy || 'auto') === 'auto'
                             ? 'border-purple-400 bg-purple-50 shadow-sm'
                             : 'border-slate-200 bg-white hover:border-slate-300'
                             }`}
                     >
                         <div className="flex items-center gap-2 font-semibold mb-1 text-slate-700">
-                            <span className="w-4 h-4 rounded-full border-2 flex items-center justify-center" style={{ borderColor: (data.missedJobHandling || 'auto') === 'auto' ? '#7c3aed' : '#cbd5e1' }}>
-                                {(data.missedJobHandling || 'auto') === 'auto' && <span className="w-2 h-2 rounded-full bg-purple-600" />}
+                            <span className="w-4 h-4 rounded-full border-2 flex items-center justify-center" style={{ borderColor: (data.missedSchedulePolicy || 'auto') === 'auto' ? '#7c3aed' : '#cbd5e1' }}>
+                                {(data.missedSchedulePolicy || 'auto') === 'auto' && <span className="w-2 h-2 rounded-full bg-purple-600" />}
                             </span>
                             Tự động lên lịch lại
                         </div>
@@ -122,16 +122,16 @@ export function WizardDetails({ data, updateData }: WizardDetailsProps) {
                     <div
                         role="button"
                         tabIndex={0}
-                        onClick={() => updateData({ missedJobHandling: 'manual' })}
-                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && updateData({ missedJobHandling: 'manual' })}
-                        className={`p-4 rounded-xl cursor-pointer border-2 transition hover:shadow-md ${data.missedJobHandling === 'manual'
+                        onClick={() => updateData({ missedSchedulePolicy: 'manual' })}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && updateData({ missedSchedulePolicy: 'manual' })}
+                        className={`p-4 rounded-xl cursor-pointer border-2 transition hover:shadow-md ${data.missedSchedulePolicy === 'manual'
                             ? 'border-purple-400 bg-purple-50 shadow-sm'
                             : 'border-slate-200 bg-white hover:border-slate-300'
                             }`}
                     >
                         <div className="flex items-center gap-2 font-semibold mb-1 text-slate-700">
-                            <span className="w-4 h-4 rounded-full border-2 flex items-center justify-center" style={{ borderColor: data.missedJobHandling === 'manual' ? '#7c3aed' : '#cbd5e1' }}>
-                                {data.missedJobHandling === 'manual' && <span className="w-2 h-2 rounded-full bg-purple-600" />}
+                            <span className="w-4 h-4 rounded-full border-2 flex items-center justify-center" style={{ borderColor: data.missedSchedulePolicy === 'manual' ? '#7c3aed' : '#cbd5e1' }}>
+                                {data.missedSchedulePolicy === 'manual' && <span className="w-2 h-2 rounded-full bg-purple-600" />}
                             </span>
                             Tạm dừng chờ duyệt
                         </div>

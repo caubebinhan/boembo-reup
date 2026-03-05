@@ -71,7 +71,7 @@ export class AsyncTaskScheduler {
       state: {},
       attempt: 0,
       maxAttempts: options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
-      nextRunAt: options.firstRunAt ?? (now + retryIntervalMs),
+      nextRunAt: options.startAt ?? (now + retryIntervalMs),
       concurrencyKey: options.concurrencyKey,
       maxConcurrent: options.maxConcurrent ?? 1,
       campaignId: options.campaignId,

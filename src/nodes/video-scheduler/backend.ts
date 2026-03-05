@@ -30,7 +30,7 @@ function formatRange(startTs: number, endTs: number): string {
  * VideoScheduler Node
  *
  * Calculates scheduled_for timestamps for each video using campaign time ranges.
- * Supports: firstRunAt gate, enableJitter, autoSchedule per-source.
+ * Supports: startAt gate, publishJitterEnabled, autoSchedule per-source.
  */
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   try {
@@ -56,26 +56,26 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       }
     }
 
-    const intervalMinutes = ctx.params.intervalMinutes ?? 60
-    const enableJitter = ctx.params.enableJitter === true
+    const publishIntervalMinutes = ctx.params.publishIntervalMinutes ?? 60
+    const publishJitterEnabled = ctx.params.publishJitterEnabled === true
 
     const ranges = normalizeTimeRanges(ctx.params)
     const rangeDesc = ranges.length === 1
       ? `${ranges[0].start}-${ranges[0].end}`
       : `${ranges.length} ranges`
 
-    ctx.logger.info(`[VideoScheduler] Scheduling ${videos.length} videos (interval=${intervalMinutes}min, jitter=${enableJitter}, window=${rangeDesc})`)
+    ctx.logger.info(`[VideoScheduler] Scheduling ${videos.length} videos (interval=${publishIntervalMinutes}min, jitter=${publishJitterEnabled}, window=${rangeDesc})`)
     ctx.onProgress(`Lên lịch ${videos.length} video...`)
 
     // Reset last_processed_index for a fresh run
     ctx.store.lastProcessedIndex = 0
 
-    // Respect firstRunAt: if set and in the future, use as cursor start
+    // Respect startAt: if set and in the future, use as cursor start
     let cursor = Date.now()
-    if (ctx.params.firstRunAt) {
-      const firstRunMs = new Date(ctx.params.firstRunAt).getTime()
+    if (ctx.params.startAt) {
+      const firstRunMs = new Date(ctx.params.startAt).getTime()
       if (!isNaN(firstRunMs) && firstRunMs > cursor) {
-        ctx.logger.info(`[VideoScheduler] Using firstRunAt as start: ${new Date(firstRunMs).toLocaleString('vi-VN')}`)
+        ctx.logger.info(`[VideoScheduler] Using startAt as start: ${new Date(firstRunMs).toLocaleString('vi-VN')}`)
         cursor = firstRunMs
       }
     }
@@ -83,8 +83,8 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     // Compute schedule slots using shared function
     const slots = computeScheduleSlots({
       cursor,
-      intervalMinutes,
-      enableJitter,
+      publishIntervalMinutes,
+      publishJitterEnabled,
       ranges,
       count: videos.length,
     })
@@ -134,8 +134,8 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     if (missedVideos.length > 0) {
       // Reschedule using shared function (respects time slots + jitter)
       const rescheduled = scheduleVideos(missedVideos, {
-        intervalMinutes,
-        enableJitter,
+        publishIntervalMinutes,
+        publishJitterEnabled,
         ranges,
       })
       for (const r of rescheduled) {
@@ -153,7 +153,7 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
       ctx.alert(
         'warn',
         `Phát hiện lịch bị lỡ (${missedVideos.length} video)`,
-        `Đã lên lịch lại ${rescheduled.length} video từ thời điểm hiện tại (interval=${intervalMinutes}ph, jitter=${enableJitter ? 'bật' : 'tắt'}).`,
+        `Đã lên lịch lại ${rescheduled.length} video từ thời điểm hiện tại (interval=${publishIntervalMinutes}ph, jitter=${publishJitterEnabled ? 'bật' : 'tắt'}).`,
       )
     }
 

@@ -155,9 +155,9 @@ export default function TikTokRepostCard({ campaign, onAction }: TikTokRepostCar
     const progressPct = g.total > 0 ? Math.round((g.terminal / g.total) * 100) : 0
 
     // Target account info
-    const targetAccount = config.targetChannel || config.publishAccount || null
-    const interval = config.intervalMinutes || null
-    const videoEdits = config.videoEditOperations?.filter((o: any) => o.enabled)?.length || 0
+    const targetAccount = config.publishAccountIds?.[0] || null
+    const interval = config.publishIntervalMinutes || null
+    const videoEdits = config.videoEditOps?.filter((o: any) => o.enabled)?.length || 0
 
     // Schedule info
     const scheduleLabel = useMemo(() => {

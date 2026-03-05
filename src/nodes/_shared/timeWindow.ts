@@ -29,11 +29,11 @@ function normalizeDays(days: any): number[] {
 
 /**
  * Normalize campaign params into a TimeRange[].
- * Returns 24/7 default if params.timeRanges is not set.
+ * Returns 24/7 default if params.activeWindows is not set.
  */
 export function normalizeTimeRanges(params: Record<string, any>): TimeRange[] {
-  if (params.timeRanges && Array.isArray(params.timeRanges) && params.timeRanges.length > 0) {
-    return params.timeRanges.map((r: any) => ({
+  if (params.activeWindows && Array.isArray(params.activeWindows) && params.activeWindows.length > 0) {
+    return params.activeWindows.map((r: any) => ({
       days: normalizeDays(r.days),
       start: r.start || '00:00',
       end: r.end || '23:59',
@@ -124,18 +124,18 @@ export function rescheduleFromNow(
   videos: { platform_id: string; [key: string]: any }[],
   opts: {
     cursor?: number
-    intervalMinutes: number
-    enableJitter?: boolean
+    publishIntervalMinutes: number
+    publishJitterEnabled?: boolean
     ranges: TimeRange[]
   }
 ): { platform_id: string; scheduled_for: number }[] {
-  const intervalMs = opts.intervalMinutes * 60_000
+  const intervalMs = opts.publishIntervalMinutes * 60_000
   let cursor = opts.cursor ?? Date.now()
 
   return videos.map(v => {
     cursor = nextValidSlot(cursor, opts.ranges)
     const scheduled_for = cursor
-    const jitteredInterval = opts.enableJitter
+    const jitteredInterval = opts.publishJitterEnabled
       ? intervalMs * (0.5 + Math.random())
       : intervalMs
     cursor += jitteredInterval

@@ -26,16 +26,16 @@ interface VideoHistoryProps {
 
 // ── Node labels for Vietnamese display ──
 const NODE_LABELS: Record<string, { icon: string; label: string }> = {
-    'core.downloader': { icon: '⬇️', label: 'Tải video' },
-    'core.video_scheduler': { icon: '📅', label: 'Lên lịch' },
+    'core.media_downloader': { icon: '⬇️', label: 'Tải video' },
+    'core.publish_scheduler': { icon: '📅', label: 'Lên lịch' },
     'core.video_edit': { icon: '🎬', label: 'Chỉnh sửa' },
     'core.caption_gen': { icon: '✍️', label: 'Caption' },
     'tiktok.publisher': { icon: '📤', label: 'Đăng TikTok' },
     'tiktok.account_dedup': { icon: '🔍', label: 'Kiểm tra trùng' },
-    'core.deduplicator': { icon: '🔍', label: 'Kiểm tra trùng' },
-    'core.check_in_time': { icon: '⏰', label: 'Chờ lịch' },
+    'core.skip_processed': { icon: '🔍', label: 'Kiểm tra trùng' },
+    'core.time_gate': { icon: '⏰', label: 'Chờ lịch' },
     'tiktok.scanner': { icon: '🔎', label: 'Quét video' },
-    'core.monitoring': { icon: '👁', label: 'Theo dõi' },
+    'core.source_watcher': { icon: '👁', label: 'Theo dõi' },
     'core.condition': { icon: '🔀', label: 'Điều kiện' },
 }
 

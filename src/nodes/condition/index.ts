@@ -21,12 +21,6 @@ const manifest: NodeManifest = {
       },
     ],
   },
-  errorPrefix: 'CND',
-  behavior: {
-    sideEffects: [],
-    idempotent: true,
-    crashBehavior: 'fail_job',
-  },
 }
 
 const node: NodeDefinition = { manifest, execute }

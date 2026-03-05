@@ -2,7 +2,7 @@
 import { execute } from './backend'
 
 const manifest: NodeManifest = {
-  id: 'core.video_scheduler',
+  id: 'core.publish_scheduler',
   name: 'Video Scheduler',
   label: 'Scheduler',
   color: '#eab308',
@@ -12,7 +12,7 @@ const manifest: NodeManifest = {
   editable_settings: {
     fields: [
       {
-        key: 'intervalMinutes',
+        key: 'publishIntervalMinutes',
         label: 'Khoảng cách giữa các video (phút)',
         type: 'number',
         default: 60,
@@ -21,12 +21,6 @@ const manifest: NodeManifest = {
     ],
   },
   on_save_event: 'reschedule',
-  errorPrefix: 'SCH',
-  behavior: {
-    sideEffects: ['writes_to_db'],
-    idempotent: true,
-    crashBehavior: 'fail_job',
-  },
 }
 
 const node: NodeDefinition = { manifest, execute }
