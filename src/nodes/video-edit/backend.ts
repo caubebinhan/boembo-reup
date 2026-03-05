@@ -6,6 +6,7 @@
  * and updates video records with edited file paths.
  */
 import type { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { CodedError } from '@core/errors/CodedError'
 import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 import { executeVideoEditPipeline, videoEditPluginRegistry } from '@core/video-edit'
 import type { VideoEditOperation } from '@core/video-edit'
@@ -141,6 +142,7 @@ export default async function execute(
       : `Chỉnh sửa video thất bại: ${msg}`
 
     ctx.alert('error', userMessage)
-    throw new Error(userMessage)
+    const code = msg.includes('ffmpeg_or_ffprobe_not_available') ? 'DG-001' : 'DG-610'
+    throw new CodedError(code, userMessage, error)
   }
 }

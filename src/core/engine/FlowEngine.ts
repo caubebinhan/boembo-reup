@@ -54,8 +54,13 @@ function handleDiskError(errorMsg: string, campaignId: string, instanceId: strin
  * Compute retry delay based on policy and current attempt.
  * Returns 0 if retry is not applicable.
  */
-function computeRetryDelay(policy: NodeRetryPolicy | undefined, attempt: number): number {
+function computeRetryDelay(policy: NodeRetryPolicy | undefined, attempt: number, errorMsg?: string): number {
   if (!policy || policy.maxRetries <= 0 || attempt >= policy.maxRetries) return 0
+  // If retryableErrors is specified, only retry matching errors
+  if (policy.retryableErrors && policy.retryableErrors.length > 0 && errorMsg) {
+    const lower = errorMsg.toLowerCase()
+    if (!policy.retryableErrors.some(p => lower.includes(p.toLowerCase()))) return 0
+  }
   const base = policy.initialDelayMs || 1000
   const max = policy.maxDelayMs || 60000
   switch (policy.backoff) {
@@ -92,11 +97,11 @@ function resolveNextEdges(flow: FlowDefinition, fromInstanceId: string, data: an
     .filter(Boolean) as FlowNodeDefinition[]
 }
 
-/** Check if campaign is still runnable (not paused/cancelled). */
+/** Check if campaign is still runnable (not paused/cancelled/deleting/error/finished). */
 function isCampaignActive(campaignId: string): boolean {
   const store = campaignRepo.tryOpen(campaignId)
   if (!store) return false
-  return store.status !== 'paused' && store.status !== 'cancelled'
+  return store.status === 'active' || store.status === 'running'
 }
 
 /**
@@ -364,6 +369,13 @@ export class FlowEngine {
   private async tick() {
     const jobs = jobRepo.findPending(5)
     for (const job of jobs) {
+      // ── Pause gate: skip jobs for paused/stopped campaigns ──
+      // Push inactive-campaign jobs to back of queue (60s delay)
+      // so they don't starve active campaign jobs
+      if (!isCampaignActive(job.campaign_id)) {
+        jobRepo.updateStatus(job.id, 'pending', undefined, Date.now() + 60_000)
+        continue
+      }
       try {
         await this.executeJob(job)
       } catch (err: any) {
@@ -388,6 +400,11 @@ export class FlowEngine {
     }
 
     try {
+      // Double-check campaign active after acquiring lock
+      if (!isCampaignActive(job.campaign_id)) {
+        CampaignPipelineLock.release(job.campaign_id, job.id)
+        return
+      }
       jobRepo.updateStatus(job.id, 'running')
 
       const flow = FlowResolver.resolve(job.campaign_id)
@@ -420,6 +437,28 @@ export class FlowEngine {
       /** @throws DG-042 — Node implementation not registered */
       if (!NodeImpl) throw new CodedError('DG-042', `Node impl ${nodeDef.node_id} not registered`)
 
+      // ── Fix 1: EntityLock for regular node execution (prevents retry + loop concurrent runs) ──
+      const entityKey = job.data?.platform_id != null ? String(job.data.platform_id)
+                      : job.data?.entityKey != null ? String(job.data.entityKey)
+                      : undefined
+      let regularLockAcquired = false
+      if (entityKey) {
+        regularLockAcquired = EntityLock.acquire(entityKey, nodeDef.instance_id, job.id, job.campaign_id)
+        if (!regularLockAcquired) {
+          const holder = EntityLock.isLocked(entityKey)
+          ExecutionLogger.log({
+            campaign_id: job.campaign_id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
+            level: 'warn', event: 'entity:lock-rejected',
+            message: `Entity ${entityKey} locked by ${holder?.instanceId}/${holder?.jobId} — rescheduling in 3s`,
+          })
+          // Reschedule — don't fail
+          jobRepo.updateStatus(job.id, 'pending', undefined, Date.now() + 3000)
+          return
+        }
+      }
+
+      try {
+
       const startTime = Date.now()
       ExecutionLogger.nodeStart(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id, {})
 
@@ -431,10 +470,9 @@ export class FlowEngine {
         { action: result.action, message: result.message }, durationMs)
       ExecutionLogger.nodeData(job.campaign_id, nodeDef.instance_id, nodeDef.node_id, result.data)
 
-      jobRepo.updateStatus(job.id, 'completed')
-
       // ── Flow control ────────────────────────────────────────────
       if (result.action === 'finish') {
+        jobRepo.updateStatus(job.id, 'completed')
         store.status = 'finished'
         store.save()
         ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Campaign finished')
@@ -445,16 +483,16 @@ export class FlowEngine {
       }
 
       if (result.action === 'wait') {
-        // Join barrier not met — reschedule with 5s delay
-        jobRepo.updateStatus(job.id, 'pending') // revert from completed
-        this.createJob(job.campaign_id, job.workflow_id, nodeDef.instance_id, nodeDef.node_id,
-          result.data || job.data, Date.now() + 5000)
+        // Reuse same job — reschedule with 5s delay (no new job creation)
+        jobRepo.updateStatus(job.id, 'pending', undefined, Date.now() + 5000)
         ExecutionLogger.log({
           campaign_id: job.campaign_id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
           level: 'info', event: 'node:wait', message: result.message || 'Waiting for parallel branches',
         })
         return
       }
+
+      jobRepo.updateStatus(job.id, 'completed')
 
       if (result.action === 'recall' && result.recall_target) {
         const targetNode = findNode(flow, result.recall_target)
@@ -464,10 +502,25 @@ export class FlowEngine {
         return
       }
 
+      // ── Fix 4: Retry jobs do NOT chain downstream — the pipeline loop handles progression ──
+      if (job.data?._isRetryJob) {
+        ExecutionLogger.log({
+          campaign_id: job.campaign_id, instance_id: nodeDef.instance_id, node_id: nodeDef.node_id,
+          level: 'info', event: 'retry:completed',
+          message: `Retry job completed — not chaining downstream (loop will handle)`,
+        })
+        return
+      }
+
       // Default: continue to next nodes via edges
       const nextNodes = resolveNextEdges(flow, nodeDef.instance_id, result.data)
       for (const next of nextNodes) {
         this.createJob(job.campaign_id, job.workflow_id, next.instance_id, next.node_id, result.data || {})
+      }
+
+      } finally {
+        // Release entity lock after regular node execution
+        if (entityKey && regularLockAcquired) EntityLock.release(entityKey, job.id)
       }
 
     } catch (err: any) {
@@ -478,7 +531,7 @@ export class FlowEngine {
       const NodeImpl = nodeRegistry.get(job.node_id)
       const retryPolicy = NodeImpl?.manifest?.retryPolicy
       const retryCount = (job.data?._retryCount as number) || 0
-      const delayMs = computeRetryDelay(retryPolicy, retryCount)
+      const delayMs = computeRetryDelay(retryPolicy, retryCount, errorMsg)
 
       if (delayMs > 0) {
         // Retry is possible
@@ -490,6 +543,8 @@ export class FlowEngine {
           maxRetries: retryPolicy!.maxRetries,
           delayMs,
           error: errorMsg,
+          videoId: job.data?.platform_id || job.data?.videoId,
+          platform_id: job.data?.platform_id,
         })
         console.log(`[FlowEngine] Retry ${retryCount + 1}/${retryPolicy!.maxRetries} for ${job.instance_id} in ${delayMs}ms`)
         this.createJob(
@@ -711,108 +766,158 @@ export class FlowEngine {
         const origOnProgress = ctx.onProgress
         ctx.onProgress = (msg: string) => { lastProgressMsg = msg; origOnProgress(msg) }
 
-        try {
-          const result = await executeWithTimeout(NodeImpl, skipToNextItem ? {} : currentData, ctx, childDef, job)
-          const durationMs = Date.now() - startTime
+        // ── Retry loop for child execution ──────────────────
+        let childRetryCount = 0
+        const childRetryPolicy = NodeImpl?.manifest?.retryPolicy
 
-          ExecutionLogger.nodeEnd(job.campaign_id, job.id, childDef.instance_id, childDef.node_id,
-            { action: result.action }, durationMs)
-          ExecutionLogger.nodeData(job.campaign_id, childDef.instance_id, childDef.node_id, result.data)
+        while (true) {
+          try {
+            const result = await executeWithTimeout(NodeImpl, skipToNextItem ? {} : currentData, ctx, childDef, job)
+            const durationMs = Date.now() - startTime
 
-          // ── Flow control from child
-          if (result.action === 'finish') {
-            store.status = 'finished'
-            store.save()
-            EntityLock.releaseAllForCampaign(job.campaign_id)
-            ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Finished by child node')
-            return
-          }
+            ExecutionLogger.nodeEnd(job.campaign_id, job.id, childDef.instance_id, childDef.node_id,
+              { action: result.action }, durationMs)
+            ExecutionLogger.nodeData(job.campaign_id, childDef.instance_id, childDef.node_id, result.data)
 
-          if (result.action === 'continue' && !result.data) {
-            if (!skipToNextItem) {
-              ExecutionLogger.log({
-                campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
-                level: 'info', event: 'node:skip',
-                message: `Item skipped by ${childDef.instance_id}`,
-              })
-              skipToNextItem = true
-            }
-            continue
-          }
-
-          currentData = result.data
-        } catch (err: any) {
-          ExecutionLogger.nodeError(job.campaign_id, job.id, childDef.instance_id, childDef.node_id, err.message)
-
-          // ── YAML events handling: match error -> event key -> action + emit ───
-          const matchedEvent = matchNodeEvent(childDef, err.message)
-          if (matchedEvent) {
-            const { eventKey, handler } = matchedEvent
-            ExecutionLogger.log({
-              campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
-              level: 'warn', event: eventKey,
-              message: `Event "${eventKey}" matched -> action: ${handler.action}`,
-            })
-            if (handler.emit) {
-              ExecutionLogger.emitNodeEvent(job.campaign_id, childDef.instance_id, handler.emit, {
-                error: err.message, eventKey, action: handler.action,
-              })
-            }
-            if (handler.action === 'pause_campaign') {
-              this.savePauseCheckpoint(job.campaign_id, {
-                itemIndex: i, entityKey, lastActiveChild: childDef.instance_id,
-                lastProgressMessage: lastProgressMsg || undefined,
-                reason: 'event', eventKey,
-              })
-              store.status = 'paused'
+            // ── Flow control from child
+            if (result.action === 'finish') {
+              store.status = 'finished'
               store.save()
               EntityLock.releaseAllForCampaign(job.campaign_id)
-              ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:paused', `Paused by event "${eventKey}"`)
+              ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Finished by child node')
               return
             }
-            if (handler.action === 'stop_campaign') {
+
+            if (result.action === 'continue' && !result.data) {
+              if (!skipToNextItem) {
+                ExecutionLogger.log({
+                  campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
+                  level: 'info', event: 'node:skip',
+                  message: `Item skipped by ${childDef.instance_id}`,
+                })
+                skipToNextItem = true
+              }
+              break // exit retry loop, continue to next child
+            }
+
+            currentData = result.data
+            break // success — exit retry loop, continue to next child
+          } catch (err: any) {
+            ExecutionLogger.nodeError(job.campaign_id, job.id, childDef.instance_id, childDef.node_id, err.message)
+
+            // ── YAML events handling: match error -> event key -> action + emit ───
+            const matchedEvent = matchNodeEvent(childDef, err.message)
+            if (matchedEvent) {
+              const { eventKey, handler } = matchedEvent
+              ExecutionLogger.log({
+                campaign_id: job.campaign_id, instance_id: childDef.instance_id, node_id: childDef.node_id,
+                level: 'warn', event: eventKey,
+                message: `Event "${eventKey}" matched -> action: ${handler.action}`,
+              })
+              if (handler.emit) {
+                ExecutionLogger.emitNodeEvent(job.campaign_id, childDef.instance_id, handler.emit, {
+                  error: err.message, eventKey, action: handler.action,
+                })
+              }
+              if (handler.action === 'pause_campaign') {
+                // Save loop state for resume (same as manual pause)
+                try {
+                  const doc = store.doc as any
+                  doc._loopData = items
+                  doc._loopInstanceId = loopDef.instance_id
+                  doc._loopNodeId = loopDef.node_id
+                } catch { /* best-effort */ }
+                this.savePauseCheckpoint(job.campaign_id, {
+                  itemIndex: i, entityKey, lastActiveChild: childDef.instance_id,
+                  lastProgressMessage: lastProgressMsg || undefined,
+                  reason: 'event', eventKey,
+                })
+                store.status = 'paused'
+                store.save()
+                EntityLock.releaseAllForCampaign(job.campaign_id)
+                ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:paused', `Paused by event "${eventKey}"`)
+                return
+              }
+              if (handler.action === 'stop_campaign') {
+                store.status = 'error'
+                store.save()
+                EntityLock.releaseAllForCampaign(job.campaign_id)
+                ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:error', `Stopped by event "${eventKey}": ${err.message}`)
+                return
+              }
+              // skip_item (default): fall through to retry/skip logic
+            }
+
+            const onError = childDef.on_error || 'skip'
+            if (onError === 'stop_campaign') {
               store.status = 'error'
               store.save()
               EntityLock.releaseAllForCampaign(job.campaign_id)
-              ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:error', `Stopped by event "${eventKey}": ${err.message}`)
+              ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:error',
+                `Campaign stopped: node "${childDef.instance_id}" failed: ${err.message}`)
               return
             }
-            // skip_item (default): fall through to skipToNextItem
-          }
 
-          const onError = childDef.on_error || 'skip'
-          if (onError === 'stop_campaign') {
-            store.status = 'error'
-            store.save()
-            EntityLock.releaseAllForCampaign(job.campaign_id)
-            ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:error',
-              `Campaign stopped: node "${childDef.instance_id}" failed: ${err.message}`)
-            return
-          }
-          skipToNextItem = true
+            // ── Retry logic for loop children ──────────────────────
+            const childDelayMs = computeRetryDelay(childRetryPolicy, childRetryCount, err.message)
+            if (childDelayMs > 0) {
+              childRetryCount++
+              ExecutionLogger.emitNodeEvent(job.campaign_id, childDef.instance_id, 'node:retry-scheduled', {
+                errorCode: err instanceof CodedError ? err.errorCode : undefined,
+                attempt: childRetryCount,
+                maxRetries: childRetryPolicy!.maxRetries,
+                delayMs: childDelayMs,
+                error: err.message,
+                videoId: currentData?.platform_id || currentData?.videoId,
+                platform_id: currentData?.platform_id,
+              })
+              ctx.logger.info(`[Loop] Retry ${childRetryCount}/${childRetryPolicy!.maxRetries} for child ${childDef.instance_id} in ${childDelayMs}ms`)
+              await new Promise(r => setTimeout(r, childDelayMs))
+              continue // retry same child
+            }
 
-          // Auto-pause on network or auto-fail on disk errors
-          // Note: these functions change campaign status — releaseAllForCampaign is called in finally
-          if (handleNetworkError(err.message, job.campaign_id, childDef.instance_id, store)) {
-            this.savePauseCheckpoint(job.campaign_id, {
-              itemIndex: i, entityKey, lastActiveChild: childDef.instance_id,
-              lastProgressMessage: lastProgressMsg || undefined,
-              reason: 'network',
-            })
-            EntityLock.releaseAllForCampaign(job.campaign_id)
-            return
+            skipToNextItem = true
+
+            // Auto-pause on network or auto-fail on disk errors
+            // Note: these functions change campaign status — releaseAllForCampaign is called in finally
+            if (handleNetworkError(err.message, job.campaign_id, childDef.instance_id, store)) {
+              // Save loop state for resume (same as manual pause)
+              try {
+                const doc = store.doc as any
+                doc._loopData = items
+                doc._loopInstanceId = loopDef.instance_id
+                doc._loopNodeId = loopDef.node_id
+                store.save()
+              } catch { /* best-effort */ }
+              this.savePauseCheckpoint(job.campaign_id, {
+                itemIndex: i, entityKey, lastActiveChild: childDef.instance_id,
+                lastProgressMessage: lastProgressMsg || undefined,
+                reason: 'network',
+              })
+              EntityLock.releaseAllForCampaign(job.campaign_id)
+              return
+            }
+            if (handleDiskError(err.message, job.campaign_id, childDef.instance_id, store)) {
+              // Save loop state for resume (same as manual pause)
+              try {
+                const doc = store.doc as any
+                doc._loopData = items
+                doc._loopInstanceId = loopDef.instance_id
+                doc._loopNodeId = loopDef.node_id
+                store.save()
+              } catch { /* best-effort */ }
+              this.savePauseCheckpoint(job.campaign_id, {
+                itemIndex: i, entityKey, lastActiveChild: childDef.instance_id,
+                lastProgressMessage: lastProgressMsg || undefined,
+                reason: 'disk',
+              })
+              EntityLock.releaseAllForCampaign(job.campaign_id)
+              return
+            }
+            break // exhausted retries — exit retry loop, move to next child
           }
-          if (handleDiskError(err.message, job.campaign_id, childDef.instance_id, store)) {
-            this.savePauseCheckpoint(job.campaign_id, {
-              itemIndex: i, entityKey, lastActiveChild: childDef.instance_id,
-              lastProgressMessage: lastProgressMsg || undefined,
-              reason: 'disk',
-            })
-            EntityLock.releaseAllForCampaign(job.campaign_id)
-            return
-          }
-        }
-      }
+        } // end while(retry)
+      } // end for(children)
 
       } finally {
         // ALWAYS release entity lock — even on early return from errors

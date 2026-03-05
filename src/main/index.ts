@@ -79,19 +79,6 @@ function createWindow(): void {
   PipelineEventBus.on('pipeline:interaction_waiting', onInteractionWaiting)
   PipelineEventBus.on('pipeline:interaction_resolved', onInteractionResolved)
 
-  // Area A: Forward recovery/info events to UI + persist to DB
-  PipelineEventBus.on('pipeline:info', (payload) => {
-    const { ExecutionLogger } = require('../core/engine/ExecutionLogger')
-    ExecutionLogger.emitToRenderer('pipeline:info', payload)
-    ExecutionLogger.log({
-      campaign_id: payload.campaignId || '_system',
-      level: 'info',
-      event: 'pipeline:info',
-      message: payload.message || '',
-      data: payload,
-    })
-  })
-
   mainWindow.on('ready-to-show', () => {
     if (!isE2EHeadless) mainWindow.show()
   })
@@ -120,13 +107,15 @@ app.whenReady().then(() => {
   })
 
   initDb()
-  CrashRecoveryService.recoverPendingTasks()
   
   // Initialize FlowLoader - scan src/workflows/*/flow.yaml
   const flowsDir = join(__dirname, '../../src/workflows')
   console.log('Loading yaml flows from:', flowsDir)
   const flows = flowLoader.loadAll(flowsDir)
   console.log(`Loaded ${flows.length} flows`)
+
+  // Recover pending tasks AFTER flows are loaded (needs flow definitions)
+  CrashRecoveryService.recoverPendingTasks()
 
   // Initialize Engine
   flowEngine.start()

@@ -39,7 +39,9 @@ for (const [path, mod] of Object.entries(recoveryModules)) {
   const m = mod as RecoveryModule
   if (typeof m.recover === 'function') {
     // Register with version-aware key so v2 doesn't silently overwrite v1
-    const key = ver ? `${wfId}@${ver}` : wfId
+    // Strip 'v' prefix: folder is v1.0 but campaign stores "1.0" (from flow.yaml)
+    const normalizedVer = ver ? ver.replace(/^v/, '') : null
+    const key = normalizedVer ? `${wfId}@${normalizedVer}` : wfId
     CrashRecoveryService.registerRecovery(key, { recover: m.recover })
     recoveryCount++
   }

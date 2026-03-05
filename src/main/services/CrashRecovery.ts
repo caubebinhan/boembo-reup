@@ -1,7 +1,7 @@
 import { jobRepo } from '../db/repositories/JobRepo'
 import { campaignRepo } from '../db/repositories/CampaignRepo'
 import { publishHistoryRepo } from '../db/repositories/PublishHistoryRepo'
-import { PipelineEventBus } from '@core/engine/PipelineEventBus'
+import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 
 /**
  * Crash Recovery Service - orchestrator.
@@ -26,10 +26,8 @@ export class CrashRecoveryService {
       if (resetJobs.length > 0) {
         console.log(`[CrashRecovery] Reset ${resetJobs.length} stuck running jobs -> pending`)
         for (const job of resetJobs) {
-          PipelineEventBus.emit('pipeline:info', {
-            campaignId: job.campaign_id,
-            message: `Recovered job ${job.id} to "pending" status after crash`,
-          })
+          ExecutionLogger.campaignEvent(job.campaign_id, 'pipeline:info',
+            `Recovered job ${job.id} to "pending" status after crash`)
         }
       } else {
         console.log('[CrashRecovery] No stuck running jobs found.')

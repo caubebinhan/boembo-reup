@@ -1,4 +1,5 @@
 ﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { CodedError, isCodedError } from '@core/errors/CodedError'
 import { failBatchGracefully } from '@core/nodes/NodeHelpers'
 
 const INSTANCE_ID = 'file_source_1'
@@ -32,6 +33,6 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     return { data: videos }
   } catch (err: any) {
     ctx.logger.error(`[FileSource] Unexpected error: ${err?.message || err}`)
-    throw err
+    throw isCodedError(err) ? err : new CodedError('DG-003', err?.message || String(err), err)
   }
 }

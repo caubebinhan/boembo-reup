@@ -3,10 +3,10 @@ import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 /**
  * TikTok Repost — Workflow Event Listeners
  *
- * Lắng nghe ExecutionLogger internal events (main-process only) và gửi
- * Electron desktop notifications cho các sự kiện quan trọng của workflow.
+ * Listens to ExecutionLogger internal events (main-process only) and sends
+ * Electron desktop notifications for important workflow events.
  *
- * Auto-discovered bởi src/workflows/index.ts qua events.ts convention.
+ * Auto-discovered by src/workflows/index.ts via events.ts convention.
  */
 
 async function sendNotification(title: string, body: string, sound = true) {

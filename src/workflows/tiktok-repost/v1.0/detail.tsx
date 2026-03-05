@@ -420,7 +420,7 @@ function VideoCard({ video, index, campaignId, phase, activeInstanceId }: { vide
                         )}
                         {video.status === 'captcha' && (
                             <button className="mt-1.5 w-full text-[10px] font-bold px-2 py-1.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition uppercase tracking-wider shadow cursor-pointer"
-                                onClick={() => api?.send('captcha:resolve', { videoId: video.platform_id, campaignId })}>
+                                onClick={() => api?.invoke('captcha:resolve', { videoId: video.platform_id, campaignId })}>
                                 Resolve CAPTCHA
                             </button>
                         )}

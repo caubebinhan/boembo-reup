@@ -1,4 +1,5 @@
 import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { CodedError, isCodedError } from '@core/errors/CodedError'
 
 /**
  * CampaignFinish Node
@@ -37,6 +38,6 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     return { data: input, action: 'finish', message: summary }
   } catch (err: any) {
     ctx.logger.error(`[CampaignFinish] Unexpected error: ${err?.message || err}`)
-    throw err
+    throw isCodedError(err) ? err : new CodedError('DG-300', err?.message || String(err), err)
   }
 }

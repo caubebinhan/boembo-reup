@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Provider, useDispatch } from 'react-redux'
 import { store } from './store/store'
-import { upsertTask } from './store/pipelineSlice'
 import { setInteractionWaiting, clearInteraction } from './store/interactionSlice'
 import { updateNodeStatus, updateNodeProgress } from './store/nodeEventsSlice'
 import { Toaster, toast } from 'sonner'
@@ -77,16 +76,6 @@ function useGlobalIPCListeners() {
 
   useEffect(() => {
     // @ts-ignore
-    const offUpdate = window.api.on('pipeline:update', (payload: any) => {
-      dispatch(upsertTask({
-        id: payload.videoId,
-        campaignId: payload.campaignId,
-        status: payload.status,
-        scheduledAt: payload.scheduledAt
-      }))
-    })
-
-    // @ts-ignore
     const offWaiting = window.api.on('pipeline:interaction_waiting', (payload: any) => {
       dispatch(setInteractionWaiting(payload))
     })
@@ -136,7 +125,7 @@ function useGlobalIPCListeners() {
     })
 
     return () => {
-      offUpdate(); offWaiting(); offResolved()
+      offWaiting(); offResolved()
       offNodeStatus(); offNodeProgress()
       offCampaignFinished(); offToast()
     }

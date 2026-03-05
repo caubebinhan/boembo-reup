@@ -9,7 +9,6 @@ const manifest: NodeManifest = {
   category: 'source',
   icon: '🔍',
   description: 'Scan TikTok channels and keywords for videos',
-  editable_settings: { fields: [] },
   retryPolicy: {
     maxRetries: 2,
     backoff: 'exponential',

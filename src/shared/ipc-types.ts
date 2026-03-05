@@ -63,11 +63,14 @@ export const IPC_CHANNELS = {
   // Account
   ACCOUNT_LIST: 'account:list',
   ACCOUNT_ADD: 'account:add',
+  ACCOUNT_DELETE: 'account:delete',
 
   // Pipeline events (renderer <-> main)
-  PIPELINE_UPDATE: 'pipeline:update',
   PIPELINE_INTERACTION_WAITING: 'pipeline:interaction_waiting',
   PIPELINE_INTERACTION_RESOLVED: 'pipeline:interaction_resolved',
+  PIPELINE_RETRY_NODE: 'pipeline:retry-node',
+  PIPELINE_SKIP_NODE: 'pipeline:skip-node',
+  CAPTCHA_RESOLVE: 'captcha:resolve',
   CAMPAIGNS_UPDATED: 'campaigns-updated',
 
   // Dialog

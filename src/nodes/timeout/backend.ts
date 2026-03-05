@@ -1,4 +1,5 @@
 import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { CodedError, isCodedError } from '@core/errors/CodedError'
 
 // Default matches wizard default (WizardDetails / WizardSchedule both default to 60)
 const DEFAULT_GAP_MINUTES = 60
@@ -42,6 +43,6 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     return { data: input, action: 'continue' }
   } catch (err: any) {
     ctx.logger.error(`[Timeout] Unexpected error: ${err?.message || err}`)
-    throw err
+    throw isCodedError(err) ? err : new CodedError('DG-000', err?.message || String(err), err)
   }
 }

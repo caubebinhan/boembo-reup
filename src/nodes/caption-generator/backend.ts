@@ -1,4 +1,5 @@
 ﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { CodedError, isCodedError } from '@core/errors/CodedError'
 import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 
 const INSTANCE_ID = 'caption_1'
@@ -59,6 +60,6 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     return { data: { ...video, generated_caption: caption } }
   } catch (err: any) {
     ctx.logger.error(`[CaptionGenerator] Unexpected error: ${err?.message || err}`)
-    throw err
+    throw isCodedError(err) ? err : new CodedError('DG-403', err?.message || String(err), err)
   }
 }

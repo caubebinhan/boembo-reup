@@ -1,4 +1,5 @@
 ﻿import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { CodedError, isCodedError } from '@core/errors/CodedError'
 
 export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
   try {
@@ -25,6 +26,6 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
     return { data: video }
   } catch (err: any) {
     ctx.logger.error(`[Deduplicator] Unexpected error: ${err?.message || err}`)
-    throw err
+    throw isCodedError(err) ? err : new CodedError('DG-000', err?.message || String(err), err)
   }
 }

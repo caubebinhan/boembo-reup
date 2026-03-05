@@ -1,7 +1,6 @@
 import { configureStore } from '@reduxjs/toolkit'
 import * as Sentry from '@sentry/react'
 import campaignsReducer from './campaignsSlice'
-import pipelineReducer from './pipelineSlice'
 import interactionReducer from './interactionSlice'
 import nodeEventsReducer from './nodeEventsSlice'
 
@@ -12,7 +11,6 @@ const sentryReduxEnhancer = Sentry.createReduxEnhancer({
 export const store = configureStore({
   reducer: {
     campaigns: campaignsReducer,
-    pipeline: pipelineReducer,
     interaction: interactionReducer,
     nodeEvents: nodeEventsReducer,
   },

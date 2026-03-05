@@ -131,7 +131,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
   if (allVideos.length > 0) {
     const videosToDownload = allVideos.filter(v => v.thumbnail)
     if (videosToDownload.length > 0) {
-      const campaignId = ctx.params.campaign_id || ctx.params.campaignId || ''
+      const campaignId = ctx.campaign_id
       ctx.asyncTasks.schedule('tiktok.thumbnail.batch', {
         campaignId,
         videos: videosToDownload.map(v => ({

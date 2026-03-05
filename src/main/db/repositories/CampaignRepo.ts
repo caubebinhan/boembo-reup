@@ -256,6 +256,12 @@ export class CampaignStore {
 
   // ���� Persist ������������������������������������������������������������������
   save(): void {
+    // Guard: if campaign was deleted while we held a reference, skip write
+    // Prevents race condition where a running job re-creates a deleted campaign
+    if (!this.repo.exists(this.doc.id)) {
+      console.warn(`[CampaignStore] Campaign ${this.doc.id} no longer exists — skipping save`)
+      return
+    }
     normalizeVideoListInPlace(this.doc.videos)
     this.recomputeCounters()
     this.doc.updated_at = Date.now()

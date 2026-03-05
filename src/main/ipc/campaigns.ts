@@ -35,7 +35,7 @@ export function setupCampaignIPC() {
   })
 
   // Open campaign detail in a new window
-  safeHandle('campaign-detail:open', async (_event, { id }: { id: string }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_DETAIL_OPEN, async (_event, { id }: { id: string }) => {
     const { join } = require('node:path')
     const { is } = require('@electron-toolkit/utils')
     const detailWin = new BrowserWindow({
@@ -92,6 +92,16 @@ export function setupCampaignIPC() {
 
   //  Campaign Delete (cascade: lifecycle hook, jobs, async_tasks, execution_logs, locks, cache)
   safeHandle(IPC_CHANNELS.CAMPAIGN_DELETE, async (_event, { id }) => {
+    // 0. Stop running jobs: pause campaign + release locks before cascade
+    try {
+      campaignRepo.updateStatus(id, 'deleting')
+      const { EntityLock, CampaignPipelineLock } = await import('@core/engine/ConcurrencyLock')
+      CampaignPipelineLock.forceRelease(id)
+      EntityLock.releaseAllForCampaign(id)
+      // Brief wait for any in-flight job to notice the status change
+      await new Promise(r => setTimeout(r, 200))
+    } catch { /* best-effort */ }
+
     // 1. Call workflow lifecycle hook for cleanup (files, etc.)
     try {
       const store = campaignRepo.tryOpen(id)
@@ -160,7 +170,7 @@ export function setupCampaignIPC() {
   })
 
   //  Flow presets 
-  safeHandle('flow:get-presets', async () => {
+  safeHandle(IPC_CHANNELS.FLOW_GET_PRESETS, async () => {
     return flowLoader.getAll().map(f => ({
       id: f.id,
       name: f.name,
@@ -171,7 +181,7 @@ export function setupCampaignIPC() {
     }))
   })
 
-  safeHandle('flow:list', async () => {
+  safeHandle(IPC_CHANNELS.FLOW_LIST, async () => {
     return flowLoader.getAll().map(f => ({
       id: f.id,
       name: f.name,
@@ -181,7 +191,7 @@ export function setupCampaignIPC() {
     }))
   })
 
-  safeHandle('flow:get-ui-descriptor', async (_event, flowId) => {
+  safeHandle(IPC_CHANNELS.FLOW_GET_UI_DESCRIPTOR, async (_event, flowId) => {
     const flow = flowLoader.get(flowId)
     return flow?.ui || null
   })
@@ -221,12 +231,12 @@ export function setupCampaignIPC() {
   })
 
   //  Execution Logs 
-  safeHandle('campaign:get-logs', async (_event, { id, limit }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_GET_LOGS, async (_event, { id, limit }) => {
     return ExecutionLogger.getLogsForCampaign(id, limit || 200)
   })
 
   //  Node Progress 
-  safeHandle('campaign:get-node-progress', async (_event, { id }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_GET_NODE_PROGRESS, async (_event, { id }) => {
     return db.prepare(`
       SELECT e.instance_id, e.message
       FROM execution_logs e
@@ -241,7 +251,7 @@ export function setupCampaignIPC() {
   })
 
   //  Per-Video Event History 
-  safeHandle('campaign:get-video-events', async (_event, { campaignId, videoId, limit }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_GET_VIDEO_EVENTS, async (_event, { campaignId, videoId, limit }) => {
     return db.prepare(`
       SELECT event, message, data_json as data, created_at, node_id, instance_id
       FROM execution_logs
@@ -273,7 +283,7 @@ export function setupCampaignIPC() {
   })
 
   //  Trigger event on campaign (e.g. reschedule) 
-  safeHandle('campaign:trigger-event', async (_event, { id, event, params }) => {
+  safeHandle(IPC_CHANNELS.CAMPAIGN_TRIGGER_EVENT, async (_event, { id, event, params }) => {
     const store = campaignRepo.tryOpen(id)
     if (!store) return { success: false, error: 'Campaign not found' }
 
@@ -311,7 +321,7 @@ export function setupCampaignIPC() {
   })
 
   // ── Pipeline: Retry node (user-initiated from Visualizer / VideoHistory / VideoCard) ──
-  safeHandle('pipeline:retry-node', async (_event, { campaignId, instanceId, videoId }: { campaignId: string; instanceId: string; videoId?: string }) => {
+  safeHandle(IPC_CHANNELS.PIPELINE_RETRY_NODE, async (_event, { campaignId, instanceId, videoId }: { campaignId: string; instanceId: string; videoId?: string }) => {
     const store = campaignRepo.tryOpen(campaignId)
     if (!store) return { success: false, error: 'Campaign not found' }
 
@@ -329,7 +339,7 @@ export function setupCampaignIPC() {
       ? db.prepare(`
           SELECT id FROM jobs
           WHERE campaign_id = ?
-            AND json_extract(data_json, '$.instance_id') = ?
+            AND instance_id = ?
             AND status IN ('pending', 'running')
             AND (
               json_extract(data_json, '$.platform_id') = ?
@@ -340,7 +350,7 @@ export function setupCampaignIPC() {
       : db.prepare(`
           SELECT id FROM jobs
           WHERE campaign_id = ?
-            AND json_extract(data_json, '$.instance_id') = ?
+            AND instance_id = ?
             AND status IN ('pending', 'running')
           LIMIT 1
         `).get(campaignId, instanceId) as { id: string } | undefined
@@ -367,7 +377,7 @@ export function setupCampaignIPC() {
 
     // Create a new job for this node (manual retry)
     // Hydrate full video payload from store so the node has local_path etc.
-    let jobData: any = { _retryCount: 0, _manualRetry: true }
+    let jobData: any = { _retryCount: 0, _manualRetry: true, _isRetryJob: true }
     if (videoId) {
       const videos = store.doc.videos || []
       const videoRecord = videos.find((v: any) => String(v.platform_id) === String(videoId))
@@ -393,11 +403,29 @@ export function setupCampaignIPC() {
     ExecutionLogger.campaignEvent(campaignId, 'pipeline:manual-retry',
       `Manual retry for node "${instanceId}" (job: ${jobId})`)
 
+    // ── B1 fix: Emit immediate UI feedback so video card + history show retry is queued ──
+    const nodeLabel = nodeDef.node_id === 'core.media_downloader' ? 'Đang thử tải lại...' :
+      nodeDef.node_id === 'core.video_edit' ? 'Đang thử chỉnh sửa lại...' :
+      nodeDef.node_id === 'tiktok.publisher' ? 'Đang thử đăng lại...' :
+      nodeDef.node_id === 'tiktok.scanner' ? 'Đang thử quét lại...' :
+      `Đang thử lại ${instanceId}...`
+
+    // Emit node:progress → shows live message on campaign card
+    ExecutionLogger.nodeProgress(campaignId, jobId, instanceId, nodeDef.node_id, nodeLabel)
+
+    // Emit node event → shows in VideoHistory timeline
+    ExecutionLogger.emitNodeEvent(campaignId, instanceId, 'retry:queued', {
+      videoId: videoId || undefined,
+      jobId,
+      message: nodeLabel,
+      _manualRetry: true,
+    })
+
     return { success: true, jobId }
   })
 
   // ── Pipeline: Skip node (user-initiated from NodeErrorModal) ──
-  safeHandle('pipeline:skip-node', async (_event, { campaignId, instanceId }: { campaignId: string; instanceId: string }) => {
+  safeHandle(IPC_CHANNELS.PIPELINE_SKIP_NODE, async (_event, { campaignId, instanceId }: { campaignId: string; instanceId: string }) => {
     // Mark recent failed jobs for this instance as 'skipped'
     const failedJobs = db.prepare(`
       SELECT id FROM jobs
@@ -413,5 +441,43 @@ export function setupCampaignIPC() {
       `User skipped node "${instanceId}" (${failedJobs.length} jobs marked skipped)`)
 
     return { success: true, skippedCount: failedJobs.length }
+  })
+
+  // ── Captcha: Resolve (user-initiated from VideoCard captcha button) ──
+  safeHandle(IPC_CHANNELS.CAPTCHA_RESOLVE, async (_event, { videoId, campaignId }: { videoId: string; campaignId: string }) => {
+    const store = campaignRepo.tryOpen(campaignId)
+    if (!store) return { success: false, error: 'Campaign not found' }
+
+    const video = store.videos.find(v => v.platform_id === videoId)
+    if (!video) return { success: false, error: 'Video not found' }
+
+    // Update video status to indicate CAPTCHA resolution in progress
+    store.updateVideo(videoId, { status: 'captcha_resolving', statusMessage: 'Đang mở trình duyệt để xác minh CAPTCHA...' })
+    store.save()
+
+    ExecutionLogger.emitNodeEvent(campaignId, 'publisher_1', 'captcha:resolving', {
+      videoId, message: 'User initiated CAPTCHA resolution',
+    })
+
+    // Create a retry job for the publisher node so the flow continues after CAPTCHA
+    const flow = FlowResolver.resolve(campaignId)
+    const publisherDef = flow?.nodes.find(n => n.instance_id === 'publisher_1')
+    if (publisherDef) {
+      const videoRecord = store.videos.find(v => v.platform_id === videoId)
+      const jobData = videoRecord
+        ? { ...videoRecord, _retryCount: 0, _manualRetry: true, _captchaResolved: true }
+        : { platform_id: videoId, _retryCount: 0, _manualRetry: true, _captchaResolved: true }
+      jobRepo.createJob({
+        campaign_id: campaignId,
+        workflow_id: store.doc.workflow_id,
+        node_id: publisherDef.node_id,
+        instance_id: 'publisher_1',
+        type: 'FLOW_STEP',
+        data: jobData,
+        scheduled_at: Date.now() + 3000, // 3s delay for CAPTCHA to clear
+      })
+    }
+
+    return { success: true }
   })
 }

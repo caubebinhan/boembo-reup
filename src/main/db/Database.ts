@@ -58,6 +58,7 @@ function createSchema() {
       status TEXT,
       campaign_id TEXT,
       scheduled_at INTEGER,
+      instance_id TEXT,
       created_at INTEGER,
       updated_at INTEGER
     );
@@ -159,8 +160,33 @@ export function getDbPath() {
 export function initDb() {
   db.pragma('journal_mode = WAL')
   createSchema()
+  migrateJobsInstanceIdColumn()
   backfillDenormalizedColumns()
   console.log('[DB] Schema initialized (document-store)')
+}
+
+/**
+ * Migration: Add instance_id column to jobs table if not present.
+ * Safe on fresh databases (column already in CREATE TABLE).
+ * Needed for existing databases created before this column existed.
+ */
+function migrateJobsInstanceIdColumn() {
+  try {
+    const cols = db.prepare("PRAGMA table_info('jobs')").all() as Array<{ name: string }>
+    if (!cols.some(c => c.name === 'instance_id')) {
+      db.exec('ALTER TABLE jobs ADD COLUMN instance_id TEXT')
+      // Backfill from data_json for existing rows
+      const r = db.prepare(`
+        UPDATE jobs SET instance_id = json_extract(data_json, '$.instance_id')
+        WHERE instance_id IS NULL AND json_extract(data_json, '$.instance_id') IS NOT NULL
+      `).run()
+      if (r.changes > 0) {
+        console.log(`[DB] Migration: backfilled instance_id for ${r.changes} existing jobs`)
+      }
+    }
+  } catch (err) {
+    console.warn('[DB] Migration jobs.instance_id (skipped):', (err as any)?.message || err)
+  }
 }
 
 /**
@@ -218,7 +244,8 @@ function backfillDenormalizedColumns() {
       UPDATE jobs SET
         status       = COALESCE(status,       json_extract(data_json, '$.status')),
         campaign_id  = COALESCE(campaign_id,  json_extract(data_json, '$.campaign_id')),
-        scheduled_at = COALESCE(scheduled_at, json_extract(data_json, '$.scheduled_at'))
+        scheduled_at = COALESCE(scheduled_at, json_extract(data_json, '$.scheduled_at')),
+        instance_id  = COALESCE(instance_id,  json_extract(data_json, '$.instance_id'))
       WHERE status IS NULL AND json_extract(data_json, '$.status') IS NOT NULL
     `).run()
     totalFixed += r.changes
@@ -251,7 +278,7 @@ function backfillDenormalizedColumns() {
   try {
     const r = db.prepare(`
       UPDATE jobs SET data_json = json_remove(data_json,
-        '$.status', '$.campaign_id', '$.scheduled_at'
+        '$.status', '$.campaign_id', '$.scheduled_at', '$.instance_id'
       ) WHERE json_extract(data_json, '$.status') IS NOT NULL
     `).run()
     totalStripped += r.changes

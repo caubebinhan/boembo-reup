@@ -90,7 +90,7 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
         }
       } catch (err: any) {
         ctx.logger.error(`[Monitor] Error scanning "${source.name}": ${err.message}`)
-        ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'monitoring_1', 'scan:failed', {
+        ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'monitor_1', 'scan:failed', {
           sourceName: source.name,
           sourceType: source.type,
           error: err?.message || String(err),

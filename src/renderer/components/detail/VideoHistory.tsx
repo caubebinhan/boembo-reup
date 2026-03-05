@@ -85,6 +85,9 @@ const EVENT_CONFIG: Record<string, EventDisplay> = {
     'publish:failed': { label: 'Đăng thất bại', category: 'error', dotColor: '#ef4444' },
     'download:failed': { label: 'Tải thất bại', category: 'error', dotColor: '#ef4444' },
     'scan:failed': { label: 'Quét thất bại', category: 'error', dotColor: '#ef4444' },
+    // Retry
+    'node:retry-scheduled': { label: 'Đang thử lại', category: 'warning', dotColor: '#f59e0b' },
+    'retry:queued': { label: 'Đang thử lại', category: 'progress', dotColor: '#3b82f6' },
 }
 const DEFAULT_EVENT: EventDisplay = { label: 'Sự kiện', category: 'info', dotColor: '#94a3b8' }
 
@@ -324,6 +327,29 @@ function RichEventData({ event, data }: { event: string; data: any }) {
             <div className="mt-2 rounded-lg px-3 py-2 bg-red-50 border border-red-200">
                 <div className="text-[10px] font-semibold text-red-500">🔑 Phiên đăng nhập hết hạn</div>
                 {data.message && <p className="text-[11px] text-red-600 mt-1">{data.message}</p>}
+            </div>
+        )
+    }
+
+    // ── Publish failed — show error detail ──
+    if (inner === 'publish:failed') {
+        return (
+            <div className="mt-2 rounded-lg px-3 py-2 bg-red-50 border border-red-200">
+                <div className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">❌ Đăng thất bại</div>
+                {data.errorType && <Badge variant="error">🏷 {data.errorType}</Badge>}
+                {data.error && <p className="text-[11px] text-red-600 mt-1 break-words leading-relaxed">{typeof data.error === 'string' ? data.error : JSON.stringify(data.error)}</p>}
+                {data.description && <p className="text-[10px] text-slate-400 mt-1 truncate">📝 {data.description.substring(0, 60)}...</p>}
+            </div>
+        )
+    }
+
+    // ── Retry scheduled — show attempt + delay ──
+    if (inner === 'node:retry-scheduled') {
+        return (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+                <Badge variant="warning">🔄 Lần {data.attempt}/{data.maxRetries}</Badge>
+                {data.delayMs && <Badge>⏰ Chờ {Math.round(data.delayMs / 1000)}s</Badge>}
+                {data.error && <p className="text-[11px] text-amber-600 mt-1 truncate">{data.error}</p>}
             </div>
         )
     }

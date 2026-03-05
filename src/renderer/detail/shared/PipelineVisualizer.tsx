@@ -107,7 +107,7 @@ function NodeTooltip({ node, campaignId, onViewError }: { node: FlowNodeInfo; ca
                     </span>
                 </div>
                 <p className="text-[10px] text-slate-400 mb-2">{meta.desc}</p>
-                {stat.total > 0 && (
+                {stat.total > 1 && (
                     <div className="flex gap-3 text-[10px] border-t border-slate-100 pt-1.5 mt-1.5">
                         {stat.completed > 0 && <span className="text-emerald-600">✓ {stat.completed}</span>}
                         {stat.running > 0 && <span className="text-blue-600">▶ {stat.running}</span>}

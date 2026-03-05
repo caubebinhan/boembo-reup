@@ -38,7 +38,7 @@ export function setupAccountsIPC() {
     return account ? { id: account.id, username: account.username, handle: account.handle, status: 'active' } : null
   })
 
-  safeHandle('account:delete', async (_event, { id }: { id: string }) => {
+  safeHandle(IPC_CHANNELS.ACCOUNT_DELETE, async (_event, { id }: { id: string }) => {
     console.log(`[IPC] account:delete — ${id}`)
     PublishAccountService.deleteAccount(id)
     return true

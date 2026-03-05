@@ -1,6 +1,6 @@
 import { campaignRepo } from '@main/db/repositories/CampaignRepo'
 import { jobRepo } from '@main/db/repositories/JobRepo'
-import { PipelineEventBus } from '@core/engine/PipelineEventBus'
+import { ExecutionLogger } from '@core/engine/ExecutionLogger'
 import { flowEngine } from '@core/engine/FlowEngine'
 import { normalizeTimeRanges } from '@nodes/_shared/timeWindow'
 import { scheduleVideos } from '@shared/scheduling'
@@ -35,14 +35,12 @@ export function recover(campaignId: string): void {
           instance_id: 'scheduler_1',
           node_id: 'core.publish_scheduler',
           level: 'warn',
-          title: `? ${missedVideos.length} video b? missed - campaign ?a t?m d?ng`,
-          body: 'Ki?m tra l?i va resume campaign khi s?n sang.',
+          title: `⚠ ${missedVideos.length} video bị missed - campaign đã tạm dừng`,
+          body: 'Kiểm tra lại và resume campaign khi sẵn sàng.',
         })
 
-        PipelineEventBus.emit('pipeline:info', {
-          campaignId,
-          message: `[Manual] Paused campaign ${campaignId}: ${missedVideos.length} missed videos`,
-        })
+        ExecutionLogger.campaignEvent(campaignId, 'pipeline:info',
+          `[Manual] Paused campaign ${campaignId}: ${missedVideos.length} missed videos`)
 
         store.save()
         return // Don't reschedule or re-trigger
@@ -60,10 +58,8 @@ export function recover(campaignId: string): void {
       }
 
       console.log(`${tag} Rescheduled ${rescheduled.length} missed videos`)
-      PipelineEventBus.emit('pipeline:info', {
-        campaignId,
-        message: `Rescheduled ${rescheduled.length} missed videos for campaign ${campaignId}`,
-      })
+      ExecutionLogger.campaignEvent(campaignId, 'pipeline:info',
+        `Rescheduled ${rescheduled.length} missed videos for campaign ${campaignId}`)
 
       // Emit alert for the Alert Panel
       store.addAlert({

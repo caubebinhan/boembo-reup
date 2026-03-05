@@ -19,11 +19,12 @@ export class JobRepository extends BaseRepo<JobDocument> {
       status: 'status',
       campaign_id: 'campaign_id',
       scheduled_at: 'scheduled_at',
+      instance_id: 'instance_id',
     }
   }
 
   private get _cols() {
-    return 'data_json, status, campaign_id, scheduled_at'
+    return 'data_json, status, campaign_id, scheduled_at, instance_id'
   }
 
   // Create shorthand
@@ -72,13 +73,14 @@ export class JobRepository extends BaseRepo<JobDocument> {
   }
 
   // Status update
-  updateStatus(id: string, status: string, error?: string): void {
+  updateStatus(id: string, status: string, error?: string, scheduledAt?: number): void {
     const doc = this.findById(id)
     if (!doc) return
     const now = Date.now()
     doc.status = status as JobDocument['status']
     doc.updated_at = now
     if (error) doc.error_message = error
+    if (scheduledAt != null) doc.scheduled_at = scheduledAt
     if (status === 'running' && !doc.started_at) doc.started_at = now
     if (status === 'completed' || status === 'failed') doc.completed_at = now
     this.save(doc)

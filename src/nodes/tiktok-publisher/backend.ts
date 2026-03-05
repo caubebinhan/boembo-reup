@@ -109,29 +109,38 @@ export async function execute(input: any, ctx: NodeExecutionContext): Promise<No
   const duplicate = findDuplicatePublishHistory(account.id, sourcePlatformId, fileFingerprint)
   if (duplicate) {
     let matchedBy = 'unknown'
+    let matchedByLabel = 'trùng'
     if (duplicate.source_platform_id && sourcePlatformId && duplicate.source_platform_id === sourcePlatformId) {
       matchedBy = 'source_platform_id'
+      matchedByLabel = 'ID video gốc trùng'
     } else if (duplicate.file_fingerprint && fileFingerprint && duplicate.file_fingerprint === fileFingerprint) {
       matchedBy = 'file_fingerprint'
+      matchedByLabel = 'file video trùng'
     }
 
-    setVideoStatus(ctx, video.platform_id, 'duplicate', duplicate.published_url)
+    // If the duplicate was already published successfully (e.g. via retry), treat as 'published' not 'duplicate'
+    const isAlreadyPublished = duplicate.status === 'published' || duplicate.status === 'under_review'
+    const effectiveStatus = isAlreadyPublished ? 'published' : 'duplicate'
+    setVideoStatus(ctx, video.platform_id, effectiveStatus, duplicate.published_url)
 
-    const existingUrlSuffix = duplicate.published_url ? `. Existing URL: ${duplicate.published_url}` : ''
+
     ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:duplicate-detected', {
       videoId: video.platform_id, accountId: account.id, accountUsername: account.username,
       matchedBy, existingStatus: duplicate.status, existingVideoId: duplicate.published_video_id,
       existingVideoUrl: duplicate.published_url, sourcePlatformId, fileFingerprint, captionHash,
-      message: `Duplicate detected on @${account.username} (${matchedBy}).`,
+      message: `Video đã được đăng trước đó trên @${account.username} (${matchedByLabel}).`,
     })
     ExecutionLogger.emitNodeEvent(ctx.campaign_id, 'publisher_1', 'video:publish-status', {
-      videoId: video.platform_id, status: 'duplicate', videoUrl: duplicate.published_url,
+      videoId: video.platform_id, status: effectiveStatus, videoUrl: duplicate.published_url,
       accountUsername: account.username, matchedBy, duplicateStatus: duplicate.status,
-      message: `Duplicate on @${account.username} (${matchedBy})${existingUrlSuffix}`,
+      message: isAlreadyPublished
+        ? `Video đã đăng thành công trên @${account.username}${duplicate.published_url ? `: ${duplicate.published_url}` : ''}`
+        : `Video đã tồn tại trên @${account.username} (${matchedByLabel})${duplicate.published_url ? `: ${duplicate.published_url}` : ''}`,
     })
 
-    const existingSuffix = duplicate.published_url ? `, existing: ${duplicate.published_url}` : ''
-    const msg = `Duplicate detected on @${account.username} (${matchedBy}) — skipping upload${existingSuffix}`
+    const msg = isAlreadyPublished
+      ? `Already published on @${account.username} — skipping (${matchedByLabel})`
+      : `Duplicate detected on @${account.username} (${matchedByLabel}) — skipping upload`
     ctx.logger.info(msg)
     return { action: 'continue', data: null, message: msg }
   }
