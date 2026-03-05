@@ -13,6 +13,7 @@ import { EditorTimeline } from './EditorTimeline'
 import { KonvaCanvasSurface } from './KonvaCanvasSurface'
 import { EditorTracePanel } from './EditorTracePanel'
 import { V } from './types'
+import { resolveTimelineCropSpace } from './canvas-contracts'
 
 export default function VideoEditorWindow(): ReactElement {
     const state = useEditorState()
@@ -85,6 +86,18 @@ export default function VideoEditorWindow(): ReactElement {
 
     const displaySrc = state.previewSrc || state.videoSrc
     const timelineDuration = displaySrc ? videoDuration : 30
+    const timelineCropSpace = resolveTimelineCropSpace(
+        state.operations,
+        videoDims.w > 0 && videoDims.h > 0 ? (videoDims.w / videoDims.h) : null,
+    )
+    const hasTimelineCrop = Boolean(
+        timelineCropSpace
+        && (timelineCropSpace.x > 0.01 || timelineCropSpace.y > 0.01 || timelineCropSpace.w < 99.99 || timelineCropSpace.h < 99.99),
+    )
+    const cropScaleX = hasTimelineCrop ? (100 / Math.max(1, Number(timelineCropSpace!.w))) : 1
+    const cropScaleY = hasTimelineCrop ? (100 / Math.max(1, Number(timelineCropSpace!.h))) : 1
+    const cropOffsetX = hasTimelineCrop ? Number(timelineCropSpace!.x) : 0
+    const cropOffsetY = hasTimelineCrop ? Number(timelineCropSpace!.y) : 0
 
     return (
         <div className="video-editor-shell flex flex-col h-screen w-screen overflow-hidden"
@@ -182,7 +195,14 @@ export default function VideoEditorWindow(): ReactElement {
                                     src={displaySrc}
                                     controls
                                     className="absolute inset-0 w-full h-full"
-                                    style={{ objectFit: 'contain', display: 'block' }}
+                                    style={{
+                                        objectFit: 'fill',
+                                        display: 'block',
+                                        transformOrigin: 'top left',
+                                        transform: hasTimelineCrop
+                                            ? `scale(${cropScaleX}, ${cropScaleY}) translate(${-cropOffsetX}%, ${-cropOffsetY}%)`
+                                            : undefined,
+                                    }}
                                 />
                                 <div className="absolute left-3 top-3 z-10 px-2 py-1 rounded-lg text-[10px] font-semibold"
                                     style={{ background: '#0b1220d9', color: '#dbeafe', border: '1px solid #334155' }}>

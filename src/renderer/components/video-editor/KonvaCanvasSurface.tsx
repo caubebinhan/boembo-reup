@@ -186,9 +186,7 @@ export function KonvaCanvasSurface({
     () => (guideEntry ? [...overlayEntries, guideEntry] : overlayEntries),
     [overlayEntries, guideEntry],
   )
-  const useCropViewport = Boolean(
-    timelineCropPx && !(guideEntry && guideEntry.hint === 'crop-guide'),
-  )
+  const useCropViewport = Boolean(timelineCropPx)
   const viewport = useMemo<PixelRect>(() => {
     if (!useCropViewport || !timelineCropPx) return { x: 0, y: 0, w: vw, h: vh }
     return {

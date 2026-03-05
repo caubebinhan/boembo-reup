@@ -1,9 +1,10 @@
-import { useEffect, useState, useMemo, useRef, useLayoutEffect, useCallback } from 'react'
+import { useEffect, useState, useMemo, useLayoutEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../../store/store'
 import { updateNodeProgress } from '../../store/nodeEventsSlice'
 import { getErrorResolution, extractErrorCodeFromMessage } from '@core/troubleshooting/errorResolution'
 import { NodeErrorModal } from '../../components/detail/NodeErrorModal'
+import { PipelineVisualizerKonva } from './PipelineVisualizerKonva'
 
 interface PipelineVisualizerProps {
     readonly campaignId: string
@@ -416,15 +417,18 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId, vertical }: { e
                     const slot = usedBackwardSlots.get(edge.from) || 0
                     usedBackwardSlots.set(edge.from, slot + 1)
                     const laneX = Math.max(x1, x2) + 38 + slot * 24
-                    const midY = (y1 + y2) / 2
-                    d = `M ${x1} ${y1} C ${x1} ${y1 + 24}, ${laneX} ${y1 + 24}, ${laneX} ${midY} C ${laneX} ${y2 - 24}, ${x2} ${y2 - 24}, ${x2} ${y2}`
+                    const topY = y1 + 18
+                    const bottomY = y2 - 18
+                    d = `M ${x1} ${y1} L ${x1} ${topY} L ${laneX} ${topY} L ${laneX} ${bottomY} L ${x2} ${bottomY} L ${x2} ${y2}`
                     labelX = laneX + 10
-                    labelY = midY
+                    labelY = (topY + bottomY) / 2
                 } else {
-                    const cp = Math.max(48, Math.min(150, Math.abs(y2 - y1) * 0.45))
-                    d = `M ${x1} ${y1} C ${x1 + branchOffset} ${y1 + cp}, ${x2 + branchOffset} ${y2 - cp}, ${x2} ${y2}`
-                    labelX = x1 + ((x2 - x1) / 2) + branchOffset
-                    labelY = y1 + ((y2 - y1) / 2)
+                    const laneX = x1 + branchOffset
+                    const topY = y1 + 18
+                    const bottomY = y2 - 18
+                    d = `M ${x1} ${y1} L ${x1} ${topY} L ${laneX} ${topY} L ${laneX} ${bottomY} L ${x2} ${bottomY} L ${x2} ${y2}`
+                    labelX = laneX + 8
+                    labelY = (topY + bottomY) / 2
                 }
             } else {
                 const isBackward = x2 <= x1 + 8
@@ -432,14 +436,18 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId, vertical }: { e
                     const slot = usedBackwardSlots.get(edge.from) || 0
                     usedBackwardSlots.set(edge.from, slot + 1)
                     const laneY = Math.max(y1, y2) + 34 + slot * 22
-                    d = `M ${x1} ${y1} C ${x1 + 24} ${y1}, ${x1 + 24} ${laneY}, ${x1 + 52} ${laneY} L ${x2 - 52} ${laneY} C ${x2 - 24} ${laneY}, ${x2 - 24} ${y2}, ${x2} ${y2}`
+                    const rightX = x1 + 18
+                    const leftX = x2 - 18
+                    d = `M ${x1} ${y1} L ${rightX} ${y1} L ${rightX} ${laneY} L ${leftX} ${laneY} L ${leftX} ${y2} L ${x2} ${y2}`
                     labelX = x1 + ((x2 - x1) / 2)
                     labelY = laneY - 10
                 } else {
-                    const cp = Math.max(56, Math.min(180, Math.abs(x2 - x1) * 0.45))
-                    d = `M ${x1} ${y1} C ${x1 + cp} ${y1 + branchOffset}, ${x2 - cp} ${y2 + branchOffset}, ${x2} ${y2}`
+                    const laneY = ((y1 + y2) / 2) + branchOffset
+                    const rightX = x1 + 18
+                    const leftX = x2 - 18
+                    d = `M ${x1} ${y1} L ${rightX} ${y1} L ${rightX} ${laneY} L ${leftX} ${laneY} L ${leftX} ${y2} L ${x2} ${y2}`
                     labelX = x1 + ((x2 - x1) / 2)
-                    labelY = y1 + ((y2 - y1) / 2) + branchOffset - 12
+                    labelY = laneY - 12
                 }
             }
 
@@ -541,6 +549,9 @@ function SvgOverlay({ edges, flowData, containerRef, campaignId, vertical }: { e
         </svg>
     )
 }
+
+void LoopBlock
+void SvgOverlay
 
 // ── Inspect Panel (light theme) ───────────────
 function InspectPanel({ node, campaignId, onClose, campaignParams, onParamsUpdate }: {
@@ -713,65 +724,7 @@ export function PipelineVisualizer({ campaignId, workflowId, vertical = false }:
     const [selectedNode, setSelectedNode] = useState<FlowNodeInfo | null>(null)
     const [campaignParams, setCampaignParams] = useState<any>({})
     const [errorModalNode, setErrorModalNode] = useState<FlowNodeInfo | null>(null)
-    const containerRef = useRef<HTMLDivElement>(null)
-    const scrollRef = useRef<HTMLDivElement>(null)
     const dispatch = useDispatch()
-
-    // ── Drag-to-Pan ──────────────────────────────
-    const isPanning = useRef(false)
-    const spacePressed = useRef(false)
-    const panStart = useRef({ x: 0, y: 0, scrollX: 0, scrollY: 0 })
-
-    const onPanDown = useCallback((e: React.MouseEvent) => {
-        if (e.button !== 0 && e.button !== 1) return
-        const target = e.target as HTMLElement
-        const isInteractive = Boolean(target.closest('button,input,textarea,select,a,[data-no-pan="true"]'))
-        const onNodeCard = Boolean(target.closest('[data-vis-node-card="true"]'))
-        const usingPanModifier = e.button === 1 || (e.button === 0 && spacePressed.current)
-        if (!usingPanModifier && (isInteractive || onNodeCard)) return
-
-        isPanning.current = true
-        panStart.current = { x: e.clientX, y: e.clientY, scrollX: scrollRef.current?.scrollLeft || 0, scrollY: scrollRef.current?.scrollTop || 0 }
-        if (scrollRef.current) scrollRef.current.style.cursor = 'grabbing'
-        e.preventDefault()
-    }, [])
-
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            if (e.code !== 'Space') return
-            const tag = (e.target as HTMLElement | null)?.tagName
-            if (tag && ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
-            spacePressed.current = true
-            e.preventDefault()
-        }
-        const onKeyUp = (e: KeyboardEvent) => {
-            if (e.code !== 'Space') return
-            spacePressed.current = false
-        }
-        window.addEventListener('keydown', onKeyDown, { passive: false })
-        window.addEventListener('keyup', onKeyUp)
-        return () => {
-            window.removeEventListener('keydown', onKeyDown)
-            window.removeEventListener('keyup', onKeyUp)
-        }
-    }, [])
-
-    useEffect(() => {
-        const onMove = (e: MouseEvent) => {
-            if (!isPanning.current || !scrollRef.current) return
-            const dx = e.clientX - panStart.current.x
-            const dy = e.clientY - panStart.current.y
-            scrollRef.current.scrollLeft = panStart.current.scrollX - dx
-            scrollRef.current.scrollTop = panStart.current.scrollY - dy
-        }
-        const onUp = () => {
-            isPanning.current = false
-            if (scrollRef.current) scrollRef.current.style.cursor = 'grab'
-        }
-        window.addEventListener('mousemove', onMove)
-        window.addEventListener('mouseup', onUp)
-        return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
-    }, [])
 
     useEffect(() => {
         // @ts-ignore
@@ -841,60 +794,18 @@ export function PipelineVisualizer({ campaignId, workflowId, vertical = false }:
     if (!flowData) return <div className="p-6 flex text-slate-400">Đang tải pipeline...</div>
 
     return (
-        <div className="flex bg-slate-50 rounded-xl border border-slate-200 overflow-hidden relative" style={{ minHeight: vertical ? '200px' : '280px' }}>
-            <div ref={scrollRef}
-                className={`flex-1 p-6 relative ${vertical ? 'overflow-y-auto overflow-x-hidden' : 'overflow-x-auto overflow-y-auto'}`}
-                style={{ cursor: 'grab' }}
-                onMouseDown={onPanDown}>
-                <style>{`
-                    @keyframes dash {
-                        to { stroke-dashoffset: -10; }
-                    }
-                    @keyframes loop-dash {
-                        from { stroke-dashoffset: 700; }
-                        to { stroke-dashoffset: 0; }
-                    }
-                `}</style>
-
-                <div ref={containerRef}
-                className={vertical
-                    ? 'flex flex-col gap-8 relative w-full'
-                    : 'flex items-center gap-16 relative min-w-max h-full'
-                }
-                >
-                    <SvgOverlay edges={flowData.edges} flowData={flowData} containerRef={containerRef} campaignId={campaignId} vertical={vertical} />
-
-                    {layers.map((layer, l_idx) => {
-                        const firstNodeId = layer[0]?.instance_id ?? `layer-${l_idx}`
-                        return (<div key={firstNodeId} className={vertical
-                            ? 'flex flex-row flex-wrap gap-4 relative z-10 justify-center'
-                            : 'flex flex-col gap-8 relative z-10'
-                        }>
-                            {layer.map(node => {
-                                const isLoop = node.children && node.children.length > 0
-                                const childrenNodes = isLoop
-                                    ? node.children!.map(cid => allChildren.find(n => n.instance_id === cid)).filter(Boolean) as FlowNodeInfo[]
-                                    : []
-
-                                return isLoop ? (
-                                    <LoopBlock
-                                        key={node.instance_id}
-                                        node={node} childNodes={childrenNodes} campaignId={campaignId}
-                                        selectedId={selectedNode?.instance_id || null} onSelect={setSelectedNode} campaignParams={campaignParams}
-                                        onViewError={setErrorModalNode}
-                                    />
-                                ) : (
-                                    <NodeCard
-                                        key={node.instance_id}
-                                        node={node} campaignId={campaignId}
-                                        isSelected={selectedNode?.instance_id === node.instance_id} onSelect={setSelectedNode} campaignParams={campaignParams}
-                                        onViewError={setErrorModalNode}
-                                    />
-                                )
-                            })}
-                        </div>)
-                    })}
-                </div>
+        <div className="flex bg-slate-50 rounded-xl border border-slate-200 overflow-hidden relative" style={{ minHeight: vertical ? '260px' : '360px' }}>
+            <div className="flex-1 p-3 relative">
+                <PipelineVisualizerKonva
+                    campaignId={campaignId}
+                    flowData={flowData}
+                    layers={layers}
+                    allChildren={allChildren}
+                    selectedNodeId={selectedNode?.instance_id || null}
+                    vertical={vertical}
+                    onSelectNode={setSelectedNode}
+                    onRequestErrorNode={setErrorModalNode}
+                />
             </div>
 
             {selectedNode && <InspectPanel node={selectedNode} campaignId={campaignId} onClose={() => setSelectedNode(null)} campaignParams={campaignParams} onParamsUpdate={(p) => setCampaignParams(p)} />}
