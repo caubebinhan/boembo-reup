@@ -347,15 +347,14 @@ export class FlowEngine {
     const pendingCount = jobRepo.countPendingForCampaign(campaignId)
     if (pendingCount > 0) return // Jobs already queued, engine will pick them up
 
-    // Check if we were mid-loop (paused inside executeLoop)
+    // Resume: check for any saved checkpoint — engine doesn't know node type,
+    // it just creates a job for the last active node. The node handles its own resume.
     const doc = store.doc as any
-    const loopData = doc._loopData
-    const loopInstanceId = doc._loopInstanceId
-    const loopNodeId = doc._loopNodeId || 'core.loop'
-    if (loopData && loopInstanceId) {
-      ExecutionLogger.campaignEvent(campaignId, 'campaign:loop-resumed',
-        `Resuming loop from item ${store.lastProcessedIndex + 1}`)
-      this.createJob(campaignId, store.doc.workflow_id, loopInstanceId, loopNodeId, loopData)
+    const lastNode = doc._lastActiveNode as { instanceId: string; nodeId: string; workflowId: string } | undefined
+    if (lastNode?.instanceId && lastNode?.nodeId) {
+      ExecutionLogger.campaignEvent(campaignId, 'campaign:node-resumed',
+        `Resuming from node ${lastNode.instanceId}`)
+      this.createJob(campaignId, lastNode.workflowId || store.doc.workflow_id, lastNode.instanceId, lastNode.nodeId, {})
       return
     }
 
@@ -462,6 +461,15 @@ export class FlowEngine {
       const startTime = Date.now()
       ExecutionLogger.nodeStart(job.campaign_id, job.id, nodeDef.instance_id, nodeDef.node_id, {})
 
+      // Save checkpoint so resume knows which node was active (non-loop case)
+      const storeDoc = store.doc as any
+      storeDoc._lastActiveNode = {
+        instanceId: nodeDef.instance_id,
+        nodeId: nodeDef.node_id,
+        workflowId: job.workflow_id,
+      }
+      store.save()
+
       const ctx = buildNodeContext(job, nodeDef, params, store)
       const result = await executeWithTimeout(NodeImpl, job.data, ctx, nodeDef, job)
       const durationMs = Date.now() - startTime
@@ -474,6 +482,9 @@ export class FlowEngine {
       if (result.action === 'finish') {
         jobRepo.updateStatus(job.id, 'completed')
         store.status = 'finished'
+        // Clear checkpoints — campaign is done
+        delete (store.doc as any)._lastActiveNode
+        delete (store.doc as any)._nodeState
         store.save()
         ExecutionLogger.campaignEvent(job.campaign_id, 'campaign:finished', result.message || 'Campaign finished')
         // Workflow lifecycle: onFinished hook
@@ -646,7 +657,24 @@ export class FlowEngine {
     params: Record<string, any>,
     store: CampaignStore
   ) {
-    const items = Array.isArray(inputData) ? inputData : [inputData]
+    // Self-recovery: save items to store so resume can re-enter this loop
+    // without the engine needing to know loop internals
+    const storeDoc = store.doc as any
+    if (!storeDoc._nodeState) storeDoc._nodeState = {}
+
+    // On resume, inputData may be empty — read saved items from store
+    let items: any[]
+    if (Array.isArray(inputData) && inputData.length > 0) {
+      items = inputData
+      // Save items for future resume
+      storeDoc._nodeState[loopDef.instance_id] = { items }
+      store.save()
+    } else if (storeDoc._nodeState[loopDef.instance_id]?.items) {
+      items = storeDoc._nodeState[loopDef.instance_id].items
+    } else {
+      items = Array.isArray(inputData) ? inputData : [inputData]
+    }
+
     const children = loopDef.children || []
     const startIndex = store.lastProcessedIndex
 
@@ -665,10 +693,8 @@ export class FlowEngine {
       if (!isCampaignActive(job.campaign_id)) {
         // Save loop state so resume can re-create this job
         try {
-          const doc = store.doc as any
-          doc._loopData = items
-          doc._loopInstanceId = loopDef.instance_id
-          doc._loopNodeId = loopDef.node_id
+          // Save lastProcessedIndex for resume — loop handles its own state
+          store.lastProcessedIndex = i
           store.save()
           // Save pause checkpoint via RuntimeProjectionService
           const entityKey = items[i]?.entityKey != null ? String(items[i].entityKey)
@@ -820,12 +846,9 @@ export class FlowEngine {
                 })
               }
               if (handler.action === 'pause_campaign') {
-                // Save loop state for resume (same as manual pause)
+                // Loop handles its own state via _nodeState — just save index
                 try {
-                  const doc = store.doc as any
-                  doc._loopData = items
-                  doc._loopInstanceId = loopDef.instance_id
-                  doc._loopNodeId = loopDef.node_id
+                  store.lastProcessedIndex = i
                 } catch { /* best-effort */ }
                 this.savePauseCheckpoint(job.campaign_id, {
                   itemIndex: i, entityKey, lastActiveChild: childDef.instance_id,
@@ -883,10 +906,7 @@ export class FlowEngine {
             if (handleNetworkError(err.message, job.campaign_id, childDef.instance_id, store)) {
               // Save loop state for resume (same as manual pause)
               try {
-                const doc = store.doc as any
-                doc._loopData = items
-                doc._loopInstanceId = loopDef.instance_id
-                doc._loopNodeId = loopDef.node_id
+                store.lastProcessedIndex = i
                 store.save()
               } catch { /* best-effort */ }
               this.savePauseCheckpoint(job.campaign_id, {
@@ -900,10 +920,7 @@ export class FlowEngine {
             if (handleDiskError(err.message, job.campaign_id, childDef.instance_id, store)) {
               // Save loop state for resume (same as manual pause)
               try {
-                const doc = store.doc as any
-                doc._loopData = items
-                doc._loopInstanceId = loopDef.instance_id
-                doc._loopNodeId = loopDef.node_id
+                store.lastProcessedIndex = i
                 store.save()
               } catch { /* best-effort */ }
               this.savePauseCheckpoint(job.campaign_id, {

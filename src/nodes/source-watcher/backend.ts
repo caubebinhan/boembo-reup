@@ -1,6 +1,7 @@
 import { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
 import { TikTokScanner, ScanOptions } from '@main/tiktok/TikTokScanner'
 import { ExecutionLogger } from '@core/engine/ExecutionLogger'
+import { campaignRepo } from '@main/db/repositories/CampaignRepo'
 
 /**
  * Monitoring Node
@@ -21,7 +22,6 @@ export async function execute(_input: any, ctx: NodeExecutionContext): Promise<N
     await new Promise((resolve) => setTimeout(resolve, waitMs))
 
     // Check campaign status from store (re-read fresh)
-    const { campaignRepo } = require('../../main/db/repositories/CampaignRepo')
     const freshStore = campaignRepo.tryOpen(ctx.campaign_id)
     if (!freshStore || !['active', 'running'].includes(freshStore.status)) {
       ctx.logger.info(`[Monitor] Campaign status=${freshStore?.status} - stopping monitor`)
