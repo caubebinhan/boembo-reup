@@ -33,6 +33,7 @@
     "@sentry/electron": "^7.8.0",
     "@sentry/react": "^10.39.0",
     "@tobyg74/tiktok-api-dl": "^1.3.7",
+    "@xyflow/react": "^12.10.1",
     "better-sqlite3": "^12.6.2",
     "date-fns": "^4.1.0",
     "electron-fetch": "^1.9.1",

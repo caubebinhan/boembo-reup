@@ -89,6 +89,9 @@ function normalizeVideoListInPlace(videos: VideoRecord[]): VideoRecord[] {
  * No WHERE clauses - videos/alerts/counters live inside the document.
  */
 export class CampaignStore {
+  /** Track which videos were explicitly modified in-memory so we don't overwrite external updates */
+  private _dirtyVideoIds = new Set<string>()
+
   constructor(
     public doc: CampaignDocument,
     private repo: CampaignRepository
@@ -162,6 +165,10 @@ export class CampaignStore {
     const video = this.findItem(platformId)
     if (!video) return
     Object.assign(video, patch)
+    // Track this video as locally modified so save() won't overwrite it
+    if (patch.status !== undefined || patch.publish_url !== undefined) {
+      this._dirtyVideoIds.add(platformId)
+    }
     normalizeVideoRecordInPlace(video)
   }
 
@@ -254,7 +261,7 @@ export class CampaignStore {
     return this.doc.workflow_version
   }
 
-  // ���� Persist ������������������������������������������������������������������
+  // ── Persist ──────────────────────────────────────────────
   save(): void {
     // Guard: if campaign was deleted while we held a reference, skip write
     // Prevents race condition where a running job re-creates a deleted campaign
@@ -262,14 +269,48 @@ export class CampaignStore {
       console.warn(`[CampaignStore] Campaign ${this.doc.id} no longer exists — skipping save`)
       return
     }
+    // Merge video status/publish_url from DB for videos we didn't touch,
+    // preventing lost updates from concurrent writers (e.g. PublishVerifyHandler)
+    this.mergeExternalVideoUpdates()
     normalizeVideoListInPlace(this.doc.videos)
     this.recomputeCounters()
     this.doc.updated_at = Date.now()
     this.repo.save(this.doc)
+    this._dirtyVideoIds.clear()
+  }
+
+  /**
+   * Read-merge-write: re-read DB document and preserve status/publish_url
+   * changes made by concurrent writers for videos we didn't modify locally.
+   *
+   * Fixes race condition where FlowEngine holds a long-lived store and
+   * its save() overwrites async verifier status updates.
+   */
+  private mergeExternalVideoUpdates(): void {
+    if (this.doc.videos.length === 0) return
+    const fresh = this.repo.findById(this.doc.id)
+    if (!fresh?.videos || fresh.videos.length === 0) return
+    const freshMap = new Map<string, VideoRecord>()
+    for (const v of fresh.videos) {
+      if (v.platform_id) freshMap.set(v.platform_id, v)
+    }
+    for (const video of this.doc.videos) {
+      // Skip videos we explicitly modified in this session
+      if (this._dirtyVideoIds.has(video.platform_id)) continue
+      const dbVideo = freshMap.get(video.platform_id)
+      if (!dbVideo) continue
+      // Preserve DB's status and publish_url if they differ (external writer updated it)
+      if (dbVideo.status !== video.status) {
+        video.status = dbVideo.status
+      }
+      if (dbVideo.publish_url && dbVideo.publish_url !== video.publish_url) {
+        video.publish_url = dbVideo.publish_url
+      }
+    }
   }
 }
 
-// ���� CampaignRepository ����������������������������������������������������
+//  CampaignRepository 
 export class CampaignRepository extends BaseRepo<CampaignDocument> {
   constructor() {
     super('campaigns')

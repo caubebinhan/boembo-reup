@@ -1,281 +1,584 @@
-﻿# Workflow Lifecycle Spec
+# Project Spec - Folder, YAML, Node, Workflow
 
-Version: 2026-03-05
-Scope: tiktok-repost workflow, Konva-based video editor integration, runtime message contract
+Version: 2026-03-06
+Audience: Dev moi, chua biet gi ve du an.
 
-## 1. Purpose
-This spec defines:
-1. Full lifecycle from Wizard -> campaign run -> finish/recovery.
-2. Expected runtime messages/events and where they must appear in UI.
-3. Edge-case behavior for Campaign Card, Campaign Detail, Pipeline Visualizer, and Wizard.
-4. Concurrency guardrails (per-campaign pipeline lock, per-video processing lock).
-5. Error handling patterns (`failGracefully` / `failBatchGracefully`).
+## 0) Doc nhanh (1 phut)
 
----
-
-## 2. System Components
-
-### 2.1 Wizard (Campaign Creation)
-- `src/renderer/components/CampaignWizard.tsx`
-- `src/workflows/tiktok-repost/v1.0/wizard.ts`
-- `src/renderer/components/wizard/WizardDetails.tsx`
-- `src/renderer/components/wizard/WizardVideoEdit.tsx`
-
-### 2.2 Runtime Engine
-- `src/core/engine/FlowEngine.ts` — Job poller, loop executor, retry/edge logic
-- `src/core/engine/ExecutionLogger.ts` — Centralized logging (console + SQLite + IPC)
-- `src/core/engine/VideoProcessingLock.ts` — Per-video + per-campaign locks
-- `src/core/nodes/NodeHelpers.ts` — `failGracefully`, `failBatchGracefully`, error classifiers
-- `src/core/errors/CodedError.ts` — `DG-xxx` error code system
-
-### 2.3 Async Task System
-- `src/main/services/AsyncTaskScheduler.ts` — Background task poller (30s tick)
-- `src/core/async-tasks/AsyncTaskRegistry.ts` — Handler registration
-- `src/main/db/repositories/AsyncTaskRepo.ts` — DB operations + lease management
-
-### 2.4 Workflow Pipeline
-- `src/workflows/tiktok-repost/v1.0/flow.yaml` — DAG definition
-- `src/workflows/tiktok-repost/v1.0/events.ts` — Desktop notification handlers
-
-### 2.5 Node Backends
-| Instance ID | Node ID | File | Purpose |
-|------------|---------|------|---------|
-| `start_gate` | `core.check_in_time` | `nodes/check-in-time/backend.ts` | Wait for campaign start time |
-| `scanner_1` | `tiktok.scanner` | `nodes/tiktok-scanner/backend.ts` | Scan TikTok sources for videos |
-| `scheduler_1` | `core.video_scheduler` | `nodes/video-scheduler/backend.ts` | Compute schedule timestamps |
-| `check_time_1` | `core.check_in_time` | `nodes/check-in-time/backend.ts` | Per-video time gate |
-| `dedup_1` | `tiktok.account_dedup` | `nodes/tiktok-account-dedup/backend.ts` | Duplicate detection |
-| `downloader_1` | `core.video_downloader` | `nodes/video-downloader/backend.ts` | Download video file |
-| `video_edit_1` | `core.video_edit` | `nodes/video-edit/backend.ts` | FFmpeg pipeline edits |
-| `caption_1` | `core.caption_generator` | `nodes/caption-generator/backend.ts` | Caption templating |
-| `account_dedup_1` | `tiktok.account_dedup` | `nodes/tiktok-account-dedup/backend.ts` | Account-level dedup |
-| `publisher_1` | `tiktok.publisher` | `nodes/tiktok-publisher/backend.ts` | Publish to TikTok |
-| `monitor_1` | `tiktok.monitoring` | `nodes/monitoring/backend.ts` | Post-publish monitoring |
-| `finish_1` | `core.campaign_finish` | `nodes/campaign-finish/backend.ts` | Campaign completion |
-| `timeout_*` | `core.timeout` | `nodes/timeout/backend.ts` | Interval delay |
-| `cond_*` | `core.condition` | `nodes/condition/backend.ts` | Branch condition |
-| `js_runner_*` | `core.js_runner` | `nodes/js-runner/backend.ts` | Custom JS execution |
-
-### 2.6 UI Runtime Surfaces
-- Campaign Card: `src/workflows/tiktok-repost/v1.0/card.tsx`
-- Campaign Detail: `src/workflows/tiktok-repost/v1.0/detail.tsx`
-- Visualizer: `src/renderer/detail/shared/PipelineVisualizer.tsx`
-- Video History: `src/renderer/components/detail/VideoHistory.tsx`
+Neu ban can lam viec ngay, doc theo thu tu:
+1. Muc 2: Cau truc thu muc
+2. Muc 3: Cach viet `flow.yaml`
+3. Muc 4: Cach lam node moi
+4. Muc 5: Cach lam workflow moi
 
 ---
 
-## 3. End-to-End Lifecycle
+## 1) Du an nay la gi?
 
-### 3.1 Wizard Lifecycle
-1. User opens wizard from Campaign List.
-2. Workflow-specific steps for `tiktok-repost`:
-   `details` → `sources` → `video-edit` → `schedule` → `target`
-3. Video Edit step opens standalone editor window via `video-editor:open`.
-4. On save: `campaign:create` → campaign doc with status `idle`.
+Boembo la desktop app (Electron + React + TypeScript) chay workflow pipeline cho video.
 
-### 3.2 Campaign Trigger
-1. `campaign:trigger` → FlowEngine pre-run health check (disk space, service endpoints).
-2. Fail → status `error` + `campaign:healthcheck-failed` event.
-3. Pass → status `active` + `campaign:triggered` + jobs for start nodes.
+Khung nghiep vu:
+- Workflow = graph node + edge (dinh nghia trong `flow.yaml`)
+- Campaign = 1 lan chay workflow voi params cu the
+- Job = 1 lan execute 1 node
+- Node = 1 buoc xu ly (scan, download, edit, publish...)
 
-### 3.3 Pipeline Execution (flow.yaml)
-```
-start_gate → scanner_1 → scheduler_1 → video_loop
-  video_loop children (per video):
-    check_time_1 → dedup_1 → downloader_1 → video_edit_1
-    → caption_1 → account_dedup_1 → publisher_1 → timeout_1
-  loop done → cond_mode_check_1 → (monitor_1 or finish_1)
+Campaign khi tao se luu `flow_snapshot`, nen campaign cu khong bi anh huong boi thay doi `flow.yaml` moi.
+
+---
+
+## 2) Cau truc thu muc (ro rang de tim file)
+
+## 2.1 Root
+
+```text
+C:/boembo2/
+  src/
+    core/
+    main/
+    preload/
+    renderer/
+    nodes/
+    workflows/
+    shared/
+  tests/
+    unit/
+    e2e/
+    debug/
+  docs/
+  scripts/
+  SPEC.md
+  README.md
+  package.json
 ```
 
-### 3.4 Pause / Resume / Finish
-- **Pause**: `campaign:pause` → status `paused`. Does NOT force-release locks — running job exits naturally via `isCampaignActive()` check.
-- **Resume**: Health check → status `active`. Resumes from `_loopData` state if mid-loop, else re-triggers.
-- **Finish**: `campaign-finish` node → status `finished` + `campaign:finished` event.
+## 2.2 `src/` theo layer
+
+```text
+src/
+  core/        # Engine + contracts + logic dung chung
+  main/        # Electron main process (DB, IPC, services, integrations)
+  preload/     # Bridge window.api cho renderer
+  renderer/    # React UI
+  nodes/       # Node implementations (manifest + execute)
+  workflows/   # Workflow packages versioned
+  shared/      # Shared constants/types (vd: IPC channels)
+```
+
+Rule import quan trong:
+- Renderer KHONG import truc tiep main, chi qua IPC.
+- Core giu vai tro contract/engine chung.
+- Main la noi glue core + DB + external systems.
+
+## 2.3 Entry points quan trong
+
+- Main boot: `src/main/index.ts`
+- Renderer root: `src/renderer/App.tsx`
+- IPC bridge: `src/preload/index.ts`
+- Engine: `src/core/engine/FlowEngine.ts`
+
+## 2.4 Thu muc `nodes/` (node da co)
+
+```text
+src/nodes/
+  campaign-finish/      -> id: core.campaign_finish
+  caption-generator/    -> id: core.caption_gen
+  condition/            -> id: core.condition
+  file-source/          -> id: core.file_source
+  item-limit/           -> id: core.item_limit
+  join/                 -> id: core.join (from src/core/nodes/JoinNode.ts)
+  js-runner/            -> id: core.js_runner
+  media-downloader/     -> id: core.media_downloader
+  parallel/             -> id: core.parallel (from src/core/nodes/ParallelNode.ts)
+  publish-scheduler/    -> id: core.publish_scheduler
+  quality-gate/         -> id: core.quality_gate
+  skip-processed/       -> id: core.skip_processed
+  source-watcher/       -> id: core.source_watcher
+  tiktok-account-dedup/ -> id: tiktok.account_dedup
+  tiktok-publisher/     -> id: tiktok.publisher
+  tiktok-scanner/       -> id: tiktok.scanner
+  time-gate/            -> id: core.time_gate
+  timeout/              -> id: core.timeout
+  video-edit/           -> id: core.video_edit
+```
+
+Auto discovery node:
+- File: `src/nodes/index.ts`
+- Rule: scan `src/nodes/**/index.ts`, lay `default export` la `NodeDefinition`, register vao `nodeRegistry`.
+
+## 2.5 Thu muc `workflows/`
+
+```text
+src/workflows/
+  index.ts                # Auto-discovery workflow modules
+  tiktok-repost/
+    v1.0/
+      flow.yaml
+      wizard.ts
+      recovery.ts
+      ipc.ts
+      services.ts
+      events.ts
+      lifecycle.ts
+      card.tsx
+      detail.tsx
+      troubleshooting/
+  upload-local/
+    v1.0/
+      flow.yaml
+      wizard.tsx
+      recovery.ts
+      detail.tsx
+      troubleshooting/
+```
+
+Auto discovery workflow (file `src/workflows/index.ts`):
+- `./*/v*/recovery.ts`
+- `./*/v*/ipc.ts`
+- `./*/v*/services.ts`
+- `./*/v*/events.ts`
+- `./*/v*/lifecycle.ts`
+
+Wizard auto discovery:
+- File: `src/renderer/wizard/workflowWizardRegistry.ts`
+- Pattern: `../../workflows/*/v*/wizard.{ts,tsx}`
 
 ---
 
-## 4. Concurrency & Lock Architecture
+## 3) Cach viet `flow.yaml` (chi tiet)
 
-### 4.1 CampaignPipelineLock (per-campaign)
-- Only ONE job executes at a time per campaign.
-- Stale timeout: 30 minutes.
-- Acquired at `executeJob()` entry, released in `finally` block.
-- If busy: job returns to `pending` for next tick.
+## 3.1 Top-level schema
 
-### 4.2 VideoProcessingLock (per-video)
-- Only ONE pipeline step per video at any time.
-- Stale timeout: 10 minutes.
-- Acquired per-video in loop iteration, released in `finally` block.
-- Lock-rejected: `continue` without advancing `lastProcessedIndex` → retried next run.
-- On campaign pause/finish/error: `releaseAllForCampaign()`.
+`flow.yaml` parse boi `FlowLoader` (`src/core/flow/FlowLoader.ts`).
 
-### 4.3 AsyncTask Lease System
-- DB-based lease (`claimDue` + `extendLease`).
-- Crash recovery: `reclaimExpiredLeases()` on startup + every tick.
-- Exponential backoff on retryable fails (30s × 2^attempt, max 5min).
-- Auto-prune completed tasks older than 7 days.
+Field bat buoc:
+- `id`
+- `name`
+- `nodes`
+- `edges`
 
----
+Field thuong dung:
+- `description`
+- `icon`
+- `color`
+- `version`
+- `health_checks` (list endpoint monitor)
+- `ui` (optional descriptor cho renderer)
 
-## 5. Error Handling Patterns
+## 3.2 Schema `nodes[]`
 
-### 5.1 `failGracefully(ctx, instanceId, platformId, errorType, message, opts?)`
-Used for **recoverable per-video errors** (download fail, publish fail, dedup skip).
-- Updates video status to `opts.statusOverride || 'failed'`.
-- Emits `node:failed` event **unless** `opts.suppressEvent === true`.
-- Returns `{ action: 'continue', data: null }` → loop skips remaining children for this video.
+Moi node trong `nodes[]` co format:
 
-**`suppressEvent` pattern**: When a node emits its own specific event (e.g. `publish:failed`, `download:failed`), it should pass `suppressEvent: true` to avoid duplicate events in timeline.
+```yaml
+- node_id: core.time_gate
+  instance_id: start_gate
+  params: {}                # optional, merge vao ctx.params khi run node
+  children: []              # optional, cho loop/parallel
+  on_error: skip            # optional: skip | stop_campaign | retry
+  timeout: 30000            # optional, ms
+  events:                   # optional, map event-key -> action
+    captcha:detected:
+      action: pause_campaign
+      emit: campaign:needs_captcha
+```
 
-### 5.2 `failBatchGracefully(ctx, instanceId, errorType, message, opts?)`
-Same as above but for **source/batch nodes** (scanner). Returns `{ data: [] }`.
+Y nghia field:
+- `node_id`: map voi `manifest.id` cua node.
+- `instance_id`: id duy nhat trong 1 flow.
+- `params`: param rieng cho node; engine merge voi campaign params.
+- `children`:
+  - voi `core.parallel`: danh sach branch.
+  - voi node khac co children: engine xem la loop.
+- `on_error`: hien tai dung ro nhat trong child loop.
+- `timeout`: engine race Promise voi timeout.
+- `events`: match message loi -> action (`skip_item`, `pause_campaign`, `stop_campaign`) + optional event emit.
 
-### 5.3 `throw` (Hard Fail)
-Used for **fatal errors** that should trigger retry policy or stop.
-- FlowEngine catches, checks `retryPolicy` from node manifest.
-- If retryable: creates retry job with `_retryCount` + exponential delay.
-- If not: emits `node:failed` + checks network/disk auto-pause.
+## 3.3 Schema `edges[]`
 
-### 5.4 YAML Event Matching
-When a child node throws inside the loop, error message is matched against `events:` in flow.yaml.
-Actions: `pause_campaign`, `stop_campaign`, `skip_item`.
+```yaml
+- from: scanner_1
+  to: scheduler_1
+  when: "branch === 'true'"   # optional JS expression
+```
 
----
+- `from`, `to` la `instance_id`.
+- `when` la bieu thuc JS, eval tren `result.data` cua node truoc.
 
-## 6. Runtime Events Contract
+## 3.4 Flow mau toi thieu (copy-paste)
 
-### 6.1 Core Engine/IPC Events
-| Event | Source | Consumers |
-|-------|--------|-----------|
-| `execution:log` | ExecutionLogger | VideoHistory, debugging |
-| `node:status` | ExecutionLogger (start/end/error) | Visualizer node states |
-| `node:progress` | ExecutionLogger | Card live msg, Visualizer |
-| `execution:node-data` | ExecutionLogger.nodeData | Detail rebuild hook |
-| `node:event` | ExecutionLogger.emitNodeEvent | Card alerts, VideoHistory |
-| `campaign:healthcheck-failed` | FlowEngine | Card alerts |
-| `pipeline:info` | PipelineEventBus | Card info alerts |
-| `campaigns-updated` | IPC operations | Campaign list refresh |
+```yaml
+id: demo-workflow
+name: Demo Workflow
+version: "1.0"
 
-### 6.2 Domain Node Events
-| Event key | Emitted by | Desktop Notification? | VideoHistory label |
-|-----------|-----------|----------------------|-------------------|
-| `video:downloading` | downloader | ❌ | Đang tải |
-| `video:downloaded` | downloader | ❌ | Đã tải |
-| `download:failed` | downloader | ✅ "Tải video thất bại" | Tải thất bại |
-| `scan:failed` | scanner/monitoring | ✅ "Quét nguồn thất bại" | Quét thất bại |
-| `scheduler:scheduled` | scheduler | ❌ | Lên lịch |
-| `scheduler:rescheduled` | scheduler | ❌ | Lên lịch lại |
-| `video-edit:started` | video-edit | ❌ | Bắt đầu chỉnh sửa |
-| `video-edit:completed` | video-edit | ❌ | Chỉnh sửa xong |
-| `video-edit:failed` | video-edit | ❌ | Chỉnh sửa thất bại |
-| `caption:transformed` | caption-gen | ❌ | Tạo caption |
-| `video:active` | publisher | ❌ | Đang xử lý |
-| `video:publish-status` | publisher | ❌ | Trạng thái đăng |
-| `video:published` | publisher | ✅ "Đăng video thành công" | Đã đăng |
-| `publish:failed` | publisher | ✅ "Đăng video thất bại" | Đăng thất bại |
-| `captcha:detected` | publisher | ✅ "CAPTCHA detected" | Phát hiện CAPTCHA |
-| `violation:detected` | publisher | ✅ "Vi phạm nội dung" | Vi phạm |
-| `session:expired` | publisher | ❌ | Phiên hết hạn |
-| `video:duplicate-detected` | dedup | ❌ | Trùng lặp |
-| `node:failed` | NodeHelpers (generic) | ❌ | Lỗi |
-| `node:retry-scheduled` | FlowEngine | ❌ | Thử lại |
+nodes:
+  - node_id: core.file_source
+    instance_id: source_1
 
-### 6.3 Campaign Events
-| Event | Trigger |
-|-------|---------|
-| `campaign:triggered` | Campaign started |
-| `campaign:paused` | Manual/event/network pause |
-| `campaign:resumed` | Resume successful |
-| `campaign:retriggered` | Resume had no pending jobs |
-| `campaign:finished` | Finish node reached |
-| `campaign:error` | Fatal stop_campaign |
-| `campaign:network-error` | Network auto-pause |
-| `campaign:disk-error` | Storage error auto-fail |
-| `pipeline:manual-retry` | Visualizer retry action |
+  - node_id: core.loop
+    instance_id: loop_1
+    children:
+      - caption_1
+      - publisher_1
 
----
+  - node_id: core.caption_gen
+    instance_id: caption_1
 
-## 7. UI Surface Contracts
+  - node_id: tiktok.publisher
+    instance_id: publisher_1
+    on_error: skip
 
-### 7.1 Campaign Card (`card.tsx`)
-**Listeners**: `node:progress`, `node:event`, `campaign:healthcheck-failed`, `pipeline:info`, `campaign:network-error`, `campaign:disk-error`, `campaigns-updated`
+edges:
+  - from: source_1
+    to: loop_1
+```
 
-**Status badges** (all in Vietnamese):
-`Chờ`, `Đang chạy`, `Tạm dừng`, `Xong`, `Lỗi`, `Đã hủy`, `Captcha`, `Lên lịch`, `Đăng nhập lại`, `Phục hồi`, `Suy giảm`
+Luu y quan trong:
+- `core.loop` la virtual node pattern trong engine (khong can node implementation rieng).
+- Node co `children` (khong phai `core.parallel`) se duoc engine xu ly theo loop path.
 
-**Counter pills**:
-`Đang chờ`, `Chờ duyệt`, `Đã tải`, `Đã tạo caption`, `Đã đăng`, `Đã gửi chờ duyệt`, `Captcha`, `Trùng`, `Thất bại`, `Bỏ qua`
+## 3.5 Flow parallel/join mau (copy-paste)
 
-**Action buttons** (with loading state via `actionInFlight`):
-`Chạy`, `Dừng`, `Tiếp tục` — disabled + "⏳ Đang..." while in-flight.
+```yaml
+id: demo-parallel
+name: Demo Parallel
+version: "1.0"
 
-### 7.2 Campaign Detail (`detail.tsx`)
-- Polls campaign + jobs.
-- Listens `execution:node-data`, `node:progress`, `node:event`.
-- Video cards show retry button for `publish_failed` and `captcha` statuses.
-- Retry dispatches `pipeline:retry-node` scoped to the correct node.
+nodes:
+  - node_id: core.file_source
+    instance_id: source_1
 
-### 7.3 Video History (`VideoHistory.tsx`)
-- Triggered by expanding a video card.
-- Fetches from `campaign:get-video-events`.
-- Displays timeline with category-aware styling (success/error/progress/info/system).
-- Maps all node events via `EVENT_CONFIG` to Vietnamese labels.
+  - node_id: core.parallel
+    instance_id: fork_1
+    children:
+      - branch_a
+      - branch_b
 
-### 7.4 Pipeline Visualizer
-- Fetches flow graph via `campaign:get-flow-nodes` with `campaignId`.
-- Shows node states (idle/running/done/error) from job stats.
-- Supports: retry node, save settings, error modal.
+  - node_id: core.js_runner
+    instance_id: branch_a
 
----
+  - node_id: core.js_runner
+    instance_id: branch_b
 
-## 8. Video Edit Node Guarantee
-1. `video_edit_1` runs BEFORE caption and publisher in the loop.
-2. FFmpeg pipeline from `videoEditOperations` in campaign params.
-3. Success → edited output becomes new `local_path`.
-4. No operations enabled → passthrough (no-op).
-5. Failure → `video-edit:failed` event + video status `failed` + throws.
+  - node_id: core.join
+    instance_id: join_1
+    params:
+      branches: [branch_a, branch_b]
+      mode: all
+      onBranchFail: continue
+
+  - node_id: core.campaign_finish
+    instance_id: finish_1
+
+edges:
+  - from: source_1
+    to: fork_1
+  - from: fork_1
+    to: join_1
+  - from: join_1
+    to: finish_1
+```
 
 ---
 
-## 9. Missed Job Logic
+## 4) Cach lam node moi (step-by-step)
 
-### 9.1 During Scheduler Execution
-Auto-reschedules past-due videos. Emits `scheduler:rescheduled` per video. Alert shown.
+## 4.1 Tao folder va files
 
-### 9.2 During Crash Recovery
-Based on `params.missedJobHandling`:
-- `manual`: pause campaign + alert.
-- `auto`: reschedule + retrigger.
+Tao:
+
+```text
+src/nodes/my-node/
+  index.ts
+  backend.ts
+```
+
+## 4.2 `index.ts` template
+
+```ts
+import type { NodeDefinition, NodeManifest } from '@core/nodes/NodeDefinition'
+import { execute } from './backend'
+
+const manifest: NodeManifest = {
+  id: 'core.my_node',
+  name: 'My Node',
+  label: 'MyNode',
+  color: '#3b82f6',
+  category: 'transform',
+  icon: 'M',
+  description: 'Do something useful',
+  retryPolicy: {
+    maxRetries: 2,
+    backoff: 'exponential',
+    initialDelayMs: 1000,
+    maxDelayMs: 15000,
+    retryableErrors: ['timeout', 'ECONNRESET'],
+  },
+}
+
+const node: NodeDefinition = { manifest, execute }
+export default node
+```
+
+## 4.3 `backend.ts` template
+
+```ts
+import type { NodeExecutionContext, NodeExecutionResult } from '@core/nodes/NodeDefinition'
+import { failGracefully } from '@core/nodes/NodeHelpers'
+
+export async function execute(input: any, ctx: NodeExecutionContext): Promise<NodeExecutionResult> {
+  try {
+    ctx.onProgress('my-node started')
+
+    if (!input) {
+      return failGracefully(
+        ctx,
+        'my_node_1',
+        'unknown',
+        'invalid_input',
+        'Input is empty',
+        { errorCode: 'DG-000' },
+      )
+    }
+
+    const output = { ...input, processedBy: 'core.my_node' }
+    return { action: 'continue', data: output }
+  } catch (err: any) {
+    // Fatal path: throw de engine handle retryPolicy
+    throw err
+  }
+}
+```
+
+## 4.4 Gan node vao flow
+
+Trong `flow.yaml`:
+
+```yaml
+- node_id: core.my_node
+  instance_id: my_node_1
+```
+
+## 4.5 Kiem tra node da duoc load
+
+1. Chay `npm run dev`
+2. Xem console main process, NodeRegistry se auto discover.
+3. Trigger campaign co su dung node moi.
+4. Xem `node:status`, `node:progress`, `execution:log` trong UI.
+
+## 4.6 Checklist node moi
+
+- `manifest.id` unique
+- `instance_id` unique trong flow
+- return dung contract `{ data, action? }`
+- retryPolicy phu hop
+- loi recoverable dung `failGracefully`/`failBatchGracefully`
+- loi domain co ma DG-xxx neu can
 
 ---
 
-## 10. Status Coverage Matrix
+## 5) Cach lam workflow moi (step-by-step)
 
-### Campaign Statuses
-Set by engine: `idle`, `active`, `paused`, `finished`, `error`
-UI-only badges: `running`, `cancelled`, `needs_captcha`, `scheduling`, `session_expired`, `recovering`, `degraded`
+## 5.1 Tao folder workflow versioned
 
-### Video Statuses
-`queued`, `pending_approval`, `downloaded`, `captioned`, `publishing`, `published`, `under_review`, `verification_incomplete`, `verifying_publish`, `duplicate`, `captcha`, `publish_failed`, `failed`, `skipped`
+```text
+src/workflows/my-workflow/v1.0/
+  flow.yaml
+  wizard.tsx
+  recovery.ts
+  ipc.ts
+  services.ts
+  events.ts
+  lifecycle.ts
+  detail.tsx
+  card.tsx
+```
+
+Bat buoc toi thieu de chay duoc:
+- `flow.yaml`
+- `wizard.ts` hoac `wizard.tsx`
+- `recovery.ts` (nen co de crash recovery ro rang)
+
+Optional:
+- `ipc.ts`, `services.ts`, `events.ts`, `lifecycle.ts`, `detail.tsx`, `card.tsx`
+
+## 5.2 `flow.yaml` cho workflow moi
+
+Yeu cau:
+- `id` trung voi workflow id folder (vd `my-workflow`)
+- `version` trung convention folder (`v1.0` -> `"1.0"`)
+- Node ids phai ton tai trong NodeRegistry
+
+## 5.3 `wizard.tsx` template
+
+```ts
+import type { WizardStepConfig } from '@renderer/wizard/WizardStepTypes'
+import { WizardTarget } from '@renderer/components/wizard/WizardTarget'
+
+function StepA({ data, updateData }: any) {
+  return null
+}
+
+export const myWorkflowSteps: WizardStepConfig[] = [
+  {
+    id: 'setup',
+    title: 'Setup',
+    icon: 'S',
+    description: 'Basic config',
+    component: StepA,
+    validate: (data) => (!data?.name ? 'Name is required' : null),
+  },
+  {
+    id: 'target',
+    title: 'Target',
+    icon: 'T',
+    description: 'Select publish accounts',
+    component: WizardTarget,
+    validate: (data) => ((data.publishAccountIds || []).length ? null : 'Select at least one account'),
+  },
+]
+```
+
+## 5.4 `recovery.ts` template
+
+```ts
+import { jobRepo } from '@main/db/repositories/JobRepo'
+import { flowEngine } from '@core/engine/FlowEngine'
+
+export function recover(campaignId: string): void {
+  const pending = jobRepo.countPendingForCampaign(campaignId)
+  if (pending === 0) {
+    flowEngine.resumeCampaign(campaignId)
+  }
+}
+```
+
+## 5.5 `lifecycle.ts` template (optional)
+
+```ts
+import type { WorkflowLifecycle } from '@core/flow/WorkflowLifecycle'
+
+const lifecycle: WorkflowLifecycle = {
+  async beforeStart(_campaignId, _params) {
+    return { ok: true, errors: [] }
+  },
+  async onDelete(_campaignId, _params) {
+    // cleanup files/resources if needed
+  },
+}
+
+export default lifecycle
+```
+
+## 5.6 `ipc.ts` template (optional)
+
+```ts
+import { ipcMain } from 'electron'
+
+export function setup() {
+  ipcMain.removeHandler('my-workflow:ping')
+  ipcMain.handle('my-workflow:ping', async () => ({ ok: true }))
+}
+```
+
+## 5.7 Verify workflow moi da duoc load
+
+1. Chay `npm run dev`
+2. Main console se log auto-discovered workflow modules.
+3. UI workflow picker (`flow:get-presets`) thay workflow moi.
+4. Mo wizard va tao campaign thanh cong.
+5. Trigger campaign va theo doi node logs.
+
+## 5.8 Versioning workflow dung cach
+
+Khi breaking change flow/params:
+1. Tao folder moi: `v1.1` hoac `v2.0`
+2. Copy file can thiet tu version cu
+3. Chinh sua flow/wizard theo requirement moi
+4. Khong sua campaign cu: vi da pin `flow_snapshot`
 
 ---
 
-## 11. Known Limitations
-1. `pipeline:retry-node` retries by `instanceId` (node-level), not per-video scoped.
-2. `campaign:alert` events are emitted but no dedicated alert panel in UI.
-3. `video-editor:done` sends null payload if editor closed without saving.
-4. Visualizer node states rely mostly on polled jobs, less realtime metadata.
+## 6) Runtime contracts quan trong
+
+## 6.1 Node execution contract
+
+`execute(input, ctx)` phai tra:
+- `data`: payload cho node tiep theo
+- `action` optional: `continue | recall | finish | wait`
+
+## 6.2 Event/Log contract
+
+Nguon chinh: `ExecutionLogger`
+
+UI dang consume cac event:
+- `node:status`
+- `node:progress`
+- `node:event`
+- `execution:log`
+- `execution:node-data`
+- `campaigns-updated`
+
+## 6.3 Locking
+
+- `CampaignPipelineLock`: 1 campaign tranh double execution
+- `EntityLock`: khoa theo entity/video trong loop
 
 ---
 
-## 12. Quick Acceptance Checklist
-1. Wizard creates campaign with `videoEditOperations` in params.
-2. Trigger emits `campaign:triggered` + start node jobs.
-3. Normal video path events appear in order:
-   `video:downloading` → `video:downloaded` → `video-edit:completed` → `caption:transformed` → `video:active` → `video:published`
-4. Download fail → `download:failed` event → desktop notification → VideoHistory "Tải thất bại".
-5. Scan fail → `scan:failed` event → desktop notification → VideoHistory "Quét thất bại".
-6. Publish fail → `publish:failed` event only (no duplicate `node:failed`) → desktop notification → VideoHistory "Đăng thất bại".
-7. Card shows live progress + correct VI status labels.
-8. Pause/Resume works with proper lock lifecycle.
-9. Edge cases produce meaningful events in logs/history.
+## 7) Testing + verify sau khi sua
+
+Lenh co ban:
+
+```bash
+npm run dev
+npm run lint
+npm run typecheck
+npm run test:unit
+npm run test:e2e
+```
+
+Run 1 case:
+
+```powershell
+$env:UNIT_CASE_ID='unit.troubleshooting.grouping.suite-and-group-order'
+npm run test:unit
+```
+
+Smoke checklist cho thay doi flow/node/workflow:
+1. Tao campaign moi thanh cong
+2. Trigger campaign tao jobs dung start node
+3. Node moi co `node:start`, `node:end` hoac `node:error`
+4. UI thay `node:progress` neu node phat progress
+5. Pause/Resume khong gay race lock
+
+---
+
+## 8) Loi thuong gap
+
+1. Sua `flow.yaml` roi test tren campaign cu -> khong thay doi vi campaign dung snapshot cu.
+2. Quen unique `instance_id` trong flow.
+3. Dung `node_id` khong ton tai trong NodeRegistry.
+4. Quen `ipcMain.removeHandler()` trong `ipc.ts` -> hot reload bi duplicate handler.
+5. Throw loi khong ro context, khong co ma DG cho loi domain quan trong.
+
+---
+
+## 9) File can nho
+
+- `src/main/index.ts`
+- `src/core/engine/FlowEngine.ts`
+- `src/core/flow/FlowLoader.ts`
+- `src/core/flow/ExecutionContracts.ts`
+- `src/core/nodes/NodeDefinition.ts`
+- `src/core/nodes/NodeHelpers.ts`
+- `src/nodes/index.ts`
+- `src/workflows/index.ts`
+- `src/renderer/wizard/workflowWizardRegistry.ts`
+- `src/shared/ipc-types.ts`
+- `src/main/db/Database.ts`
+
+Ban co the bat dau task dau tien bang cach:
+1. Tao 1 node `core.my_node`
+2. Gan vao `upload-local/v1.0/flow.yaml`
+3. Tao campaign moi va verify log/event trong UI
